@@ -78,3 +78,31 @@ def rectangle(image, top_left, bottom_right, line_color=(0, 255, 0), fill_color=
     cv2.addWeighted(overlay_line, line_opacity, image, 1 - line_opacity, 0, image)
 
     return image
+
+
+def line(image, start_point, end_point, line_color=(0, 255, 0),
+         line_thickness=3, line_opacity=0.8):
+    """
+    Draw a line with specified opacity on an image.
+
+    Parameters:
+    - image: The original image (NumPy array).
+    - start_point: The starting point of the line (tuple of x, y).
+    - end_point: The ending point of the line (tuple of x, y).
+    - line_color: The color of the line (BGR tuple).
+    - line_thickness: The thickness of the line.
+    - line_opacity: The opacity of the line (0.0 to 1.0).
+
+    Returns:
+    - The image with the line drawn with the specified opacity.
+    """
+    # Create an overlay image
+    overlay_line = image.copy()
+
+    # Draw the line on the overlay
+    cv2.line(overlay_line, start_point, end_point, color=line_color, thickness=line_thickness)
+
+    # Blend the line with the original image
+    cv2.addWeighted(overlay_line, line_opacity, image, 1 - line_opacity, 0, image)
+
+    return image
