@@ -106,3 +106,40 @@ def line(image, start_point, end_point, line_color=(0, 255, 0),
     cv2.addWeighted(overlay_line, line_opacity, image, 1 - line_opacity, 0, image)
 
     return image
+
+
+def circle(image, center, radius, line_color=(0, 255, 0), fill_color=(0, 255, 0),
+           line_thickness=3, line_opacity=0.8, fill_opacity=0.4):
+    """
+    Draw a circle with different opacities for the outline and the fill on an image.
+
+    Parameters:
+    - image: The original image (NumPy array).
+    - center: The center of the circle (tuple of x, y).
+    - radius: The radius of the circle.
+    - line_color: The color of the circle outline (BGR tuple).
+    - fill_color: The color of the circle fill (BGR tuple).
+    - line_thickness: The thickness of the circle outline.
+    - line_opacity: The opacity of the circle outline (0.0 to 1.0).
+    - fill_opacity: The opacity of the circle fill (0.0 to 1.0).
+
+    Returns:
+    - The image with the circle drawn with the specified opacities.
+    """
+    # Create two overlay images
+    overlay_fill = image.copy()
+    overlay_line = image.copy()
+
+    # Draw the filled circle on the overlay_fill
+    cv2.circle(overlay_fill, center, radius, color=fill_color, thickness=cv2.FILLED)
+
+    # Draw the circle outline on the overlay_line
+    cv2.circle(overlay_line, center, radius, color=line_color, thickness=line_thickness)
+
+    # Blend the filled circle with the original image
+    cv2.addWeighted(overlay_fill, fill_opacity, image, 1 - fill_opacity, 0, image)
+
+    # Blend the circle outline with the original image
+    cv2.addWeighted(overlay_line, line_opacity, image, 1 - line_opacity, 0, image)
+
+    return image
