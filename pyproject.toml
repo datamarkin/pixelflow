@@ -1,0 +1,19 @@
+[project]
+name = "pixelflow"
+version = "0.1.0"
+description = "Reusable computer vision tools"
+requires-python = ">=3"
+license = {text = "MIT License"}
+authors = [
+    {name = "Datamarkin", email = "support@datamarkin.com"}
+]
+
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+]
+
+dependencies = []
