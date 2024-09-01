@@ -2,6 +2,7 @@
 
 import cv2
 import numpy as np
+from . import color
 
 
 def polygon(image, points, line_color=(0, 255, 0), fill_color=(0, 255, 0),
