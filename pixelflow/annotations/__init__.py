@@ -108,6 +108,26 @@ class Predictions:
 #     print(pred.bbox, pred.confidence)
 
 
+def from_dtm_api(dtm_api_results):
+    pass
+
+
+def from_detectron2(detectron2_results):
+    pass
+
+
+def from_ultralytics(ultralytics_results):
+    pass
+
+
+def from_transformers(transformers_results):
+    pass
+
+
+def from_sam(sam_results):
+    pass
+
+
 def dtm_csv_to_dtm(group, height, width):
     annotations = {}
 
