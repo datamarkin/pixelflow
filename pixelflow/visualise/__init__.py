@@ -9,7 +9,7 @@ import pixelflow.draw
 import pixelflow.annotations
 
 
-def from_datamarkin_csv(csv_path, image_dir):
+def from_dtm_csv(csv_path, image_dir):
     # Load data from CSV
     data = pd.read_csv(csv_path)
 
