@@ -11,13 +11,34 @@ from typing import List, Iterator
 
 # Object-oriented approach instead of a NumPy array-based approach
 # Let's see how it goes
+
+
+class KeyPoint:
+    def __init__(self, x: int, y: int, name: str, visibility: bool):
+        self.x = x
+        self.y = y
+        self.name = name
+        self.visibility = visibility
+
+    def to_dict(self):
+        """
+        Convert the KeyPoint object to a dictionary that can be easily converted to JSON.
+        """
+        return {
+            "x": self.x,
+            "y": self.y,
+            "name": self.name,
+            "visibility": self.visibility
+        }
+
+
 class Prediction:
-    def __init__(self, inference_id=None, bbox=None, mask=None, keypoints=None, class_id=None, confidence=None,
-                 tracker_id=None, data=None):
+    def __init__(self, inference_id=None, bbox=None, mask=None, keypoints: List[KeyPoint] = None, class_id=None,
+                 confidence=None, tracker_id=None, data=None):
         self.inference_id = inference_id
         self.bbox = bbox
         self.mask = mask
-        self.keypoints = keypoints
+        self.keypoints = keypoints if keypoints is not None else []
         self.class_id = class_id
         self.confidence = confidence
         self.tracker_id = tracker_id
@@ -31,7 +52,7 @@ class Prediction:
             "inference_id": self.inference_id,
             "bbox": self.bbox,
             "mask": self.mask,
-            "keypoints": self.keypoints,
+            "keypoints": [kp.to_dict() for kp in self.keypoints],
             "class_id": self.class_id,
             "confidence": self.confidence,
             "tracker_id": self.tracker_id
