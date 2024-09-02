@@ -6,6 +6,7 @@ import ast
 import numpy as np
 import pandas as pd
 import pixelflow.draw
+import pixelflow.annotations
 
 
 def from_datamarkin_csv(csv_path, image_dir):
@@ -29,6 +30,9 @@ def from_datamarkin_csv(csv_path, image_dir):
         # Load image
         img = cv2.imread(image_path)
         height, width = img.shape[:2]
+
+        datamarkin_format = pixelflow.annotations.dtm_csv_to_dtm(group, height, width)
+        print(datamarkin_format)
 
         # Iterate through rows for the current image
         for index, row in group.iterrows():
