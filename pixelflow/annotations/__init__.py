@@ -7,6 +7,17 @@ import pandas as pd
 import ast
 
 
+class Predictions:
+    def __init__(self):
+        self.id = None
+        self.bbox = None
+        self.mask = None
+        self.class_id = None
+        self.confidence = None
+        self.tracker_id = None
+        self.data = None
+
+
 def dtm_csv_to_dtm(group, height, width):
     annotations = {}
 
