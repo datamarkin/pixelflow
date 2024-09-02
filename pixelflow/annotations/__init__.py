@@ -1,6 +1,7 @@
 # annotations/__init__.py
 
 import cv2
+import json
 import numpy as np
 import pixelflow.draw
 import pandas as pd
@@ -21,6 +22,20 @@ class Prediction:
         self.confidence = confidence
         self.tracker_id = tracker_id
         self.data = data
+
+    def to_dict(self):
+        """
+        Convert the Prediction object to a dictionary that can be easily converted to JSON.
+        """
+        return {
+            "inference_id": self.inference_id,
+            "bbox": self.bbox,
+            "mask": self.mask,
+            "keypoints": self.keypoints,
+            "class_id": self.class_id,
+            "confidence": self.confidence,
+            "tracker_id": self.tracker_id
+        }
 
 
 class Predictions:
@@ -49,6 +64,13 @@ class Predictions:
             if prediction.confidence is not None and prediction.confidence >= threshold:
                 filtered_predictions.add_prediction(prediction)
         return filtered_predictions
+
+    def to_json(self) -> str:
+        """
+        Converts the list of predictions into a JSON string.
+        """
+        predictions_dict = [prediction.to_dict() for prediction in self.predictions]
+        return json.dumps(predictions_dict, indent=4)
 
 
 # # Example usage
