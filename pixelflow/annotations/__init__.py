@@ -93,6 +93,14 @@ class Predictions:
         predictions_dict = [prediction.to_dict() for prediction in self.predictions]
         return json.dumps(predictions_dict, indent=4)
 
+    def to_json_with_metrics(self) -> str:
+        """
+        Converts the list of predictions into a JSON string.
+        More to come here
+        """
+        predictions_dict = [prediction.to_dict() for prediction in self.predictions]
+        return json.dumps(predictions_dict, indent=4)
+
 
 # # Example usage
 # pred1 = Prediction(inference_id=1, bbox=[0, 0, 10, 10], class_id=0, confidence=0.9)
