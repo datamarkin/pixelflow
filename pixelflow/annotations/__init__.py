@@ -6,6 +6,7 @@ import numpy as np
 import pixelflow.draw
 import pandas as pd
 import ast
+from pixelflow.validators import validate_bbox, validate_mask, round_to_decimal
 from typing import List, Iterator
 
 
@@ -36,11 +37,11 @@ class Prediction:
     def __init__(self, inference_id=None, bbox=None, mask=None, keypoints: List[KeyPoint] = None, class_id=None,
                  confidence=None, tracker_id=None, data=None):
         self.inference_id = inference_id
-        self.bbox = bbox
-        self.mask = mask
+        self.bbox = validate_bbox(bbox)
+        self.mask = validate_mask(mask)
         self.keypoints = keypoints if keypoints is not None else []
         self.class_id = class_id
-        self.confidence = confidence
+        self.confidence = round_to_decimal(confidence)
         self.tracker_id = tracker_id
         self.data = data
 
