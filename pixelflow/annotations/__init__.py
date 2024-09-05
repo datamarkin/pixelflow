@@ -39,7 +39,7 @@ class Prediction:
         self.inference_id = inference_id
         self.bbox = validate_bbox(bbox)
         self.mask = validate_mask(mask)
-        self.keypoints = keypoints if keypoints is not None else []
+        self.keypoints = keypoints if keypoints is not None else None
         self.class_id = class_id
         self.confidence = round_to_decimal(confidence)
         self.tracker_id = tracker_id
