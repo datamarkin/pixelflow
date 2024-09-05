@@ -31,7 +31,7 @@ def from_dtm_csv(csv_path, image_dir):
         img = cv2.imread(image_path)
         height, width = img.shape[:2]
 
-        datamarkin_format = pixelflow.annotations.dtm_csv_to_dtm(group, height, width)
+        datamarkin_format = pixelflow.annotations.from_datamarkin_csv(group, height, width)
         print(datamarkin_format)
 
         # Iterate through rows for the current image

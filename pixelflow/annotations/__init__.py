@@ -116,8 +116,43 @@ class Predictions:
 #     print(pred.bbox, pred.confidence)
 
 
-def from_dtm_api(dtm_api_results):
-    pass
+def from_datamarkin_api(api_response: dict) -> Predictions:
+    """
+    Converts the Datamarkin API response to a `Predictions` object.
+
+    Args:
+        api_response (dict): The API response in dictionary format.
+
+    Returns:
+        Predictions: The corresponding Predictions object.
+    """
+
+    # if hasattr(api_response, 'predictions'):
+    # if hasattr(api_response, 'errors'):
+    # TODO: Add some checks when basic idea starts working
+
+    predictions_obj = Predictions()
+
+    for obj in api_response.get("predictions", {}).get("objects", []):
+        bbox = obj.get("bbox", [])
+        mask = obj.get("mask", [])
+        keypoints = obj.get("keypoints", [])
+        class_name = obj.get("class", "")
+        confidence = obj.get("bbox_score", None)
+
+        # Create the Prediction object
+        prediction = Prediction(
+            bbox=bbox,
+            mask=mask,
+            keypoints=keypoints,
+            class_id=class_name,
+            confidence=confidence,
+        )
+
+        # Add to the predictions list
+        predictions_obj.add_prediction(prediction)
+
+    return predictions_obj
 
 
 def from_detectron2(detectron2_results):
@@ -136,7 +171,7 @@ def from_sam(sam_results):
     pass
 
 
-def dtm_csv_to_dtm(group, height, width):
+def from_datamarkin_csv(group, height, width):
     annotations = {}
 
     objects = []
