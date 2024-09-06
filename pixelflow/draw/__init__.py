@@ -155,7 +155,7 @@ def all_predictions(image, predictions):
     pass
 
 
-def bboxes(image, predictions):
+def bboxes(image, predictions, labels=True):
     for prediction in predictions:
         # Draw the bounding box using the custom rectangle function
         if prediction.bbox:
@@ -166,7 +166,7 @@ def bboxes(image, predictions):
     return image
 
 
-def masks(image, predictions):
+def masks(image, predictions, labels=True):
     # Loop over all predictions
     for prediction in predictions:
         # Get the mask (polygon points) from the prediction
@@ -177,5 +177,5 @@ def masks(image, predictions):
     return image
 
 
-def keypoints(image, predictions):
+def keypoints(image, predictions, labels=True):
     pass
