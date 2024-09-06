@@ -54,7 +54,7 @@ class Prediction:
             "inference_id": self.inference_id,
             "bbox": self.bbox,
             "mask": self.masks,
-            "keypoints": [kp.to_dict() for kp in self.keypoints],
+            "keypoints": [kp.to_dict() for kp in self.keypoints] if self.keypoints is not None else None,
             "class_id": self.class_id,
             "confidence": self.confidence,
             "tracker_id": self.tracker_id
@@ -185,8 +185,45 @@ def from_detectron2(detectron2_results):
     pass
 
 
-def from_ultralytics(ultralytics_results):
-    pass
+def from_ultralytics(ultralytics_results) -> Predictions:
+    """
+    Converts Ultralytics YOLOv8 inference results to a `Predictions` object.
+
+    Args:
+        ultralytics_results: The YOLOv8 inference results from the Ultralytics model.
+
+    Returns:
+        Predictions: A `Predictions` object containing all the detections from the model.
+    """
+    predictions_obj = Predictions()
+
+    # Loop through all detections in ultralytics_results
+    for result in ultralytics_results:
+        # Get bounding boxes in xyxy format
+        bboxes = result.boxes.xyxy.cpu().numpy()  # Bounding boxes as [x1, y1, x2, y2]
+        confidences = result.boxes.conf.cpu().numpy()  # Confidence scores
+        class_ids = result.boxes.cls.cpu().numpy().astype(int)  # Class IDs
+        masks = None
+
+        # If there are masks (segmentation), extract them
+        if hasattr(result, 'masks') and result.masks is not None:
+            masks = result.masks.data.cpu().numpy()  # Masks in boolean array
+
+        # Loop through all detections in the current result
+        for bbox, confidence, class_id in zip(bboxes, confidences, class_ids):
+            # Create a Prediction object
+            prediction = Prediction(
+                bbox=bbox.tolist(),
+                mask=masks,  # If masks exist, provide them
+                keypoints=None,  # Keypoints not used in this example
+                class_id=str(class_id),  # Convert class_id to string for compatibility
+                confidence=float(confidence)  # Convert confidence to float
+            )
+
+            # Add to the predictions list
+            predictions_obj.add_prediction(prediction)
+
+    return predictions_obj
 
 
 def from_transformers(transformers_results):
