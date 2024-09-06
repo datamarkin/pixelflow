@@ -1,4 +1,4 @@
-# annotations/__init__.py
+# predictions/__init__.py
 
 import cv2
 import json
