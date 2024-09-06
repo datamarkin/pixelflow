@@ -110,9 +110,9 @@ def circle(image, center, radius, line_color=(0, 255, 0), fill_color=None, line_
 
 
 def text(image, text, position, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1,
-         text_color=(0, 255, 0), text_opacity=0.8, thickness=2, background_color=None, background_opacity=0.4):
+         text_color=(0, 255, 0), thickness=2, background_color=None):
     """
-    Draw text with specified opacity on an image. Optionally, draw a background behind the text.
+    Draw simple text on an image. Optionally, draw a background behind the text.
 
     Parameters:
     - image: The original image (NumPy array).
@@ -121,32 +121,22 @@ def text(image, text, position, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1,
     - font: Font type (default is cv2.FONT_HERSHEY_SIMPLEX).
     - font_scale: Font scale factor that is multiplied by the font-specific base size.
     - text_color: The color of the text (BGR tuple).
-    - text_opacity: The opacity of the text (0.0 to 1.0).
     - thickness: Thickness of the text strokes.
     - background_color: Optional background color (BGR tuple) behind the text.
-    - background_opacity: Opacity of the background color (0.0 to 1.0).
 
     Returns:
-    - The image with the text drawn with the specified opacity.
+    - The image with the text drawn.
     """
-    # Create an overlay image for the text
-    overlay_text = image.copy()
-
     # If a background color is specified, calculate the size of the text and draw the background rectangle
     if background_color is not None:
         text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
         text_w, text_h = text_size
         top_left = (position[0], position[1] - text_h)
         bottom_right = (position[0] + text_w, position[1])
-        cv2.rectangle(overlay_text, top_left, bottom_right, background_color, thickness=cv2.FILLED)
-        # Blend the background with the original image
-        cv2.addWeighted(overlay_text, background_opacity, image, 1 - background_opacity, 0, image)
+        cv2.rectangle(image, top_left, bottom_right, background_color, thickness=cv2.FILLED)
 
-    # Draw the text on the overlay
-    cv2.putText(overlay_text, text, position, font, font_scale, text_color, thickness, cv2.LINE_AA)
-
-    # Blend the text with the original image
-    cv2.addWeighted(overlay_text, text_opacity, image, 1 - text_opacity, 0, image)
+    # Draw the text directly on the image
+    cv2.putText(image, text, position, font, font_scale, text_color, thickness, cv2.LINE_AA)
 
     return image
 
