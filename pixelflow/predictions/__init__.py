@@ -2,8 +2,13 @@
 
 import json
 import ast
-from pixelflow.validators import validate_bbox, validate_mask, round_to_decimal
-from typing import List, Iterator
+from pixelflow.validators import (validate_bbox,
+                                  validate_masks,
+                                  round_to_decimal,
+                                  convert_datamarkin_masks,
+                                  simplify_polygon)
+from typing import (List,
+                    Iterator)
 
 
 # Object-oriented approach instead of a NumPy array-based approach
@@ -34,7 +39,7 @@ class Prediction:
                  confidence=None, tracker_id=None, data=None):
         self.inference_id = inference_id
         self.bbox = validate_bbox(bbox)
-        self.mask = validate_mask(mask)
+        self.masks = validate_masks(mask)
         self.keypoints = keypoints if keypoints is not None else None
         self.class_id = class_id
         self.confidence = round_to_decimal(confidence)
@@ -48,12 +53,24 @@ class Prediction:
         return {
             "inference_id": self.inference_id,
             "bbox": self.bbox,
-            "mask": self.mask,
+            "mask": self.masks,
             "keypoints": [kp.to_dict() for kp in self.keypoints],
             "class_id": self.class_id,
             "confidence": self.confidence,
             "tracker_id": self.tracker_id
         }
+
+    def simplify_masks(self, tolerance: float = 2.0, preserve_topology: bool = True):
+        """
+        Simplifies the polygon masks using Shapely.
+
+        Args:
+            tolerance (float): The tolerance factor for simplification (higher = more simplified).
+            preserve_topology (bool): If True, the function will try to preserve the polygon's topology.
+        """
+        if self.masks:
+            # Apply the simplify function to each mask (assuming self.masks is a list of polygons)
+            self.masks = [simplify_polygon(mask, tolerance, preserve_topology) for mask in self.masks]
 
 
 class Predictions:
@@ -82,6 +99,18 @@ class Predictions:
             if prediction.confidence is not None and prediction.confidence >= threshold:
                 filtered_predictions.add_prediction(prediction)
         return filtered_predictions
+
+    def simplify(self, tolerance: float = 2.0, preserve_topology: bool = True):
+        """
+        Simplifies the masks of all predictions in the Predictions object.
+
+        Args:
+            tolerance (float): The tolerance factor for simplification.
+            preserve_topology (bool): Whether to preserve the topology.
+        """
+        for prediction in self.predictions:
+            prediction.simplify_masks(tolerance=tolerance, preserve_topology=preserve_topology)
+        return self
 
     def to_json(self) -> str:
         """
@@ -140,7 +169,7 @@ def from_datamarkin_api(api_response: dict) -> Predictions:
         # Create the Prediction object
         prediction = Prediction(
             bbox=bbox,
-            mask=mask,
+            mask=convert_datamarkin_masks(mask),
             keypoints=keypoints,
             class_id=class_name,
             confidence=confidence,
