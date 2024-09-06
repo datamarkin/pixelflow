@@ -7,6 +7,7 @@ from pixelflow.validators import (validate_bbox,
                                   round_to_decimal,
                                   convert_datamarkin_masks,
                                   simplify_polygon)
+from pixelflow.zones import Zones
 from typing import (List,
                     Iterator)
 
@@ -74,11 +75,20 @@ class Prediction:
 
 
 class Predictions:
-    def __init__(self):
+    def __init__(self, zones: 'Zones' = None):
         self.predictions: List[Prediction] = []
+        self.zones = zones  # Store the zones object if provided
 
     def add_prediction(self, prediction: Prediction):
-        self.predictions.append(prediction)
+        """
+        Add a prediction to the list, applying zone filtering if zones are provided.
+        """
+        if self.zones:
+            # Check if the prediction is excluded or not included in zones
+            if self.zones.is_excluded(prediction.bbox, prediction.masks):
+                return  # Skip if the prediction is in an excluded zone
+            if not self.zones.is_included(prediction.bbox, prediction.masks):
+                return  # Skip if the prediction is outside of included zones
 
     def __len__(self):
         return len(self.predictions)
@@ -128,34 +138,17 @@ class Predictions:
         return json.dumps(predictions_dict, indent=4)
 
 
-# # Example usage
-# pred1 = Prediction(inference_id=1, bbox=[0, 0, 10, 10], class_id=0, confidence=0.9)
-# pred2 = Prediction(inference_id=2, bbox=[15, 15, 25, 25], class_id=1, confidence=0.8)
-# pred3 = Prediction(inference_id=3, bbox=[30, 30, 40, 40], class_id=2, confidence=0.7)
-#
-# predictions = Predictions()
-# predictions.add_prediction(pred1)
-# predictions.add_prediction(pred2)
-# predictions.add_prediction(pred3)
-#
-# for pred in predictions:
-#     print(pred.bbox, pred.confidence)
-
-
-def from_datamarkin_api(api_response: dict) -> Predictions:
+def from_datamarkin_api(api_response: dict, zones: Zones = None) -> Predictions:
     """
-    Converts the Datamarkin API response to a `Predictions` object.
+    Converts the Datamarkin API response to a `Predictions` object, filtering based on included/excluded zones.
 
     Args:
         api_response (dict): The API response in dictionary format.
+        zones (Zones, optional): The Zones object for managing included/excluded zones. If None, no filtering is applied.
 
     Returns:
         Predictions: The corresponding Predictions object.
     """
-
-    # if hasattr(api_response, 'predictions'):
-    # if hasattr(api_response, 'errors'):
-    # TODO: Add some checks when basic idea starts working
 
     predictions_obj = Predictions()
 
@@ -169,16 +162,17 @@ def from_datamarkin_api(api_response: dict) -> Predictions:
         # Create the Prediction object
         prediction = Prediction(
             bbox=bbox,
-            mask=convert_datamarkin_masks(mask),
+            mask=mask,
             keypoints=keypoints,
             class_id=class_name,
             confidence=confidence,
         )
 
-        # Add to the predictions list
+        # Add the prediction to the list
         predictions_obj.add_prediction(prediction)
 
     return predictions_obj
+
 
 
 def from_detectron2(detectron2_results):
