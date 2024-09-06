@@ -69,14 +69,13 @@ def from_dtm_csv(csv_path, image_dir):
 
 def frame(image, predictions: pixelflow.predictions.Predictions):
     """
-    Draw polygons on the image using the masks from a Predictions object and display the result.
+    Draw polygons on the image using the masks from a Predictions object.
 
     Parameters:
     - image: The original image (NumPy array).
     - predictions: A Predictions object containing multiple Prediction objects with polygon masks.
 
-    This function will draw the polygons defined by each prediction's mask onto the image
-    and then display the resulting image.
+    This function will draw the polygons defined by each prediction's mask and bounding box onto the image.
     """
     # Loop over all predictions
     for prediction in predictions:
@@ -88,16 +87,10 @@ def frame(image, predictions: pixelflow.predictions.Predictions):
             image = pixelflow.draw.rectangle(image, top_left=(xmin, ymin), bottom_right=(xmax, ymax))
 
         # Get the mask (polygon points) from the prediction
-        for mask in prediction.masks:
-            # Draw the polygon on the image using the polygon points (mask)
-            image = pixelflow.draw.polygon(image, mask)
+        if prediction.masks:
+            for mask in prediction.masks:
+                # Draw the polygon on the image using the polygon points (mask)
+                image = pixelflow.draw.polygon(image, mask)
 
-    # Display the image with the polygons
-    cv2.imshow("Predictions Visualization", image)
-
-    # Wait indefinitely until a key is pressed
-    cv2.waitKey(0)
-
-    # Destroy all OpenCV windows
-    cv2.destroyAllWindows()
+    return image
 
