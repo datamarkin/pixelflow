@@ -64,10 +64,9 @@ def rectangle(image, top_left, bottom_right, line_color=(0, 255, 0), line_thickn
     return image
 
 
-def line(image, start_point, end_point, line_color=(0, 255, 0),
-         line_thickness=3, line_opacity=0.8):
+def line(image, start_point, end_point, line_color=(0, 255, 0), line_thickness=3):
     """
-    Draw a line with specified opacity on an image.
+    Draw a simple line on an image without opacity handling.
 
     Parameters:
     - image: The original image (NumPy array).
@@ -75,56 +74,37 @@ def line(image, start_point, end_point, line_color=(0, 255, 0),
     - end_point: The ending point of the line (tuple of x, y).
     - line_color: The color of the line (BGR tuple).
     - line_thickness: The thickness of the line.
-    - line_opacity: The opacity of the line (0.0 to 1.0).
 
     Returns:
-    - The image with the line drawn with the specified opacity.
+    - The image with the line drawn.
     """
-    # Create an overlay image
-    overlay_line = image.copy()
-
-    # Draw the line on the overlay
-    cv2.line(overlay_line, start_point, end_point, color=line_color, thickness=line_thickness)
-
-    # Blend the line with the original image
-    cv2.addWeighted(overlay_line, line_opacity, image, 1 - line_opacity, 0, image)
+    # Draw the line directly on the image
+    cv2.line(image, start_point, end_point, color=line_color, thickness=line_thickness)
 
     return image
 
 
-def circle(image, center, radius, line_color=(0, 255, 0), fill_color=(0, 255, 0),
-           line_thickness=3, line_opacity=0.8, fill_opacity=0.4):
+def circle(image, center, radius, line_color=(0, 255, 0), fill_color=None, line_thickness=3):
     """
-    Draw a circle with different opacities for the outline and the fill on an image.
+    Draw a simple circle on an image without opacity handling.
 
     Parameters:
     - image: The original image (NumPy array).
     - center: The center of the circle (tuple of x, y).
     - radius: The radius of the circle.
     - line_color: The color of the circle outline (BGR tuple).
-    - fill_color: The color of the circle fill (BGR tuple).
-    - line_thickness: The thickness of the circle outline.
-    - line_opacity: The opacity of the circle outline (0.0 to 1.0).
-    - fill_opacity: The opacity of the circle fill (0.0 to 1.0).
+    - fill_color: The color of the circle fill (BGR tuple). If None, no fill is applied.
+    - line_thickness: The thickness of the circle outline. If thickness is negative or thickness=cv2.FILLED, the circle is filled.
 
     Returns:
-    - The image with the circle drawn with the specified opacities.
+    - The image with the circle drawn.
     """
-    # Create two overlay images
-    overlay_fill = image.copy()
-    overlay_line = image.copy()
+    # Draw the filled circle if fill_color is provided
+    if fill_color is not None:
+        cv2.circle(image, center, radius, color=fill_color, thickness=cv2.FILLED)
 
-    # Draw the filled circle on the overlay_fill
-    cv2.circle(overlay_fill, center, radius, color=fill_color, thickness=cv2.FILLED)
-
-    # Draw the circle outline on the overlay_line
-    cv2.circle(overlay_line, center, radius, color=line_color, thickness=line_thickness)
-
-    # Blend the filled circle with the original image
-    cv2.addWeighted(overlay_fill, fill_opacity, image, 1 - fill_opacity, 0, image)
-
-    # Blend the circle outline with the original image
-    cv2.addWeighted(overlay_line, line_opacity, image, 1 - line_opacity, 0, image)
+    # Draw the circle outline
+    cv2.circle(image, center, radius, color=line_color, thickness=line_thickness)
 
     return image
 
