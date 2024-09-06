@@ -67,25 +67,37 @@ def from_dtm_csv(csv_path, image_dir):
         cv2.destroyAllWindows()
 
 
-def image(image, points):
+def frame(image, predictions: pixelflow.predictions.Predictions):
     """
-    Draw a polygon on the image using the provided points and display the result.
+    Draw polygons on the image using the masks from a Predictions object and display the result.
 
     Parameters:
     - image: The original image (NumPy array).
-    - points: A list of points defining the polygon's vertices.
+    - predictions: A Predictions object containing multiple Prediction objects with polygon masks.
 
-    This function will use the existing polygon() function to draw the polygon
-    and then display the resulting image in a window.
+    This function will draw the polygons defined by each prediction's mask onto the image
+    and then display the resulting image.
     """
-    # Draw the polygon on the image using the existing polygon() function
-    image_with_polygon = pixelflow.draw.polygon(image, points)
+    # Loop over all predictions
+    for prediction in predictions:
+        # Draw the bounding box using the custom rectangle function
+        if prediction.bbox:
+            # Unpack the bounding box coordinates
+            xmin, ymin, xmax, ymax = prediction.bbox
+            # Call the custom rectangle function to draw the bounding box with opacity
+            image = pixelflow.draw.rectangle(image, top_left=(xmin, ymin), bottom_right=(xmax, ymax))
 
-    # Display the image with the polygon
-    cv2.imshow("Polygon Visualization", image_with_polygon)
+        # Get the mask (polygon points) from the prediction
+        for mask in prediction.masks:
+            # Draw the polygon on the image using the polygon points (mask)
+            image = pixelflow.draw.polygon(image, mask)
+
+    # Display the image with the polygons
+    cv2.imshow("Predictions Visualization", image)
 
     # Wait indefinitely until a key is pressed
     cv2.waitKey(0)
 
     # Destroy all OpenCV windows
     cv2.destroyAllWindows()
+
