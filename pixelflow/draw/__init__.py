@@ -44,39 +44,22 @@ def polygon(image, points, line_color=(0, 255, 0), fill_color=(0, 255, 0),
     return image
 
 
-def rectangle(image, top_left, bottom_right, line_color=(0, 255, 0), fill_color=(0, 255, 0),
-              line_thickness=3, line_opacity=0.8, fill_opacity=0.4):
+def rectangle(image, top_left, bottom_right, line_color=(0, 255, 0), line_thickness=1):
     """
-    Draw a rectangle with different opacities for the outline and the fill on an image.
+    Draw a simple rectangle on an image without opacity handling.
 
     Parameters:
     - image: The original image (NumPy array).
     - top_left: The top-left corner of the rectangle (tuple of x, y).
     - bottom_right: The bottom-right corner of the rectangle (tuple of x, y).
     - line_color: The color of the rectangle outline (BGR tuple).
-    - fill_color: The color of the rectangle fill (BGR tuple).
     - line_thickness: The thickness of the rectangle outline.
-    - line_opacity: The opacity of the rectangle outline (0.0 to 1.0).
-    - fill_opacity: The opacity of the rectangle fill (0.0 to 1.0).
 
     Returns:
-    - The image with the rectangle drawn with the specified opacities.
+    - The image with the rectangle drawn.
     """
-    # Create two overlay images
-    overlay_fill = image.copy()
-    overlay_line = image.copy()
-
-    # Draw the filled rectangle on the overlay_fill
-    cv2.rectangle(overlay_fill, top_left, bottom_right, color=fill_color, thickness=cv2.FILLED)
-
-    # Draw the rectangle outline on the overlay_line
-    cv2.rectangle(overlay_line, top_left, bottom_right, color=line_color, thickness=line_thickness)
-
-    # Blend the filled rectangle with the original image
-    cv2.addWeighted(overlay_fill, fill_opacity, image, 1 - fill_opacity, 0, image)
-
-    # Blend the rectangle outline with the original image
-    cv2.addWeighted(overlay_line, line_opacity, image, 1 - line_opacity, 0, image)
+    # Draw the rectangle directly on the image
+    cv2.rectangle(image, top_left, bottom_right, color=line_color, thickness=line_thickness)
 
     return image
 
@@ -147,7 +130,7 @@ def circle(image, center, radius, line_color=(0, 255, 0), fill_color=(0, 255, 0)
 
 
 def text(image, text, position, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1,
-              text_color=(0, 255, 0), text_opacity=0.8, thickness=2, background_color=None, background_opacity=0.4):
+         text_color=(0, 255, 0), text_opacity=0.8, thickness=2, background_color=None, background_opacity=0.4):
     """
     Draw text with specified opacity on an image. Optionally, draw a background behind the text.
 
@@ -186,3 +169,33 @@ def text(image, text, position, font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=1,
     cv2.addWeighted(overlay_text, text_opacity, image, 1 - text_opacity, 0, image)
 
     return image
+
+
+def all_predictions(image, predictions):
+    pass
+
+
+def bboxes(image, predictions):
+    for prediction in predictions:
+        # Draw the bounding box using the custom rectangle function
+        if prediction.bbox:
+            # Unpack the bounding box coordinates
+            xmin, ymin, xmax, ymax = prediction.bbox
+            # Call the custom rectangle function to draw the bounding box with opacity
+            image = rectangle(image, top_left=(xmin, ymin), bottom_right=(xmax, ymax))
+    return image
+
+
+def masks(image, predictions):
+    # Loop over all predictions
+    for prediction in predictions:
+        # Get the mask (polygon points) from the prediction
+        if prediction.masks:
+            for mask in prediction.masks:
+                # Draw the polygon on the image using the polygon points (mask)
+                image = polygon(image, mask)
+    return image
+
+
+def keypoints(image, predictions):
+    pass
