@@ -1,4 +1,4 @@
-# visualise/__init__.py
+# visualize/__init__.py
 
 import os
 import cv2
