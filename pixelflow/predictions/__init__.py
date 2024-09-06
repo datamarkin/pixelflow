@@ -197,51 +197,46 @@ def from_sam(sam_results):
     pass
 
 
-def from_datamarkin_csv(group, height, width):
-    annotations = {}
+def from_datamarkin_csv(group, height, width) -> Predictions:
+    """
+    Converts CSV data to a `Predictions` object.
 
-    objects = []
+    Args:
+        group: The pandas DataFrame group with the CSV rows.
+        height: Image height to denormalize the bounding box and segmentation coordinates.
+        width: Image width to denormalize the bounding box and segmentation coordinates.
+
+    Returns:
+        Predictions: The corresponding Predictions object.
+    """
+
+    predictions_obj = Predictions()
+
     for index, row in group.iterrows():
-
         # Get the bounding box coordinates and denormalize them
         xmin = int(row['xmin'] * width)
         ymin = int(row['ymin'] * height)
         xmax = int(row['xmax'] * width)
         ymax = int(row['ymax'] * height)
 
-        # Convert normalized points to pixel coordinates
+        # Convert normalized points to pixel coordinates for the mask
         segmentation_list = ast.literal_eval(row['segmentation'])
-
         segmentation_points = []
         for i in range(0, len(segmentation_list), 2):
             x = int(segmentation_list[i] * width)
             y = int(segmentation_list[i + 1] * height)
-            segmentation_points.append([x, y])
+            segmentation_points.append((x, y))  # Convert to tuple for polygon points
 
-        x_object = {}
-        x_object['bbox'] = [xmin, ymin, xmax, ymax]
-        x_object['class'] = row['class']
-        x_object['segmentation'] = segmentation_points
+        # Create the Prediction object
+        prediction = Prediction(
+            bbox=[xmin, ymin, xmax, ymax],
+            mask=[segmentation_points],  # Add mask as list of lists of tuples
+            keypoints=None,  # TODO
+            class_id=row['class'],
+            confidence=row.get('confidence', None)  # Add confidence if available
+        )
 
-        # x_object['keypoints'] = [
-        #     [
-        #         {
-        #             "name": "p0",
-        #             "point": [
-        #                 0.2026,
-        #                 0.2128
-        #             ]
-        #         },
-        #         {
-        #             "name": "p1",
-        #             "point": [
-        #                 0.2719,
-        #                 0.25
-        #             ]
-        #         }
-        #     ]]
+        # Add the prediction to the predictions list
+        predictions_obj.add_prediction(prediction)
 
-        objects.append(x_object)
-    annotations['objects'] = objects
-
-    return annotations
+    return predictions_obj
