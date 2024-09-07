@@ -37,12 +37,13 @@ class KeyPoint:
 
 class Prediction:
     def __init__(self, inference_id=None, bbox=None, mask=None, keypoints: List[KeyPoint] = None, class_id=None,
-                 confidence=None, tracker_id=None, data=None):
+                 class_name=None, confidence=None, tracker_id=None, data=None):
         self.inference_id = inference_id
         self.bbox = validate_bbox(bbox)
         self.masks = validate_masks(mask)
         self.keypoints = keypoints if keypoints is not None else None
         self.class_id = class_id
+        self.class_name = class_name
         self.confidence = round_to_decimal(confidence)
         self.tracker_id = tracker_id
         self.data = data
@@ -89,6 +90,9 @@ class Predictions:
                 return  # Skip if the prediction is in an excluded zone
             if not self.zones.is_included(prediction.bbox, prediction.masks):
                 return  # Skip if the prediction is outside of included zones
+
+        # Add the prediction if it passes the zone checks
+        self.predictions.append(prediction)
 
     def __len__(self):
         return len(self.predictions)
@@ -213,7 +217,6 @@ def from_ultralytics(ultralytics_results) -> Predictions:
                 class_id=str(class_id),  # Convert class_id to string for compatibility
                 confidence=float(confidence)  # Convert confidence to float
             )
-
             # Add to the predictions list
             predictions_obj.add_prediction(prediction)
 
