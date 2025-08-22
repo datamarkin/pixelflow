@@ -212,6 +212,62 @@ def pixelate(image, results, pixel_size: int = 10, padding_percent: float = 0.05
     return image
 
 
+def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_angle: int = 235):
+    """
+    Draws elliptical footprints at the bottom of detected objects.
+    
+    Creates ground-plane footprint visualization by drawing partial ellipses
+    at the bottom center of each bounding box. Useful for showing object
+    presence on the ground plane or creating shadow-like effects.
+    
+    Args:
+        image (np.ndarray): Input image to draw footprints on
+        results: List of detection results containing bounding boxes
+        thickness (int): Thickness of the ellipse lines. Default is 2.
+        start_angle (int): Starting angle of the ellipse in degrees. 
+                          Default is -45 (bottom-left).
+        end_angle (int): Ending angle of the ellipse in degrees.
+                        Default is 235 (bottom-right, creating bottom arc).
+        
+    Returns:
+        np.ndarray: Image with elliptical footprints drawn at object bases
+    
+    Notes:
+        - Ellipse width matches the bounding box width
+        - Ellipse height is 25% of the width for natural proportions
+        - Center point is at bottom-center of bounding box
+        - Useful for ground plane visualization and spatial awareness
+    """
+    assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
+    
+    for result in results:
+        box = result.bbox
+        x1, y1, x2, y2 = map(int, box)
+        
+        # Get color for this detection
+        color = colors.get_color(result.class_id)
+        
+        # Calculate ellipse parameters
+        center = (int((x1 + x2) / 2), y2)  # Bottom center of bbox
+        width = x2 - x1
+        height = int(0.25 * width)  # Height is 25% of width for natural look
+        
+        # Draw the ellipse (partial arc from start_angle to end_angle)
+        cv2.ellipse(
+            image,
+            center=center,
+            axes=(int(width / 2), height),  # Semi-major and semi-minor axes
+            angle=0.0,
+            startAngle=start_angle,
+            endAngle=end_angle,
+            color=color,
+            thickness=thickness,
+            lineType=cv2.LINE_AA  # Anti-aliased for smooth curves
+        )
+    
+    return image
+
+
 def motion_trails(image, results, thickness: int = 2, ):
     # TODO: Implement motion trail visualization for tracked objects
     return image
