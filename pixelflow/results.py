@@ -289,22 +289,38 @@ def from_ultralytics(ultralytics_results) -> Results:
     """
     predictions_obj = Results()
 
-    # Loop through all detections in ultralytics_results
-    for ultralytics_result in ultralytics_results:
-        # Get bounding boxes in xyxy format
-        box = ultralytics_result.boxes.xyxy.cpu().numpy()[0]
-        confidence = ultralytics_result.boxes.conf.cpu().numpy()[0]
-        class_id = ultralytics_result.boxes.cls.cpu().numpy().astype(int)[0]
-        segments = ultralytics_result.masks.xy[0]
-        masks = extract_pixel_perfect_ultralytics_masks(ultralytics_result)
-
+    # Handle case where there are no detections
+    if ultralytics_results[0].boxes is None or len(ultralytics_results[0].boxes) == 0:
+        return predictions_obj
+    
+    # Get the first result (typically there's only one result per image)
+    result = ultralytics_results[0]
+    
+    # Get bounding boxes in xyxy format
+    boxes = result.boxes.xyxy.cpu().numpy()
+    confidences = result.boxes.conf.cpu().numpy()
+    class_ids = result.boxes.cls.cpu().numpy().astype(int)
+    
+    # Handle masks if available (for segmentation models)
+    masks = None
+    segments = None
+    if hasattr(result, 'masks') and result.masks is not None:
+        masks = extract_pixel_perfect_ultralytics_masks(result)
+        segments = result.masks.xy  # List of polygon coordinates
+    
+    # Loop through all detections
+    for i in range(len(boxes)):
+        # Get segment for this detection if available
+        segment = segments[i] if segments is not None else None
+        mask = masks[i] if masks is not None else None
+        
         prediction = Prediction(
-            bbox=box.tolist(),
-            masks=masks,
-            segments=segments.astype(int).tolist(),
+            bbox=boxes[i].tolist(),
+            masks=[mask] if mask is not None else None,
+            segments=segment.astype(int).tolist() if segment is not None else None,
             keypoints=None,
-            class_id=int(class_id),
-            confidence=float(confidence)
+            class_id=int(class_ids[i]),
+            confidence=float(confidences[i])
         )
 
         # Add to the predictions list
@@ -410,36 +426,41 @@ def extract_pixel_perfect_ultralytics_masks(yolo_results) -> Optional[np.ndarray
         return None
 
     # Get the original image shape and inference shape
-    original_shape = yolo_results.orig_shape  # (height, width)
+    orig_shape = yolo_results.orig_shape  # (height, width)
     inference_shape = tuple(yolo_results.masks.data.shape[1:])  # (height, width)
 
-    # Calculate gain and padding used during preprocessing
-    gain = min(inference_shape[0] / original_shape[0], inference_shape[1] / original_shape[1])
-    pad_w = (inference_shape[1] - original_shape[1] * gain) / 2  # Width padding
-    pad_h = (inference_shape[0] - original_shape[0] * gain) / 2  # Height padding
+    # Calculate padding if inference shape differs from original shape
+    pad = (0, 0)
+    if inference_shape != orig_shape:
+        gain = min(
+            inference_shape[0] / orig_shape[0],
+            inference_shape[1] / orig_shape[1],
+        )
+        pad = (
+            (inference_shape[1] - orig_shape[1] * gain) / 2,
+            (inference_shape[0] - orig_shape[0] * gain) / 2,
+        )
 
-    # Convert padding values to integers
-    pad_w = int(pad_w)
-    pad_h = int(pad_h)
+    # Calculate crop boundaries
+    top, left = int(pad[1]), int(pad[0])
+    bottom, right = int(inference_shape[0] - pad[1]), int(inference_shape[1] - pad[0])
 
     # Extract masks from YOLO results
-    raw_masks = yolo_results.masks.data.cpu().numpy()
-
-    # Initialize an empty list to store resized masks
-    aligned_masks = []
-
-    for mask in raw_masks:
-        # Remove padding and resize to the original shape
-        cropped_mask = mask[pad_h:inference_shape[0] - pad_h, pad_w:inference_shape[1] - pad_w]
-
-        # Resize to the original image dimensions
-        resized_mask = cv2.resize(cropped_mask, (original_shape[1], original_shape[0]))
-
-        # Threshold to create a binary mask
-        binary_mask = resized_mask > 0.5
-
-        # Add the binary mask to the list
-        aligned_masks.append(binary_mask)
-
-    # Convert the list of masks to a NumPy array and return
-    return np.asarray(aligned_masks, dtype=bool)
+    masks = yolo_results.masks.data.cpu().numpy()
+    
+    # Initialize list to store processed masks
+    mask_maps = []
+    
+    for i in range(masks.shape[0]):
+        mask = masks[i]
+        # Crop to remove padding
+        mask = mask[top:bottom, left:right]
+        
+        # Resize if needed
+        if mask.shape != orig_shape:
+            mask = cv2.resize(mask, (orig_shape[1], orig_shape[0]))
+        
+        # Convert to binary mask
+        mask_maps.append(mask > 0.5)
+    
+    return np.asarray(mask_maps, dtype=bool)
