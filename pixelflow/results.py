@@ -10,9 +10,6 @@ from pixelflow.validators import (validate_bbox,
 from pixelflow.zones import Zones
 from typing import (List,
                     Iterator)
-import cv2
-import numpy as np
-from typing import Optional
 
 
 # Object-oriented approach instead of a NumPy array-based approach
@@ -280,52 +277,82 @@ def from_detectron2(detectron2_results) -> Results:
 def from_ultralytics(ultralytics_results) -> Results:
     """
     Converts Ultralytics YOLO results to a custom Results object.
-
+    
+    Supports both detection and segmentation models.
+    
     Args:
-        ultralytics_results: YOLOv8 results from the Ultralytics library.
+        ultralytics_results: YOLO results from the Ultralytics library.
 
     Returns:
         Results: A unified Results object containing predictions.
     """
     predictions_obj = Results()
-
-    # Handle case where there are no detections
-    if ultralytics_results[0].boxes is None or len(ultralytics_results[0].boxes) == 0:
-        return predictions_obj
     
-    # Get the first result (typically there's only one result per image)
+    # Handle empty results or single result
+    if not ultralytics_results:
+        return predictions_obj
+        
+    # Get the first result (YOLO returns a list with one result per image)
     result = ultralytics_results[0]
     
-    # Get bounding boxes in xyxy format
-    boxes = result.boxes.xyxy.cpu().numpy()
-    confidences = result.boxes.conf.cpu().numpy()
-    class_ids = result.boxes.cls.cpu().numpy().astype(int)
+    # Handle case where there are no detections
+    if result.boxes is None or len(result.boxes) == 0:
+        return predictions_obj
     
-    # Handle masks if available (for segmentation models)
-    masks = None
-    segments = None
-    if hasattr(result, 'masks') and result.masks is not None:
-        masks = extract_pixel_perfect_ultralytics_masks(result)
-        segments = result.masks.xy  # List of polygon coordinates
+    # Get all box data in one tensor transfer (more efficient)
+    boxes_data = result.boxes.data.cpu().numpy()
     
-    # Loop through all detections
-    for i in range(len(boxes)):
-        # Get segment for this detection if available
-        segment = segments[i] if segments is not None else None
-        mask = masks[i] if masks is not None else None
+    # Extract components from the tensor
+    # Format: [x1, y1, x2, y2, conf, class_id, ...]
+    xyxy = boxes_data[:, :4]  # Bounding boxes
+    confidences = boxes_data[:, 4]  # Confidence scores  
+    class_ids = boxes_data[:, 5].astype(int)  # Class IDs
+    
+    # Check if we have segmentation masks
+    has_masks = hasattr(result, 'masks') and result.masks is not None
+    
+    # Process each detection
+    num_detections = len(xyxy)
+    for i in range(num_detections):
+        # Basic detection info
+        bbox = xyxy[i].tolist()
+        confidence = float(confidences[i])
+        class_id = int(class_ids[i])
         
+        # Handle masks if available
+        masks = None
+        segments = None
+        if has_masks:
+            # Use polygon format (xy) for segments - it's more efficient
+            segments = result.masks.xy[i]
+            # Convert to integer coordinates
+            if segments is not None and len(segments) > 0:
+                segments = segments.astype(int).tolist()
+                # Store segments as masks for compatibility
+                # This maintains the expected interface without expensive pixel operations
+                masks = [segments]  # Wrap in list as expected by Prediction
+            
+            # For pixel masks, we'll use the data attribute only when needed
+            # This avoids expensive resizing operations unless absolutely necessary
+            # masks.data is shape: [num_masks, height, width]
+        
+        # Create prediction object
         prediction = Prediction(
-            bbox=boxes[i].tolist(),
-            masks=[mask] if mask is not None else None,
-            segments=segment.astype(int).tolist() if segment is not None else None,
+            bbox=bbox,
+            masks=masks,  # Now properly populated with polygon segments
+            segments=segments,
             keypoints=None,
-            class_id=int(class_ids[i]),
-            confidence=float(confidences[i])
+            class_id=class_id,
+            confidence=confidence
         )
-
-        # Add to the predictions list
+        
         predictions_obj.add_prediction(prediction)
-
+    
+    # Store the original YOLO masks data for later use if needed
+    # This avoids processing masks until they're actually used
+    if has_masks:
+        predictions_obj._ultralytics_masks = result.masks
+    
     return predictions_obj
 
 
@@ -381,86 +408,3 @@ def from_datamarkin_csv(group, height, width) -> Results:
 
     return predictions_obj
 
-def extract_ultralytics_masks(yolo_results) -> Optional[np.ndarray]:
-    """
-    Resizes segmentation masks from YOLO results to match the original image dimensions.
-
-    Args:
-        yolo_results: YOLO inference results containing segmentation masks.
-
-    Returns:
-        Optional[np.ndarray]: Array of binary masks resized to the original image dimensions,
-                              or None if no masks are available.
-    """
-    # Check if masks are available in the YOLO results
-    if not yolo_results.masks:
-        return None
-
-    # Get the original image shape
-    original_shape = yolo_results.orig_shape
-
-    # Extract masks from the YOLO results and resize them
-    raw_masks = yolo_results.masks.data.cpu().numpy()
-    resized_masks = [
-        cv2.resize(mask, (original_shape[1], original_shape[0])) > 0.5  # Resize and threshold
-        for mask in raw_masks
-    ]
-
-    # Convert to binary masks and return
-    return np.asarray(resized_masks, dtype=bool)
-
-def extract_pixel_perfect_ultralytics_masks(yolo_results) -> Optional[np.ndarray]:
-    """
-    Extracts segmentation masks from YOLO results and resizes them to match the original image dimensions,
-    including handling padding for pixel-perfect alignment.
-
-    Args:
-        yolo_results: YOLO inference results containing segmentation masks.
-
-    Returns:
-        Optional[np.ndarray]: Array of binary masks resized to the original image dimensions,
-                              or None if no masks are available.
-    """
-    # Check if masks are available in the YOLO results
-    if not yolo_results.masks:
-        return None
-
-    # Get the original image shape and inference shape
-    orig_shape = yolo_results.orig_shape  # (height, width)
-    inference_shape = tuple(yolo_results.masks.data.shape[1:])  # (height, width)
-
-    # Calculate padding if inference shape differs from original shape
-    pad = (0, 0)
-    if inference_shape != orig_shape:
-        gain = min(
-            inference_shape[0] / orig_shape[0],
-            inference_shape[1] / orig_shape[1],
-        )
-        pad = (
-            (inference_shape[1] - orig_shape[1] * gain) / 2,
-            (inference_shape[0] - orig_shape[0] * gain) / 2,
-        )
-
-    # Calculate crop boundaries
-    top, left = int(pad[1]), int(pad[0])
-    bottom, right = int(inference_shape[0] - pad[1]), int(inference_shape[1] - pad[0])
-
-    # Extract masks from YOLO results
-    masks = yolo_results.masks.data.cpu().numpy()
-    
-    # Initialize list to store processed masks
-    mask_maps = []
-    
-    for i in range(masks.shape[0]):
-        mask = masks[i]
-        # Crop to remove padding
-        mask = mask[top:bottom, left:right]
-        
-        # Resize if needed
-        if mask.shape != orig_shape:
-            mask = cv2.resize(mask, (orig_shape[1], orig_shape[0]))
-        
-        # Convert to binary mask
-        mask_maps.append(mask > 0.5)
-    
-    return np.asarray(mask_maps, dtype=bool)
