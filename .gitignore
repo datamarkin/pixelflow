@@ -2,3 +2,7 @@
 build/
 wheels/
 pixelflow.egg-info/
+
+/.cursor
+/.idea
+.DS_Store
