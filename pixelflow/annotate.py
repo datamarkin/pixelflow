@@ -40,52 +40,62 @@ def draw_box(image, results, thickness: int = 2):
 
 
 def box_fill(image, results, thickness: int = 2, ):
+    # TODO: Implement filled bounding boxes without borders
     return image
 
 
 def blur(image, results, thickness: int = 2, ):
+    # TODO: Implement blur effect on detected regions
     return image
 
 
 def pixelate(image, results, thickness: int = 2, ):
+    # TODO: Implement pixelation effect on detected regions
     return image
 
 
 def motion_trails(image, results, thickness: int = 2, ):
+    # TODO: Implement motion trail visualization for tracked objects
     return image
 
 
 def motion_dots(image, results, thickness: int = 2, ):
+    # TODO: Implement motion dots/breadcrumbs for object paths
     return image
 
 
 def heatmap(image, results, thickness: int = 2, ):
+    # TODO: Implement heatmap visualization for detection density
     return image
 
 
 def dot(image, results, thickness: int = 2, ):
+    # TODO: Implement center dot annotation for detected objects
     return image
 
 
 def keypoint(image, results, thickness: int = 2, ):
+    # TODO: Implement keypoint visualization (e.g., pose estimation)
     return image
 
 
 def keypoint_skeleton(image, results, thickness: int = 2, ):
+    # TODO: Implement skeleton connections between keypoints
     return image
 
 
 def grid_overlay(image, results, thickness: int = 2, ):
+    # TODO: Implement grid overlay for spatial reference
     return image
 
 
 def scale_bar(image, results, thickness: int = 2, ):
+    # TODO: Implement scale bar for size reference
     return image
 
 
 def fps_counter(image, results, thickness: int = 2, ):
     import time
-    from datetime import datetime
 
     # Get current time
     current_time = time.time()
@@ -220,4 +230,3 @@ def label(image, results, labels=None, font_scale=0.5, font_thickness=1, font_co
 
     return image
 
-## Quick Start
