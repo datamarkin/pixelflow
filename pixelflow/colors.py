@@ -23,7 +23,8 @@ class ColorManager:
     def get_color(self, idx):
         if idx not in self.used_colors:
             current_index = len(self.used_colors)
-            self.used_colors[idx] = self.palette[current_index + 1]
+            # Use modulo to cycle through palette when we have more classes than colors
+            self.used_colors[idx] = self.palette[current_index % len(self.palette)]
             return self.used_colors[idx]
         else:
             return self.used_colors[idx]
