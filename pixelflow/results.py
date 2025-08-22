@@ -208,32 +208,67 @@ def from_detectron2(detectron2_results) -> Results:
         Results: A unified Results object containing predictions.
     """
     predictions_obj = Results()
+    
+    # Get instances and ensure they're on CPU for processing
+    instances = detectron2_results["instances"].to("cpu")
+    
+    # Check if we have any instances
+    if len(instances) == 0:
+        return predictions_obj
 
-    # Extract data from Detectron2 results
-    bboxes = detectron2_results["instances"].pred_boxes.tensor.cpu().numpy()  # Bounding boxes
-    confidences = detectron2_results["instances"].scores.cpu().numpy()       # Confidence scores
-    class_ids = detectron2_results["instances"].pred_classes.cpu().numpy().astype(int)  # Class IDs
-    masks = (
-        detectron2_results["instances"].pred_masks.cpu().numpy()
-        if hasattr(detectron2_results["instances"], "pred_masks")
-        else None
-    )  # Optional segmentation masks
+    # Extract prediction data
+    # Bounding boxes - Detectron2 uses XYXY format
+    boxes = instances.pred_boxes.tensor.numpy() if instances.has("pred_boxes") else None
+    
+    # Confidence scores
+    scores = instances.scores.numpy() if instances.has("scores") else None
+    
+    # Class IDs  
+    classes = instances.pred_classes.numpy() if instances.has("pred_classes") else None
+    
+    # Segmentation masks
+    masks = None
+    if instances.has("pred_masks"):
+        masks = instances.pred_masks.numpy()
+    
+    # Keypoints if available
+    keypoints = None
+    if instances.has("pred_keypoints"):
+        keypoints = instances.pred_keypoints.numpy()
 
     # Iterate over each detection
-    for i in range(len(bboxes)):
-        bbox = bboxes[i]
-        confidence = confidences[i]
-        class_id = class_ids[i]
-        mask = masks[i] if masks is not None else None
-
+    for i in range(len(instances)):
+        # Extract bounding box in XYXY format
+        bbox = boxes[i].tolist() if boxes is not None else None
+        
+        # Extract confidence score
+        confidence = float(scores[i]) if scores is not None else None
+        
+        # Extract class ID  
+        class_id = int(classes[i]) if classes is not None else None
+        
+        # Handle segmentation masks
+        mask = None
+        if masks is not None:
+            mask_data = masks[i].astype(bool)
+            mask = mask_data
+        
+        # Handle keypoints if available
+        kpts = None
+        if keypoints is not None:
+            # Detectron2 keypoints are in format (x, y, visibility) 
+            kpt_data = keypoints[i]
+            # Convert to PixelFlow KeyPoint format if needed
+            # This would need to be implemented based on your KeyPoint class
+        
         # Create a Prediction object
         prediction = Prediction(
-            bbox=bbox.tolist(),
-            masks=mask if mask is None else mask.astype(bool),  # Ensure masks are binary
-            segments=None,  # Detectron2 does not provide polygon segments
-            keypoints=None,  # Add if keypoints are part of your format
-            class_id=int(class_id),
-            confidence=float(confidence)
+            bbox=bbox,
+            masks=[mask] if mask is not None else None,
+            segments=None,
+            keypoints=kpts,
+            class_id=class_id,
+            confidence=confidence
         )
 
         # Add the prediction to the Results object
