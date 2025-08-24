@@ -6,3 +6,4 @@ pixelflow.egg-info/
 /.cursor
 /.idea
 .DS_Store
+/pixelflow/__pycache__
