@@ -42,6 +42,7 @@ class Zones:
             if zone.polygon.contains(bbox_polygon) or zone.polygon.intersects(bbox_polygon):
                 return True
 
+        #TODO verify with real world logic if this is necessary
         if masks:
             for mask in masks:
                 mask_polygon = Polygon(mask)
