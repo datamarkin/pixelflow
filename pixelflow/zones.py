@@ -156,7 +156,7 @@ class Zone:
         self._tracked_ids.clear()
 
 
-class ZoneManager:
+class Zones:
     """Manages multiple zones and updates detection results with zone information."""
     
     def __init__(self):
@@ -332,41 +332,3 @@ class ZoneManager:
         """Reset statistics for all zones."""
         for zone in self.zones:
             zone.reset_counts()
-
-
-# Maintain backward compatibility with old Zones class
-class Zones:
-    """Legacy Zones class for backward compatibility."""
-    
-    def __init__(self):
-        import warnings
-        warnings.warn(
-            "Zones class is deprecated. Use ZoneManager instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        self.manager = ZoneManager()
-        self.zones = self.manager.zones
-    
-    def add_zone(self, zone):
-        """Legacy method - converts old Zone to new format."""
-        if hasattr(zone, 'polygon') and isinstance(zone.polygon, Polygon):
-            # Convert Shapely polygon to list of points
-            points = list(zone.polygon.exterior.coords[:-1])  # Remove duplicate last point
-            self.manager.add_zone(
-                polygon=points,
-                zone_id=zone.zone_id,
-                name=getattr(zone, 'name', ''),
-                color=getattr(zone, 'color', None)
-            )
-    
-    def remove_zone(self, zone_id: int):
-        """Legacy method."""
-        self.manager.remove_zone(zone_id)
-    
-    def is_inside(self, bbox: List[float], masks: List[List[float]]) -> bool:
-        """Legacy method - checks if bbox is in any zone."""
-        for zone in self.manager.zones:
-            if zone.check_detection(bbox):
-                return True
-        return False
