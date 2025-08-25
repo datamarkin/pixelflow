@@ -165,6 +165,11 @@ class STrack:
             frame_id: Current frame ID
             new_id: Whether to assign a new track ID
         """
+        # Smooth velocity transition during reactivation
+        if self.time_since_update > 2:
+            # If track was lost for multiple frames, reduce trust in velocity
+            self.mean[4:8] *= 0.3  # Keep only 30% of velocity
+            
         self.mean, self.covariance = self.shared_kalman.update(
             self.mean, self.covariance, self.tlwh_to_xyah(new_track.tlwh)
         )
@@ -202,7 +207,8 @@ class STrack:
     def predict(self):
         """Predict the track's next state using Kalman filter."""
         if self.state != TrackState.TRACKED:
-            self.mean[7] = 0  # Reset velocity if not tracked
+            # Reduce velocity gradually instead of hard reset for smoother transitions
+            self.mean[4:8] *= 0.5  # Dampen all velocities by 50%
             
         self.mean, self.covariance = self.shared_kalman.predict(
             self.mean, self.covariance

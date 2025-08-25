@@ -44,28 +44,31 @@ class ByteTracker:
     Args:
         track_activation_threshold: Detection confidence threshold for track activation (default: 0.25)
         lost_track_buffer: Number of frames to buffer when a track is lost (default: 30)
-        minimum_matching_threshold: Threshold for matching tracks with detections (default: 0.8)
-        frame_rate: Video frame rate for time calculations (default: 30)
+        minimum_matching_threshold: IoU threshold for first-stage matching with high confidence detections (default: 0.7)
         minimum_consecutive_frames: Minimum frames before considering a track valid (default: 3)
+        second_match_threshold: IoU threshold for second-stage matching with low confidence detections (default: 0.5)
+        assignment_threshold: IoU threshold for assigning tracker IDs to predictions (default: 0.3)
     """
     
     def __init__(
         self,
         track_activation_threshold: float = 0.25,
         lost_track_buffer: int = 30,
-        minimum_matching_threshold: float = 0.8,
-        frame_rate: int = 30,
-        minimum_consecutive_frames: int = 3
+        minimum_matching_threshold: float = 0.7,
+        minimum_consecutive_frames: int = 3,
+        second_match_threshold: float = 0.5,
+        assignment_threshold: float = 0.3
     ):
         self.track_activation_threshold = track_activation_threshold
         self.minimum_matching_threshold = minimum_matching_threshold
-        self.frame_rate = frame_rate
         self.minimum_consecutive_frames = minimum_consecutive_frames
+        self.second_match_threshold = second_match_threshold
+        self.assignment_threshold = assignment_threshold
         
         # Frame and threshold management
         self.frame_id = 0
         self.det_thresh = track_activation_threshold + 0.1
-        self.max_time_lost = int(frame_rate / 30.0 * lost_track_buffer)
+        self.max_time_lost = lost_track_buffer
         
         # Kalman filters
         self.kalman_filter = KalmanFilter()
@@ -128,9 +131,9 @@ class ByteTracker:
         # Split detections into high and low confidence
         remain_inds = scores > self.track_activation_threshold
         inds_low = scores > 0.1
-        inds_high = scores < self.track_activation_threshold
+        inds_high = scores > self.track_activation_threshold
         
-        inds_second = np.logical_and(inds_low, inds_high)
+        inds_second = np.logical_and(inds_low, ~inds_high)
         dets_second = bboxes[inds_second]
         dets = bboxes[remain_inds]
         scores_keep = scores[remain_inds]
@@ -196,7 +199,7 @@ class ByteTracker:
         ]
         
         dists = matching.iou_distance(r_tracked_tracks, detections_second)
-        matches, u_track, u_detection_second = matching.linear_assignment(dists, thresh=0.5)
+        matches, u_track, u_detection_second = matching.linear_assignment(dists, thresh=self.second_match_threshold)
         
         for itracked, idet in matches:
             track = r_tracked_tracks[itracked]
@@ -307,7 +310,7 @@ class ByteTracker:
         
         # Assign tracker IDs based on best IoU match
         for i, pred in enumerate(results.predictions):
-            if np.max(ious[i]) > 0.3:  # Minimum IoU threshold for assignment
+            if np.max(ious[i]) > self.assignment_threshold:  # Minimum IoU threshold for assignment
                 best_track_idx = np.argmax(ious[i])
                 pred.tracker_id = tracks[best_track_idx].track_id
             else:
