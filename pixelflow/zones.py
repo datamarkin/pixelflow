@@ -3,7 +3,7 @@
 from shapely.geometry import Polygon, Point, box
 from typing import List, Optional, Tuple, Dict, Any, Literal, Union
 import numpy as np
-from .strategies import TriggerStrategy
+from .strategies import TriggerStrategy, check_detection_in_region
 
 
 class Zone:
@@ -85,55 +85,13 @@ class Zone:
         Returns:
             True if detection is in zone, False otherwise
         """
-        x1, y1, x2, y2 = bbox
-        
-        # Create bbox polygon
-        bbox_poly = box(x1, y1, x2, y2)
-        
-        # Check based on strategy
-        if self.trigger_strategy == TriggerStrategy.CENTER:
-            center = Point((x1 + x2) / 2, (y1 + y2) / 2)
-            in_zone = self.polygon.contains(center)
-            
-        elif self.trigger_strategy == TriggerStrategy.BOTTOM_CENTER:
-            bottom_center = Point((x1 + x2) / 2, y2)
-            in_zone = self.polygon.contains(bottom_center)
-            
-        elif self.trigger_strategy == TriggerStrategy.TOP_LEFT:
-            in_zone = self.polygon.contains(Point(x1, y1))
-            
-        elif self.trigger_strategy == TriggerStrategy.TOP_RIGHT:
-            in_zone = self.polygon.contains(Point(x2, y1))
-            
-        elif self.trigger_strategy == TriggerStrategy.BOTTOM_LEFT:
-            in_zone = self.polygon.contains(Point(x1, y2))
-            
-        elif self.trigger_strategy == TriggerStrategy.BOTTOM_RIGHT:
-            in_zone = self.polygon.contains(Point(x2, y2))
-            
-        elif self.trigger_strategy == TriggerStrategy.ANY_CORNER:
-            corners = [Point(x1, y1), Point(x2, y1), Point(x1, y2), Point(x2, y2)]
-            in_zone = any(self.polygon.contains(corner) for corner in corners)
-            
-        elif self.trigger_strategy == TriggerStrategy.ALL_CORNERS:
-            corners = [Point(x1, y1), Point(x2, y1), Point(x1, y2), Point(x2, y2)]
-            in_zone = all(self.polygon.contains(corner) for corner in corners)
-            
-        elif self.trigger_strategy == TriggerStrategy.OVERLAP:
-            in_zone = self.polygon.intersects(bbox_poly)
-            
-        elif self.trigger_strategy == TriggerStrategy.CONTAINS:
-            in_zone = self.polygon.contains(bbox_poly)
-            
-        elif self.trigger_strategy == TriggerStrategy.PERCENTAGE:
-            if self.polygon.intersects(bbox_poly):
-                intersection = self.polygon.intersection(bbox_poly)
-                overlap_ratio = intersection.area / bbox_poly.area
-                in_zone = overlap_ratio >= self.overlap_threshold
-            else:
-                in_zone = False
-        else:
-            in_zone = False
+        # Use centralized strategy logic
+        in_zone = check_detection_in_region(
+            bbox, 
+            self.trigger_strategy, 
+            self.polygon, 
+            self.overlap_threshold
+        )
         
         # Update tracking if object is in zone
         if in_zone and tracker_id is not None:

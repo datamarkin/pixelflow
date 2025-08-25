@@ -3,6 +3,8 @@ Strategies for detection and trigger logic used across PixelFlow components.
 """
 
 from enum import Enum
+from typing import List, Tuple
+from shapely.geometry import Polygon, Point, box
 
 
 class TriggerStrategy(Enum):
@@ -47,4 +49,103 @@ class TriggerStrategy(Enum):
     OVERLAP = "overlap"  # Check if bbox overlaps with region
     CONTAINS = "contains"  # Check if region fully contains the bbox
     PERCENTAGE = "percentage"  # Check if overlap percentage exceeds threshold
+
+
+def get_anchor_position(bbox: List[float], strategy: TriggerStrategy) -> Tuple[float, float]:
+    """
+    Get the position of a specific anchor point on the bounding box.
+    
+    Args:
+        bbox: Bounding box in [x1, y1, x2, y2] format
+        strategy: The trigger strategy defining which anchor point to use
+        
+    Returns:
+        Tuple of (x, y) coordinates for the anchor point
+    """
+    x1, y1, x2, y2 = bbox
+    
+    if strategy == TriggerStrategy.CENTER:
+        return ((x1 + x2) / 2, (y1 + y2) / 2)
+    elif strategy == TriggerStrategy.BOTTOM_CENTER:
+        return ((x1 + x2) / 2, y2)
+    elif strategy == TriggerStrategy.TOP_LEFT:
+        return (x1, y1)
+    elif strategy == TriggerStrategy.TOP_RIGHT:
+        return (x2, y1)
+    elif strategy == TriggerStrategy.BOTTOM_LEFT:
+        return (x1, y2)
+    elif strategy == TriggerStrategy.BOTTOM_RIGHT:
+        return (x2, y2)
+    else:
+        # Default to center if unknown
+        return ((x1 + x2) / 2, (y1 + y2) / 2)
+
+
+def check_detection_in_region(
+    bbox: List[float], 
+    strategy: TriggerStrategy, 
+    region: Polygon, 
+    overlap_threshold: float = 0.5
+) -> bool:
+    """
+    Check if a detection is within a region based on the trigger strategy.
+    
+    Args:
+        bbox: Bounding box in [x1, y1, x2, y2] format
+        strategy: Strategy for determining if detection is in region
+        region: Shapely Polygon representing the region
+        overlap_threshold: Threshold for PERCENTAGE strategy (0.0 to 1.0)
+        
+    Returns:
+        True if detection is in region according to strategy, False otherwise
+    """
+    x1, y1, x2, y2 = bbox
+    
+    # Create bbox polygon for geometric operations
+    bbox_poly = box(x1, y1, x2, y2)
+    
+    # Check based on strategy
+    if strategy == TriggerStrategy.CENTER:
+        center = Point((x1 + x2) / 2, (y1 + y2) / 2)
+        return region.contains(center)
+        
+    elif strategy == TriggerStrategy.BOTTOM_CENTER:
+        bottom_center = Point((x1 + x2) / 2, y2)
+        return region.contains(bottom_center)
+        
+    elif strategy == TriggerStrategy.TOP_LEFT:
+        return region.contains(Point(x1, y1))
+        
+    elif strategy == TriggerStrategy.TOP_RIGHT:
+        return region.contains(Point(x2, y1))
+        
+    elif strategy == TriggerStrategy.BOTTOM_LEFT:
+        return region.contains(Point(x1, y2))
+        
+    elif strategy == TriggerStrategy.BOTTOM_RIGHT:
+        return region.contains(Point(x2, y2))
+        
+    elif strategy == TriggerStrategy.ANY_CORNER:
+        corners = [Point(x1, y1), Point(x2, y1), Point(x1, y2), Point(x2, y2)]
+        return any(region.contains(corner) for corner in corners)
+        
+    elif strategy == TriggerStrategy.ALL_CORNERS:
+        corners = [Point(x1, y1), Point(x2, y1), Point(x1, y2), Point(x2, y2)]
+        return all(region.contains(corner) for corner in corners)
+        
+    elif strategy == TriggerStrategy.OVERLAP:
+        return region.intersects(bbox_poly)
+        
+    elif strategy == TriggerStrategy.CONTAINS:
+        return region.contains(bbox_poly)
+        
+    elif strategy == TriggerStrategy.PERCENTAGE:
+        if region.intersects(bbox_poly):
+            intersection = region.intersection(bbox_poly)
+            overlap_ratio = intersection.area / bbox_poly.area
+            return overlap_ratio >= overlap_threshold
+        else:
+            return False
+    else:
+        return False
     

@@ -11,7 +11,7 @@ from collections import Counter, defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
-from .strategies import TriggerStrategy
+from .strategies import TriggerStrategy, get_anchor_position
 
 
 class Line:
@@ -130,25 +130,6 @@ class Line:
         """Per-class counts for objects crossing out."""
         return dict(self._out_count_per_class)
     
-    def _get_anchor_position(self, bbox: List[float], anchor: TriggerStrategy) -> Tuple[float, float]:
-        """Get the position of a specific anchor point on the bounding box."""
-        x1, y1, x2, y2 = bbox
-        
-        if anchor == TriggerStrategy.CENTER:
-            return ((x1 + x2) / 2, (y1 + y2) / 2)
-        elif anchor == TriggerStrategy.BOTTOM_CENTER:
-            return ((x1 + x2) / 2, y2)
-        elif anchor == TriggerStrategy.TOP_LEFT:
-            return (x1, y1)
-        elif anchor == TriggerStrategy.TOP_RIGHT:
-            return (x2, y1)
-        elif anchor == TriggerStrategy.BOTTOM_LEFT:
-            return (x1, y2)
-        elif anchor == TriggerStrategy.BOTTOM_RIGHT:
-            return (x2, y2)
-        else:
-            # Default to center if unknown
-            return ((x1 + x2) / 2, (y1 + y2) / 2)
     
     def _point_side_of_line(self, point: Tuple[float, float]) -> int:
         """
@@ -198,7 +179,7 @@ class Line:
                 continue
             
             # Check which side of the line the triggering anchor is on
-            point = self._get_anchor_position(prediction.bbox, self.triggering_anchor)
+            point = get_anchor_position(prediction.bbox, self.triggering_anchor)
             side = self._point_side_of_line(point)
             
             if side == 0:  # Point is exactly on the line, skip
