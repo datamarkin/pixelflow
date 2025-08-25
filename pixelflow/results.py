@@ -137,6 +137,24 @@ class Results:
                 filtered_predictions.add_prediction(prediction)
         return filtered_predictions
 
+    def filter_by_class_id(self, class_ids) -> 'Results':
+        """
+        Returns a new Results object containing only predictions
+        with class_id matching one of the provided class_ids.
+        
+        Args:
+            class_ids: Single class_id or list of class_ids to filter by
+        """
+        # Handle single class_id or list of class_ids
+        if not isinstance(class_ids, (list, tuple)):
+            class_ids = [class_ids]
+            
+        filtered_predictions = Results()
+        for prediction in self.predictions:
+            if prediction.class_id is not None and prediction.class_id in class_ids:
+                filtered_predictions.add_prediction(prediction)
+        return filtered_predictions
+
     def simplify(self, tolerance: float = 2.0, preserve_topology: bool = True):
         """
         Simplifies the masks of all predictions in the Predictions object.
