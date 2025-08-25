@@ -37,7 +37,8 @@ class KeyPoint:
 
 class Prediction:
     def __init__(self, inference_id=None, bbox=None, masks=None, segments=None, keypoints: List[KeyPoint] = None, class_id=None,
-                 class_name=None, labels=None, confidence=None, tracker_id=None, data=None, zones=None, zone_names=None):
+                 class_name=None, labels=None, confidence=None, tracker_id=None, data=None, zones=None, zone_names=None,
+                 line_crossings=None):
         self.inference_id = inference_id
         self.bbox = validate_bbox(bbox)
         self.masks = masks
@@ -51,6 +52,7 @@ class Prediction:
         self.data = data
         self.zones = zones if zones is not None else []  # List of zone IDs
         self.zone_names = zone_names if zone_names is not None else []  # List of zone names
+        self.line_crossings = line_crossings if line_crossings is not None else []  # List of line crossing events
 
     def to_dict(self):
         """
@@ -69,7 +71,8 @@ class Prediction:
             "tracker_id": self.tracker_id,
             "data": self.data,
             "zones": self.zones,
-            "zone_names": self.zone_names
+            "zone_names": self.zone_names,
+            "line_crossings": self.line_crossings
         }
 
     def simplify_masks(self, tolerance: float = 2.0, preserve_topology: bool = True):
