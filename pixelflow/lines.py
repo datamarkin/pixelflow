@@ -149,6 +149,40 @@ class Line:
         else:
             return 0
     
+    def _is_point_near_line_segment(self, point: Tuple[float, float], margin: float = 50.0) -> bool:
+        """
+        Check if a point is within the bounds of the line segment (with optional margin).
+        
+        This prevents counting objects that pass beside the line segment
+        (outside the start/end points) but would cross the infinite line extension.
+        
+        Args:
+            point: The point to check (x, y)
+            margin: Additional margin beyond line endpoints (default 50 pixels)
+        
+        Returns:
+            True if point is near the line segment, False otherwise
+        """
+        x, y = point
+        x1, y1 = self.start
+        x2, y2 = self.end
+        
+        # Calculate the parameter t for the closest point on the line
+        # Using parametric form: P(t) = start + t * (end - start)
+        line_length_sq = self.dx * self.dx + self.dy * self.dy
+        
+        if line_length_sq == 0:
+            # Start and end are the same point
+            dist_sq = (x - x1) ** 2 + (y - y1) ** 2
+            return dist_sq <= margin * margin
+        
+        # Calculate t parameter for projection of point onto line
+        t = ((x - x1) * self.dx + (y - y1) * self.dy) / line_length_sq
+        
+        # Check if projection falls within segment bounds (with margin)
+        margin_ratio = margin / (line_length_sq ** 0.5)
+        return -margin_ratio <= t <= 1.0 + margin_ratio
+    
     def trigger(self, detections) -> Tuple[np.ndarray, np.ndarray]:
         """
         Check for line crossings and update counts.
@@ -178,8 +212,20 @@ class Line:
             if prediction.bbox is None:
                 continue
             
+            # Get tracker ID early for use in boundary checking
+            tracker_id = prediction.tracker_id
+            
             # Check which side of the line the triggering anchor is on
             point = get_anchor_position(prediction.bbox, self.triggering_anchor)
+            
+            # First check if the point is near the line segment
+            # This prevents counting objects that pass beside the line
+            if not self._is_point_near_line_segment(point):
+                # Clear history for trackers that move away from the line
+                if tracker_id in self.crossing_state_history:
+                    self.crossing_state_history[tracker_id].clear()
+                continue
+            
             side = self._point_side_of_line(point)
             
             if side == 0:  # Point is exactly on the line, skip
@@ -189,7 +235,6 @@ class Line:
             tracker_state = side > 0
             
             # Update crossing history
-            tracker_id = prediction.tracker_id
             class_id = prediction.class_id if prediction.class_id is not None else -1
             
             # Store class name mapping
@@ -209,15 +254,21 @@ class Line:
             oldest_state = crossing_history[0]
             newest_state = crossing_history[-1]
             
-            # Object must have been consistently on one side and now consistently on the other
-            if crossing_history.count(oldest_state) == 1 and oldest_state != newest_state:
-                # Crossing detected
-                if newest_state:  # Moved from right to left (in)
-                    self._in_count_per_class[class_id] += 1
-                    crossed_in[i] = True
-                else:  # Moved from left to right (out)
-                    self._out_count_per_class[class_id] += 1
-                    crossed_out[i] = True
+            # Only trigger if oldest state appears exactly once
+            if crossing_history.count(oldest_state) > 1:
+                continue
+            
+            # Must have different states to be a crossing
+            if oldest_state == newest_state:
+                continue
+            
+            # Crossing detected - use newest state to determine direction
+            if newest_state:  # Moved from right to left (in)
+                self._in_count_per_class[class_id] += 1
+                crossed_in[i] = True
+            else:  # Moved from left to right (out)
+                self._out_count_per_class[class_id] += 1
+                crossed_out[i] = True
         
         return crossed_in, crossed_out
     
