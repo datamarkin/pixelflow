@@ -11,8 +11,8 @@ from . import zones
 
 # Import specific functions for top-level access
 from .video import lazy_frame_generator
-from .zones import Zones, Zone, TriggerStrategy
+from .zones import Zones, Zone
 
 # Define the public API
 __all__ = ["draw", "annotate", "results", "zones", "lazy_frame_generator",
-           "Zones", "Zone", "TriggerStrategy", "__version__", "__author__"]
+           "Zones", "Zone", "__version__", "__author__"]

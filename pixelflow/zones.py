@@ -1,24 +1,9 @@
 # zones.py
 
 from shapely.geometry import Polygon, Point, box
-from typing import List, Optional, Tuple, Dict, Any, Literal
+from typing import List, Optional, Tuple, Dict, Any, Literal, Union
 import numpy as np
-from enum import Enum
-
-
-class TriggerStrategy(Enum):
-    """Strategies for determining if a detection is within a zone."""
-    CENTER = "center"  # Check if center point is in zone
-    BOTTOM_CENTER = "bottom_center"  # Check if bottom center is in zone
-    TOP_LEFT = "top_left"  # Check if top-left corner is in zone
-    TOP_RIGHT = "top_right"  # Check if top-right corner is in zone
-    BOTTOM_LEFT = "bottom_left"  # Check if bottom-left corner is in zone
-    BOTTOM_RIGHT = "bottom_right"  # Check if bottom-right corner is in zone
-    ANY_CORNER = "any_corner"  # Check if any corner is in zone
-    ALL_CORNERS = "all_corners"  # Check if all corners are in zone
-    OVERLAP = "overlap"  # Check if bbox overlaps with zone
-    CONTAINS = "contains"  # Check if zone fully contains the bbox
-    PERCENTAGE = "percentage"  # Check if overlap percentage exceeds threshold
+from .strategies import TriggerStrategy
 
 
 class Zone:
@@ -30,7 +15,7 @@ class Zone:
         zone_id: int | str,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        trigger_strategy: TriggerStrategy | str = TriggerStrategy.CENTER,
+        trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage"], None] = "center",
         overlap_threshold: float = 0.5,
         metadata: Optional[Dict[str, Any]] = None
     ):
@@ -56,8 +41,17 @@ class Zone:
         self.color = color or self._generate_color(zone_id)
         
         # Trigger configuration
+        if trigger_strategy is None:
+            trigger_strategy = "center"
         if isinstance(trigger_strategy, str):
-            trigger_strategy = TriggerStrategy(trigger_strategy)
+            try:
+                trigger_strategy = TriggerStrategy(trigger_strategy)
+            except ValueError:
+                valid_strategies = [s.value for s in TriggerStrategy]
+                raise ValueError(
+                    f"Invalid trigger_strategy '{trigger_strategy}'. "
+                    f"Valid options are: {', '.join(valid_strategies)}"
+                )
         self.trigger_strategy = trigger_strategy
         self.overlap_threshold = max(0.0, min(1.0, overlap_threshold))
         
@@ -170,7 +164,7 @@ class Zones:
         zone_id: Optional[int | str] = None,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        trigger_strategy: TriggerStrategy | str = TriggerStrategy.CENTER,
+        trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage"], None] = "center",
         overlap_threshold: float = 0.5,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Zone:
