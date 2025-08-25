@@ -178,7 +178,7 @@ def pixelate(image, results, pixel_size: int = 10, padding_percent: float = 0.05
     return image
 
 
-def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_angle: int = 235):
+def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_angle: int = 235, colors=None):
     """
     Draws elliptical footprints at the bottom of detected objects.
     
@@ -194,6 +194,9 @@ def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_an
                           Default is -45 (bottom-left).
         end_angle (int): Ending angle of the ellipse in degrees.
                         Default is 235 (bottom-right, creating bottom arc).
+        colors (list, optional): List of BGR color tuples to override default colors.
+                               Colors are mapped to unique class_ids in order of appearance.
+                               If None, uses default ColorManager colors.
         
     Returns:
         np.ndarray: Image with elliptical footprints drawn at object bases
@@ -203,15 +206,25 @@ def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_an
         - Ellipse height is 25% of the width for natural proportions
         - Center point is at bottom-center of bounding box
         - Useful for ground plane visualization and spatial awareness
+        
+    Examples:
+        # Use default colors
+        annotated = footprint(image, results)
+        
+        # Override with custom colors
+        custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+        annotated = footprint(image, results, colors=custom_colors)
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
+    
+    from .colors import get_color_for_prediction
     
     for result in results:
         box = result.bbox
         x1, y1, x2, y2 = map(int, box)
         
         # Get color for this detection
-        color = colors.get_color(result.class_id)
+        color = get_color_for_prediction(result, colors)
         
         # Calculate ellipse parameters
         center = (int((x1 + x2) / 2), y2)  # Bottom center of bbox
@@ -298,48 +311,108 @@ def fps_counter(image, results, thickness: int = 2, ):
     return image
 
 
-def box(image, results, thickness: int = 2, ):
+def box(image, results, thickness: int = 2, colors=None):
+    """
+    Draw bounding boxes on detected objects.
+    
+    Args:
+        image (np.ndarray): Input image to draw boxes on
+        results: List of detection results containing bounding boxes
+        thickness (int): Line thickness for bounding boxes. Default is 2.
+        colors (list, optional): List of BGR color tuples to override default colors.
+                                Colors are mapped to unique class_ids in order of appearance.
+                                If None, uses default ColorManager colors.
+    
+    Returns:
+        np.ndarray: Image with bounding boxes drawn
+        
+    Examples:
+        # Use default colors
+        annotated = box(image, results)
+        
+        # Override with custom colors
+        custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+        annotated = box(image, results, colors=custom_colors)
+    """
+    from .colors import get_color_for_prediction
+    
     for result in results:
         box = result.bbox
         x1, y1, x2, y2 = map(int, box)
 
-        color = colors.get_color(result.class_id)
+        color = get_color_for_prediction(result, colors)
 
         draw.rectangle(image, (x1, y1), (x2, y2), line_color=color, thickness=thickness)
 
     return image
 
 
-def polygon(image: np.ndarray, results, color: tuple = None, thickness: int = 2) -> np.ndarray:
+def polygon(image: np.ndarray, results, thickness: int = 2, colors=None) -> np.ndarray:
+    """
+    Draw polygon outlines on detected objects.
+    
+    Args:
+        image (np.ndarray): Input image to draw polygons on
+        results: List of detection results containing segments
+        thickness (int): Line thickness for polygon outlines. Default is 2.
+        colors (list, optional): List of BGR color tuples to override default colors.
+                                Colors are mapped to unique class_ids in order of appearance.
+                                If None, uses default ColorManager colors.
+    
+    Returns:
+        np.ndarray: Image with polygon outlines drawn
+        
+    Examples:
+        # Use default colors
+        annotated = polygon(image, results)
+        
+        # Override with custom colors
+        custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+        annotated = polygon(image, results, colors=custom_colors)
+    """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
+    
+    from .colors import get_color_for_prediction
 
     for result in results:
         # Iterate over the segments in the result
         # Convert the points to a NumPy array and reshape for OpenCV
         polygon = np.array(result.segments, dtype=np.int32).reshape((-1, 1, 2))
         # Draw the polygon on the canvas
-        color = colors.get_color(result.class_id)
-        cv2.polylines(image, [polygon], isClosed=True, color=color, thickness=2)
+        color = get_color_for_prediction(result, colors)
+        cv2.polylines(image, [polygon], isClosed=True, color=color, thickness=thickness)
 
     return image
 
 
 def mask(frame: np.ndarray,
          results,
-         color_order='class_id',
-         opacity: float = 0.5) -> np.ndarray:
+         opacity: float = 0.5,
+         colors=None) -> np.ndarray:
     """
     Overlays binary masks on a video frame with improved performance.
 
     Args:
         frame (np.ndarray): The video frame (BGR format).
         results: List of results containing masks (e.g., from a model's output).
-        color (tuple): The color for the mask overlay (BGR format). Default is green (0, 255, 0).
         opacity (float): Opacity level for blending masks with the frame (0.0 to 1.0).
+        colors (list, optional): List of BGR color tuples to override default colors.
+                               Colors are mapped to unique class_ids in order of appearance.
+                               If None, uses default ColorManager colors.
 
     Returns:
         np.ndarray: The frame with masks overlaid.
+        
+    Examples:
+        # Use default colors
+        annotated = mask(image, results)
+        
+        # Override with custom colors
+        custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+        annotated = mask(image, results, colors=custom_colors)
     """
+    from .colors import get_color_for_prediction
+    
     # Create a shared overlay array (same as frame) for all masks
     overlay = np.zeros_like(frame, dtype=np.uint8)
 
@@ -351,7 +424,7 @@ def mask(frame: np.ndarray,
                 raise ValueError("Mask dimensions do not match frame dimensions.")
 
             # Apply the color only to the masked regions
-            color = colors.get_color(result.class_id)
+            color = get_color_for_prediction(result, colors)
             overlay[mask] = color
 
     # Blend the overlay with the original frame in a single operation

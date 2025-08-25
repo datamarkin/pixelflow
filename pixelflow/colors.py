@@ -193,3 +193,68 @@ class ColorManager:
             'assigned_classes': len(self.assigned_colors),
             'ui_colors': list(self.ui_colors.keys())
         }
+
+
+def get_color_for_prediction(prediction, colors_override=None, color_manager=None):
+    """
+    Get color for a prediction with optional color override list.
+    
+    This function provides a simple way to override colors by mapping unique class_ids
+    to a list of color tuples in order of first appearance.
+    
+    Args:
+        prediction: Prediction object with class_id attribute
+        colors_override: Optional list of BGR color tuples to use instead of defaults
+        color_manager: ColorManager instance to use for fallback (uses global if None)
+    
+    Returns:
+        BGR color tuple for the prediction
+    
+    Examples:
+        # Use default colors
+        color = get_color_for_prediction(pred)
+        
+        # Override with custom colors
+        custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+        color = get_color_for_prediction(pred, custom_colors)
+    """
+    if color_manager is None:
+        # Import here to avoid circular imports
+        from . import annotate
+        color_manager = annotate.colors
+    
+    # If no override, use the color manager
+    if colors_override is None:
+        return color_manager.get_color(prediction.class_id)
+    
+    # If override is provided but not a list, fall back to color manager
+    if not isinstance(colors_override, list):
+        return color_manager.get_color(prediction.class_id)
+    
+    # If override list is empty, fall back to color manager
+    if len(colors_override) == 0:
+        return color_manager.get_color(prediction.class_id)
+    
+    # Get unique class_ids from color manager's assigned_colors
+    # This maintains the order of first appearance
+    unique_class_ids = list(color_manager.assigned_colors.keys())
+    
+    # If this class_id hasn't been seen before, we need to determine its index
+    if prediction.class_id not in unique_class_ids:
+        # This will cause the color manager to assign it, maintaining order
+        color_manager.get_color(prediction.class_id)
+        unique_class_ids = list(color_manager.assigned_colors.keys())
+    
+    # Find the index of this class_id in the unique list
+    try:
+        class_index = unique_class_ids.index(prediction.class_id)
+    except ValueError:
+        # Fallback if something goes wrong
+        return color_manager.get_color(prediction.class_id)
+    
+    # If we have a color for this index, use it
+    if class_index < len(colors_override):
+        return colors_override[class_index]
+    
+    # If index is beyond our override list, fall back to color manager
+    return color_manager.get_color(prediction.class_id)
