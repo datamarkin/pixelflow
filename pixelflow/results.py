@@ -37,7 +37,7 @@ class KeyPoint:
 
 class Prediction:
     def __init__(self, inference_id=None, bbox=None, masks=None, segments=None, keypoints: List[KeyPoint] = None, class_id=None,
-                 class_name=None, labels=None, confidence=None, tracker_id=None, data=None):
+                 class_name=None, labels=None, confidence=None, tracker_id=None, data=None, zones=None, zone_names=None):
         self.inference_id = inference_id
         self.bbox = validate_bbox(bbox)
         self.masks = masks
@@ -49,6 +49,8 @@ class Prediction:
         self.confidence = round_to_decimal(confidence)
         self.tracker_id = tracker_id
         self.data = data
+        self.zones = zones if zones is not None else []  # List of zone IDs
+        self.zone_names = zone_names if zone_names is not None else []  # List of zone names
 
     def to_dict(self):
         """
@@ -64,7 +66,10 @@ class Prediction:
             "class_name": self.class_name,
             "labels": self.labels,
             "confidence": self.confidence,
-            "tracker_id": self.tracker_id
+            "tracker_id": self.tracker_id,
+            "data": self.data,
+            "zones": self.zones,
+            "zone_names": self.zone_names
         }
 
     def simplify_masks(self, tolerance: float = 2.0, preserve_topology: bool = True):
@@ -91,17 +96,23 @@ class Results:
 
     def add_prediction(self, prediction: Prediction):
         """
-        Add a prediction to the list, applying zone filtering if zones are provided.
+        Add a prediction to the list.
         """
-        if self.zones:
-            # Check if the prediction is excluded or not included in zones
-            if self.zones.is_excluded(prediction.bbox, prediction.masks):
-                return  # Skip if the prediction is in an excluded zone
-            if not self.zones.is_included(prediction.bbox, prediction.masks):
-                return  # Skip if the prediction is outside of included zones
-
-        # Add the prediction if it passes the zone checks
         self.predictions.append(prediction)
+    
+    def update_zones(self, zone_manager):
+        """
+        Update all predictions with zone information.
+        
+        Args:
+            zone_manager: ZoneManager instance to check zones against
+            
+        Returns:
+            self: Returns self for method chaining
+        """
+        if zone_manager is not None:
+            zone_manager.update(self)
+        return self
 
     def __len__(self):
         return len(self.predictions)
@@ -159,7 +170,7 @@ class Results:
 
 def from_datamarkin_api(api_response: dict, zones: Zones = None) -> Results:
     """
-    Converts the Datamarkin API response to a `Predictions` object, filtering based on included/excluded zones.
+    Converts the Datamarkin API response to a `Predictions` object, filtering based on zones.
 
     Args:
         api_response (dict): The API response in dictionary format.
