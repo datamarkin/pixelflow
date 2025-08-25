@@ -5,40 +5,6 @@ import numpy as np
 
 colors = colors.ColorManager()
 
-
-def draw_box(image, results, thickness: int = 2):
-    """
-    Draws filled boxes with borders around detected objects.
-    
-    Args:
-        image (np.ndarray): Input image to draw on
-        results: List of detection results containing bounding boxes
-        thickness (int): Border thickness of the boxes
-        
-    Returns:
-        np.ndarray: Image with filled boxes drawn
-    """
-    assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
-    
-    for result in results:
-        box = result.bbox
-        x1, y1, x2, y2 = map(int, box)
-        
-        color = colors.get_color(result.class_id)
-        
-        # Create a semi-transparent fill
-        alpha = 0.3
-        overlay = image.copy()
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, -1)  # Filled rectangle
-        cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
-        
-        # Draw the border
-        draw.rectangle(image, (x1, y1), (x2, y2), line_color=color, thickness=thickness)
-
-    return image
-
-
-
 def box_fill(image, results, thickness: int = 2, ):
     # TODO: Implement filled bounding boxes without borders
     return image
