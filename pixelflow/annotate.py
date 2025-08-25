@@ -293,7 +293,7 @@ def fps_counter(image, results, thickness: int = 2, ):
 
     # Draw FPS text
     fps_text = f"FPS: {int(fps_counter.fps)}"
-    cv2.putText(image, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(image, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, colors.ui('fps'), 2)
 
     return image
 
@@ -310,7 +310,7 @@ def box(image, results, thickness: int = 2, ):
     return image
 
 
-def polygon(image: np.ndarray, results, color: tuple = (0, 255, 0), thickness: int = 2) -> np.ndarray:
+def polygon(image: np.ndarray, results, color: tuple = None, thickness: int = 2) -> np.ndarray:
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
 
     for result in results:
@@ -429,7 +429,7 @@ def label(
     default_style = {
         'font_scale': 0.5,
         'font_thickness': 1,
-        'font_color': (255, 255, 255),
+        'font_color': colors.ui('text'),
         'bg_color': 'auto',
         'border_color': None,
         'border_width': 0
@@ -603,7 +603,7 @@ def label(
         # Draw shadow if enabled
         if shadow:
             shadow_offset = 2
-            shadow_color = (50, 50, 50)
+            shadow_color = colors.ui('shadow')
             if rounded > 0:
                 _draw_rounded_rectangle(
                     overlay,
@@ -767,7 +767,7 @@ def line_zone(
     thickness=2,
     color=None,
     text_thickness=2,
-    text_color=(255, 255, 255),
+    text_color=None,
     text_scale=0.5,
     text_offset=20,
     text_padding=10,
@@ -790,7 +790,7 @@ def line_zone(
         thickness (int): Line thickness. Default 2.
         color (tuple, optional): Line color RGB. If None, uses line's color.
         text_thickness (int): Text thickness. Default 2.
-        text_color (tuple): Text color RGB. Default white.
+        text_color (tuple, optional): Text color RGB. If None, uses UI text color.
         text_scale (float): Text scale factor. Default 0.5.
         text_offset (int): Distance of text from line center. Default 20.
         text_padding (int): Padding around text. Default 10.
@@ -815,6 +815,10 @@ def line_zone(
     
     # Get line color
     line_color = color if color else line.color
+    
+    # Get text color
+    if text_color is None:
+        text_color = colors.ui('text')
     
     # Draw the line
     start_point = tuple(map(int, line.start))
@@ -908,8 +912,8 @@ def zones(
     show_names=True,
     font_scale=0.7,
     font_thickness=2,
-    text_color=(255, 255, 255),
-    text_bg_color=(0, 0, 0),
+    text_color=None,
+    text_bg_color=None,
     text_bg_opacity=0.7,
     count_position='center',
     draw_filled=True,
@@ -930,8 +934,8 @@ def zones(
         show_names (bool): Display zone names. Default True.
         font_scale (float): Scale of text labels. Default 0.7.
         font_thickness (int): Thickness of text. Default 2.
-        text_color (tuple): RGB color for text. Default white.
-        text_bg_color (tuple): RGB color for text background. Default black.
+        text_color (tuple, optional): RGB color for text. If None, uses UI text color.
+        text_bg_color (tuple, optional): RGB color for text background. If None, uses UI background.
         text_bg_opacity (float): Opacity of text background. Default 0.7.
         count_position (str): Position for count display ('center', 'top', 'bottom').
         draw_filled (bool): Whether to fill zones with color. Default True.
@@ -954,6 +958,12 @@ def zones(
     
     if zone_manager is None or not hasattr(zone_manager, 'zones'):
         return image
+    
+    # Get default colors if not specified
+    if text_color is None:
+        text_color = colors.ui('text')
+    if text_bg_color is None:
+        text_bg_color = colors.ui('background')
     
     # Create overlay for transparency effects
     overlay = image.copy()
