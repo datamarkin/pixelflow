@@ -19,5 +19,6 @@ classifiers = [
 dependencies = [
     "shapely>=2.0.0",  # Add dependencies here
     "numpy>=1.21.0",
-    "opencv-python>=4.8.0"
+    "opencv-python>=4.8.0",
+    "scipy>=1.10.0"
 ]
