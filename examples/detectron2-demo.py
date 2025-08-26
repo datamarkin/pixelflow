@@ -1,6 +1,5 @@
 """
 Detectron2 demo with PixelFlow features - tracking, zones, lines, and enhanced annotations.
-Similar to ultralytics-demo.py but using Detectron2 for detection.
 """
 
 import cv2
