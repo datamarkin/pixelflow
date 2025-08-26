@@ -11,8 +11,8 @@ class Zone:
     
     def __init__(
         self,
-        polygon: List[Tuple[float, float]] | np.ndarray,
-        zone_id: int | str,
+        polygon: Union[List[Tuple[float, float]], np.ndarray],
+        zone_id: Union[int, str],
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
         trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage"], None] = "center",
@@ -114,12 +114,12 @@ class Zones:
     def __init__(self):
         """Initialize the ZoneManager."""
         self.zones: List[Zone] = []
-        self._zone_dict: Dict[int | str, Zone] = {}
+        self._zone_dict: Dict[Union[int, str], Zone] = {}
     
     def add_zone(
         self,
-        polygon: List[Tuple[float, float]] | np.ndarray,
-        zone_id: Optional[int | str] = None,
+        polygon: Union[List[Tuple[float, float]], np.ndarray],
+        zone_id: Optional[Union[int, str]] = None,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
         trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage"], None] = "center",
@@ -168,13 +168,13 @@ class Zones:
         
         return zone
     
-    def remove_zone(self, zone_id: int | str):
+    def remove_zone(self, zone_id: Union[int, str]):
         """Remove a zone by its ID."""
         if zone_id in self._zone_dict:
             zone = self._zone_dict.pop(zone_id)
             self.zones.remove(zone)
     
-    def get_zone(self, zone_id: int | str) -> Optional[Zone]:
+    def get_zone(self, zone_id: Union[int, str]) -> Optional[Zone]:
         """Get a zone by its ID."""
         return self._zone_dict.get(zone_id)
     
@@ -218,7 +218,7 @@ class Zones:
         
         return results
     
-    def get_zone_counts(self) -> Dict[int | str, int]:
+    def get_zone_counts(self) -> Dict[Union[int, str], int]:
         """
         Get current detection count for each zone.
         
@@ -227,7 +227,7 @@ class Zones:
         """
         return {zone.zone_id: zone.current_count for zone in self.zones}
     
-    def get_zone_stats(self) -> Dict[int | str, Dict[str, Any]]:
+    def get_zone_stats(self) -> Dict[Union[int, str], Dict[str, Any]]:
         """
         Get detailed statistics for each zone.
         
@@ -245,7 +245,7 @@ class Zones:
             }
         return stats
     
-    def filter_by_zones(self, results, zone_ids: List[int | str], exclude: bool = False):
+    def filter_by_zones(self, results, zone_ids: List[Union[int, str]], exclude: bool = False):
         """
         Filter results to only include detections in specified zones.
         
