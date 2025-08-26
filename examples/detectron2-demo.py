@@ -65,10 +65,10 @@ lines.add_line(
     minimum_crossing_threshold=1
 )
 
-cap = cv2.VideoCapture("videos/paris.mp4")
+cap = cv2.VideoCapture("data/crowd.mp4")
 
 if not cap.isOpened():
-    print("Error: Cannot open paris.mp4")
+    print("Error: Cannot open crowd.mp4")
     exit(1)
 
 prev_time = 0
