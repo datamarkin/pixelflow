@@ -5,12 +5,53 @@ import numpy as np
 
 colors = colors.ColorManager()
 
-def box_fill(image, results, thickness: int = 2, ):
+# Adaptive sizing cache and configuration
+_adaptive_cache = {}
+ADAPTIVE_SCALE_MULTIPLIER = 1.0  # Users can adjust this globally
+
+def _get_adaptive_params(image):
+    """
+    Get cached adaptive parameters based on image dimensions.
+    Calculates once per unique resolution and caches for reuse.
+    
+    Args:
+        image (np.ndarray): Input image to get dimensions from
+    
+    Returns:
+        dict: Adaptive parameters for annotation sizing
+    """
+    shape_key = image.shape[:2]  # (height, width) as cache key
+    
+    if shape_key in _adaptive_cache:
+        return _adaptive_cache[shape_key]
+    
+    # Calculate once per unique resolution
+    height, width = shape_key
+    # Base scale normalized around 1000x1000 images
+    base_scale = np.sqrt(width * height) / 1000 * ADAPTIVE_SCALE_MULTIPLIER
+    
+    params = {
+        'thickness': max(1, int(base_scale * 2)),
+        'font_scale': max(0.3, base_scale * 0.5),
+        'font_thickness': max(1, int(base_scale * 1.5)),
+        'padding': max(2, int(base_scale * 5)),
+        'margin': max(1, int(base_scale * 2)),
+        'text_offset': max(10, int(base_scale * 20)),
+        'blur_kernel': max(3, int(base_scale * 15)) | 1,  # ensure odd number
+        'pixel_size': max(2, int(base_scale * 10)),
+        'corner_radius': max(0, int(base_scale * 5)),
+        'shadow_offset': max(1, int(base_scale * 2)),
+    }
+    
+    _adaptive_cache[shape_key] = params
+    return params
+
+def box_fill(image, results, thickness=None):
     # TODO: Implement filled bounding boxes without borders
     return image
 
 
-def blur(image, results, kernel_size: int = 15, padding_percent: float = 0.05):
+def blur(image, results, kernel_size=None, padding_percent: float = 0.05):
     """
     Applies blur effect to detected regions in the image with padding.
     
@@ -35,10 +76,15 @@ def blur(image, results, kernel_size: int = 15, padding_percent: float = 0.05):
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
-    # Validate and ensure kernel_size is odd and positive
-    kernel_size = max(1, kernel_size)
-    if kernel_size % 2 == 0:
-        kernel_size += 1  # Make it odd
+    # Get adaptive kernel size if not specified
+    if kernel_size is None:
+        params = _get_adaptive_params(image)
+        kernel_size = params['blur_kernel']
+    else:
+        # Validate and ensure kernel_size is odd and positive
+        kernel_size = max(1, kernel_size)
+        if kernel_size % 2 == 0:
+            kernel_size += 1  # Make it odd
     
     # Validate padding percent
     padding_percent = max(0, min(padding_percent, 0.5))  # Cap at 50% padding
@@ -85,7 +131,7 @@ def blur(image, results, kernel_size: int = 15, padding_percent: float = 0.05):
     return image
 
 
-def pixelate(image, results, pixel_size: int = 10, padding_percent: float = 0.05):
+def pixelate(image, results, pixel_size=None, padding_percent: float = 0.05):
     """
     Applies pixelation effect to detected regions in the image with padding.
     
@@ -114,8 +160,13 @@ def pixelate(image, results, pixel_size: int = 10, padding_percent: float = 0.05
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
-    # Validate and clamp pixel_size early (reduced default from 20 to 10)
-    pixel_size = max(1, pixel_size)
+    # Get adaptive pixel size if not specified
+    if pixel_size is None:
+        params = _get_adaptive_params(image)
+        pixel_size = params['pixel_size']
+    else:
+        # Validate and clamp pixel_size
+        pixel_size = max(1, pixel_size)
     
     # Validate padding percent
     padding_percent = max(0, min(padding_percent, 0.5))  # Cap at 50% padding
@@ -178,7 +229,7 @@ def pixelate(image, results, pixel_size: int = 10, padding_percent: float = 0.05
     return image
 
 
-def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_angle: int = 235, colors=None):
+def footprint(image, results, thickness=None, start_angle: int = -45, end_angle: int = 235, colors=None):
     """
     Draws elliptical footprints at the bottom of detected objects.
     
@@ -217,6 +268,11 @@ def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_an
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
+    # Get adaptive thickness if not specified
+    if thickness is None:
+        params = _get_adaptive_params(image)
+        thickness = params['thickness']
+    
     from .colors import get_color_for_prediction
     
     for result in results:
@@ -247,47 +303,47 @@ def footprint(image, results, thickness: int = 2, start_angle: int = -45, end_an
     return image
 
 
-def motion_trails(image, results, thickness: int = 2, ):
+def motion_trails(image, results, thickness=None):
     # TODO: Implement motion trail visualization for tracked objects
     return image
 
 
-def motion_dots(image, results, thickness: int = 2, ):
+def motion_dots(image, results, thickness=None):
     # TODO: Implement motion dots/breadcrumbs for object paths
     return image
 
 
-def heatmap(image, results, thickness: int = 2, ):
+def heatmap(image, results, thickness=None):
     # TODO: Implement heatmap visualization for detection density
     return image
 
 
-def dot(image, results, thickness: int = 2, ):
+def dot(image, results, thickness=None):
     # TODO: Implement center dot annotation for detected objects
     return image
 
 
-def keypoint(image, results, thickness: int = 2, ):
+def keypoint(image, results, thickness=None):
     # TODO: Implement keypoint visualization (e.g., pose estimation)
     return image
 
 
-def keypoint_skeleton(image, results, thickness: int = 2, ):
+def keypoint_skeleton(image, results, thickness=None):
     # TODO: Implement skeleton connections between keypoints
     return image
 
 
-def grid_overlay(image, results, thickness: int = 2, ):
+def grid_overlay(image, results, thickness=None):
     # TODO: Implement grid overlay for spatial reference
     return image
 
 
-def scale_bar(image, results, thickness: int = 2, ):
+def scale_bar(image, results, thickness=None):
     # TODO: Implement scale bar for size reference
     return image
 
 
-def fps_counter(image, results, thickness: int = 2, ):
+def fps_counter(image, results, thickness=None):
     import time
 
     # Get current time
@@ -304,14 +360,22 @@ def fps_counter(image, results, thickness: int = 2, ):
             fps_counter.fps = 1 / time_diff
         fps_counter.prev_time = current_time
 
+    # Get adaptive parameters if thickness not specified
+    if thickness is None:
+        params = _get_adaptive_params(image)
+        font_scale = params['font_scale'] * 1.5  # FPS counter slightly larger
+        thickness = params['font_thickness']
+    else:
+        font_scale = 1
+    
     # Draw FPS text
     fps_text = f"FPS: {int(fps_counter.fps)}"
-    cv2.putText(image, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, colors.ui('fps'), 2)
+    cv2.putText(image, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, colors.ui('fps'), thickness)
 
     return image
 
 
-def box(image, results, thickness: int = 2, colors=None):
+def box(image, results, thickness=None, colors=None):
     """
     Draw bounding boxes on detected objects.
     
@@ -336,6 +400,11 @@ def box(image, results, thickness: int = 2, colors=None):
     """
     from .colors import get_color_for_prediction
     
+    # Get adaptive thickness if not specified
+    if thickness is None:
+        params = _get_adaptive_params(image)
+        thickness = params['thickness']
+    
     for result in results:
         box = result.bbox
         x1, y1, x2, y2 = map(int, box)
@@ -347,7 +416,7 @@ def box(image, results, thickness: int = 2, colors=None):
     return image
 
 
-def polygon(image: np.ndarray, results, thickness: int = 2, colors=None) -> np.ndarray:
+def polygon(image: np.ndarray, results, thickness=None, colors=None) -> np.ndarray:
     """
     Draw polygon outlines on detected objects.
     
@@ -373,6 +442,11 @@ def polygon(image: np.ndarray, results, thickness: int = 2, colors=None) -> np.n
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
     from .colors import get_color_for_prediction
+    
+    # Get adaptive thickness if not specified
+    if thickness is None:
+        params = _get_adaptive_params(image)
+        thickness = params['thickness']
 
     for result in results:
         # Iterate over the segments in the result
@@ -441,11 +515,11 @@ def label(
     template=None,
     style=None,
     auto_arrange=True,
-    padding=5,
-    margin=2,
+    padding=None,
+    margin=None,
     max_width=None,
     opacity=0.7,
-    rounded=0,
+    rounded=None,
     shadow=False,
     gradient=False
 ):
@@ -498,10 +572,21 @@ def label(
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
-    # Default style
+    # Get adaptive parameters
+    params = _get_adaptive_params(image)
+    
+    # Use adaptive values if not specified
+    if padding is None:
+        padding = params['padding']
+    if margin is None:
+        margin = params['margin']
+    if rounded is None:
+        rounded = params['corner_radius']
+    
+    # Default style with adaptive font parameters
     default_style = {
-        'font_scale': 0.5,
-        'font_thickness': 1,
+        'font_scale': params['font_scale'],
+        'font_thickness': params['font_thickness'],
         'font_color': colors.ui('text'),
         'bg_color': 'auto',
         'border_color': None,
@@ -675,7 +760,7 @@ def label(
         
         # Draw shadow if enabled
         if shadow:
-            shadow_offset = 2
+            shadow_offset = params['shadow_offset']
             shadow_color = colors.ui('shadow')
             if rounded > 0:
                 _draw_rounded_rectangle(
@@ -837,13 +922,13 @@ def _draw_gradient_rectangle(image, x1, y1, x2, y2, base_color, radius=0):
 def line_zone(
     image,
     line,
-    thickness=2,
+    thickness=None,
     color=None,
-    text_thickness=2,
+    text_thickness=None,
     text_color=None,
-    text_scale=0.5,
-    text_offset=20,
-    text_padding=10,
+    text_scale=None,
+    text_offset=None,
+    text_padding=None,
     custom_in_text=None,
     custom_out_text=None,
     display_in_count=True,
@@ -886,6 +971,21 @@ def line_zone(
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
+    # Get adaptive parameters
+    params = _get_adaptive_params(image)
+    
+    # Use adaptive values if not specified
+    if thickness is None:
+        thickness = params['thickness']
+    if text_thickness is None:
+        text_thickness = params['font_thickness']
+    if text_scale is None:
+        text_scale = params['font_scale']
+    if text_offset is None:
+        text_offset = params['text_offset']
+    if text_padding is None:
+        text_padding = params['padding']
+    
     # Get line color
     line_color = color if color else line.color
     
@@ -898,9 +998,10 @@ def line_zone(
     end_point = tuple(map(int, line.end))
     cv2.line(image, start_point, end_point, line_color, thickness, cv2.LINE_AA)
     
-    # Draw end point markers
-    cv2.circle(image, start_point, 5, text_color, -1, cv2.LINE_AA)
-    cv2.circle(image, end_point, 5, text_color, -1, cv2.LINE_AA)
+    # Draw end point markers (scale with image size)
+    marker_size = max(3, int(params['thickness'] * 2.5))
+    cv2.circle(image, start_point, marker_size, text_color, -1, cv2.LINE_AA)
+    cv2.circle(image, end_point, marker_size, text_color, -1, cv2.LINE_AA)
     
     # Calculate line center for text placement
     center_x = (line.start[0] + line.end[0]) / 2
@@ -980,11 +1081,11 @@ def zones(
     image,
     zone_manager,
     opacity=0.3,
-    border_thickness=2,
+    border_thickness=None,
     show_counts=True,
     show_names=True,
-    font_scale=0.7,
-    font_thickness=2,
+    font_scale=None,
+    font_thickness=None,
     text_color=None,
     text_bg_color=None,
     text_bg_opacity=0.7,
@@ -1031,6 +1132,17 @@ def zones(
     
     if zone_manager is None or not hasattr(zone_manager, 'zones'):
         return image
+    
+    # Get adaptive parameters
+    params = _get_adaptive_params(image)
+    
+    # Use adaptive values if not specified
+    if border_thickness is None:
+        border_thickness = params['thickness']
+    if font_scale is None:
+        font_scale = params['font_scale']
+    if font_thickness is None:
+        font_thickness = params['font_thickness']
     
     # Get default colors if not specified
     if text_color is None:
@@ -1098,11 +1210,11 @@ def zones(
                 # Draw text background if opacity > 0
                 if text_bg_opacity > 0:
                     # Create background rectangle with padding
-                    padding = 5
-                    bg_x1 = label_x - padding
-                    bg_y1 = label_y - text_size[1] - padding
-                    bg_x2 = label_x + text_size[0] + padding
-                    bg_y2 = label_y + baseline + padding
+                    bg_padding = params['padding']
+                    bg_x1 = label_x - bg_padding
+                    bg_y1 = label_y - text_size[1] - bg_padding
+                    bg_x2 = label_x + text_size[0] + bg_padding
+                    bg_y2 = label_y + baseline + bg_padding
                     
                     # Draw semi-transparent background
                     text_overlay = overlay.copy()
