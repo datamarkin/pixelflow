@@ -20,7 +20,7 @@ from .slicer import SlicedInference, auto_slice_size
 from .buffer import Buffer
 
 # Define the public API
-__all__ = ["draw", "annotate", "results", "zones", "lines", "slicer", "buffer", 
+__all__ = ["draw", "annotate", "results", "slicer", "buffer", 
            "lazy_frame_generator", "Zones", "Zone", "Lines", "Line", 
            "SlicedInference", "auto_slice_size", "Buffer",
            "__version__", "__author__"]
