@@ -40,7 +40,7 @@ class Prediction:
                  class_name=None, labels=None, confidence=None, tracker_id=None, data=None, zones=None, zone_names=None,
                  line_crossings=None):
         self.inference_id = inference_id
-        self.bbox = validate_bbox(bbox)
+        self.bbox = validate_bbox(bbox) if bbox is not None else None
         self.masks = masks
         self.segments = segments
         self.keypoints = keypoints if keypoints is not None else None
@@ -313,19 +313,24 @@ def from_ultralytics(ultralytics_results) -> Results:
     Supports both detection and segmentation models.
     
     Args:
-        ultralytics_results: YOLO results from the Ultralytics library.
+        ultralytics_results: YOLO results from the Ultralytics library (single result object or list).
 
     Returns:
         Results: A unified Results object containing predictions.
     """
     predictions_obj = Results()
     
-    # Handle empty results or single result
+    # Handle empty results
     if not ultralytics_results:
         return predictions_obj
-        
-    # Get the first result (YOLO returns a list with one result per image)
-    result = ultralytics_results[0]
+    
+    # Handle both single result and list of results
+    if isinstance(ultralytics_results, list):
+        # Get the first result (YOLO returns a list with one result per image)
+        result = ultralytics_results[0]
+    else:
+        # Already a single result object
+        result = ultralytics_results
     
     # Handle case where there are no detections
     if result.boxes is None or len(result.boxes) == 0:
