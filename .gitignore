@@ -7,3 +7,4 @@ pixelflow.egg-info/
 /.idea
 .DS_Store
 /pixelflow/__pycache__
+/examples/ultralytics
