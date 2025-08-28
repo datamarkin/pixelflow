@@ -8,14 +8,13 @@
     "navigation": {
         "tabs": [
             {
-                "tab": "Components",
+                "tab": "Guides",
                 "groups": [
                     {
-                        "group": "Components",
+                        "group": "Getting started",
                         "pages": [
-                            "content/components/accordions",
-                            "content/components/accordion-groups",
-                            "content/components/callouts"
+                            "/docs/index",
+                            "/docs/development"
                         ]
                     },
                     {
