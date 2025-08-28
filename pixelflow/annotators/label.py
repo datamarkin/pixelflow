@@ -3,7 +3,7 @@ import numpy as np
 from .. import colors
 from .utils import _get_adaptive_params
 
-colors = colors.ColorManager()
+color_manager = colors.ColorManager()
 
 
 def label(
@@ -86,7 +86,7 @@ def label(
     default_style = {
         'font_scale': params['font_scale'],
         'font_thickness': params['font_thickness'],
-        'font_color': colors.ui('text'),
+        'font_color': color_manager.ui('text'),
         'bg_color': 'auto',
         'border_color': None,
         'border_width': 0
@@ -252,7 +252,7 @@ def label(
         # Get background color
         bg_color = style['bg_color']
         if bg_color == 'auto':
-            bg_color = colors.get_color(result.class_id)
+            bg_color = color_manager.get_color(result.class_id)
 
         # Create overlay for transparency
         overlay = image.copy()
@@ -260,7 +260,7 @@ def label(
         # Draw shadow if enabled
         if shadow:
             shadow_offset = params['shadow_offset']
-            shadow_color = colors.ui('shadow')
+            shadow_color = color_manager.ui('shadow')
             if rounded > 0:
                 _draw_rounded_rectangle(
                     overlay,
