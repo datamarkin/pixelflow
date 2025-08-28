@@ -1,4 +1,10 @@
 {
+    "$schema": "https://mintlify.com/docs.json",
+    "theme": "mint",
+    "name": "PixelFlow Docs",
+    "colors": {
+        "primary": "#ff0000"
+    },
     "navigation": {
         "tabs": [
             {
