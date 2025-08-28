@@ -1,9 +1,25 @@
+"""
+Blur annotator for privacy-preserving object detection visualization.
+
+This module provides Gaussian blur effects for detected regions, commonly used
+for privacy protection, aesthetic effects, or focus redirection in computer vision applications.
+The blur effect maintains natural appearance while obscuring sensitive details.
+"""
+
+from typing import List, Optional
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 
+__all__ = ["blur"]
 
-def blur(image, results, kernel_size=None, padding_percent: float = 0.05):
+
+def blur(
+    image: np.ndarray, 
+    results: List, 
+    kernel_size: Optional[int] = None, 
+    padding_percent: float = 0.05
+) -> np.ndarray:
     """
     Applies blur effect to detected regions in the image with padding.
     
@@ -12,19 +28,55 @@ def blur(image, results, kernel_size=None, padding_percent: float = 0.05):
     
     Args:
         image (np.ndarray): Input image to apply blur on
-        results: List of detection results containing bounding boxes
-        kernel_size (int): Size of the blur kernel. Larger values create
-                          stronger blur effect. Default is 15. Must be odd and > 0.
+        results (List): List of detection results containing bounding boxes.
+                       Each result must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
+        kernel_size (Optional[int]): Size of the blur kernel. Larger values create
+                                   stronger blur effect. Must be odd and > 0. 
+                                   If None, uses adaptive sizing based on image dimensions.
         padding_percent (float): Padding to add around detection as percentage
-                                of box size. Default is 0.05 (5% from each side).
+                               of box size. Range: 0.0-0.5. Default is 0.05 (5% from each side).
         
     Returns:
-        np.ndarray: Image with blurred regions where objects were detected
+        np.ndarray: Image with blurred regions where objects were detected.
+                   The input image is modified in-place for memory efficiency.
     
+    Raises:
+        AssertionError: If image is not a NumPy array
+        AttributeError: If results objects don't have 'bbox' attribute
+        IndexError: If bbox coordinates are invalid or outside image bounds
+    
+    Example:
+        >>> import cv2
+        >>> import pixelflow as pf
+        >>> 
+        >>> # Load image and get model predictions
+        >>> image = cv2.imread("path/to/image.jpg")
+        >>> outputs = model.predict(image)  # Raw model outputs
+        >>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> 
+        >>> # Apply blur with default settings
+        >>> blurred_image = pf.annotators.blur(image, results)
+        >>> 
+        >>> # Apply stronger blur with custom kernel size
+        >>> blurred_image = pf.annotators.blur(image, results, kernel_size=25)
+        >>> 
+        >>> # Apply blur with more padding around detections
+        >>> blurred_image = pf.annotators.blur(image, results, padding_percent=0.1)
+    
+    Notes:
+        - Modifies the input image in-place for memory efficiency
+        - Automatically adapts kernel size based on image dimensions when not specified
+        - Skips regions too small for the specified kernel size
+        - Padding is automatically clamped to prevent excessive expansion
+        
     Performance Notes:
         - Uses OpenCV's optimized Gaussian blur implementation
         - Efficient for real-time processing
         - Scales well with image size
+        
+    See Also:
+        pixelate : Alternative privacy protection method using pixelation
+        oval : Shaped region effects for selective blurring
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
