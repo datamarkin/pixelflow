@@ -13,7 +13,7 @@
                     {
                         "group": "Getting started",
                         "pages": [
-                            "/docs/index",
+                            "index",
                             "/docs/development"
                         ]
                     },
