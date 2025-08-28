@@ -5,7 +5,7 @@ __author__ = "Datamarkin"
 from . import draw
 from . import results
 from . import video
-from . import annotate
+from . import annotators as annotate
 from . import colors
 from . import zones
 from . import lines
