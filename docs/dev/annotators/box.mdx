@@ -1,0 +1,39 @@
+---
+title: box
+description: Draw bounding boxes on detected objects.
+icon: "square"
+---
+
+## Overview
+
+Draw bounding boxes on detected objects.
+
+## Function Signature
+
+```python
+box(
+    image: np.ndarray,
+    thickness: int = 2,
+    colors: list, optional
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required >
+  Input image to draw boxes on results: List of detection results containing bounding boxes
+</ParamField>
+
+<ParamField path="thickness" type="int" required default="2">
+  Line thickness for bounding boxes. Default is 2.
+</ParamField>
+
+<ParamField path="colors" type="list, optional" required >
+  List of BGR color tuples to override default colors. Colors are mapped to unique class_ids in order of appearance. If None, uses default ColorManager colors.
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Image with bounding boxes drawn
+</ResponseField>

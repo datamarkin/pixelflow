@@ -1,0 +1,96 @@
+---
+title: line_zone
+description: Annotate a line zone on an image with crossing counts.
+icon: "function"
+---
+
+## Overview
+
+Annotate a line zone on an image with crossing counts.
+
+This function draws a line and displays the in/out crossing counts with customizable styling.
+
+## Function Signature
+
+```python
+line_zone(
+    image: np.ndarray,
+    thickness: int,
+    color: tuple, optional,
+    text_thickness: int,
+    text_color: tuple, optional,
+    text_scale: float,
+    text_offset: int,
+    text_padding: int,
+    custom_in_text: str, optional,
+    custom_out_text: str, optional,
+    display_in_count: bool,
+    display_out_count: bool,
+    display_text_box: bool,
+    text_centered: bool
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required >
+  Input image to annotate line: Line object from pixelflow.lines
+</ParamField>
+
+<ParamField path="thickness" type="int" required >
+  Line thickness. Default 2.
+</ParamField>
+
+<ParamField path="color" type="tuple, optional" required >
+  Line color RGB. If None, uses line's color.
+</ParamField>
+
+<ParamField path="text_thickness" type="int" required >
+  Text thickness. Default 2.
+</ParamField>
+
+<ParamField path="text_color" type="tuple, optional" required >
+  Text color RGB. If None, uses UI text color.
+</ParamField>
+
+<ParamField path="text_scale" type="float" required >
+  Text scale factor. Default 0.5.
+</ParamField>
+
+<ParamField path="text_offset" type="int" required >
+  Distance of text from line center. Default 20.
+</ParamField>
+
+<ParamField path="text_padding" type="int" required >
+  Padding around text. Default 10.
+</ParamField>
+
+<ParamField path="custom_in_text" type="str, optional" required >
+  Custom label for "in" count.
+</ParamField>
+
+<ParamField path="custom_out_text" type="str, optional" required >
+  Custom label for "out" count.
+</ParamField>
+
+<ParamField path="display_in_count" type="bool" required >
+  Whether to show in count. Default True.
+</ParamField>
+
+<ParamField path="display_out_count" type="bool" required >
+  Whether to show out count. Default True.
+</ParamField>
+
+<ParamField path="display_text_box" type="bool" required >
+  Whether to show text background. Default True.
+</ParamField>
+
+<ParamField path="text_centered" type="bool" required >
+  Whether to center text on line. Default True.
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Annotated image
+</ResponseField>

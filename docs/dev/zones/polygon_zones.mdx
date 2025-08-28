@@ -1,0 +1,91 @@
+---
+title: zones
+description: Annotate zones on an image with superior visualization capabilities.
+icon: "function"
+---
+
+## Overview
+
+Annotate zones on an image with superior visualization capabilities.
+
+This function draws polygon zones with customizable appearance, automatic counting, and labeling.
+
+## Function Signature
+
+```python
+zones(
+    image: np.ndarray,
+    opacity: float,
+    border_thickness: int,
+    show_counts: bool,
+    show_names: bool,
+    font_scale: float,
+    font_thickness: int,
+    text_color: tuple, optional,
+    text_bg_color: tuple, optional,
+    text_bg_opacity: float,
+    count_position: str,
+    draw_filled: bool,
+    draw_border: bool
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required >
+  Input image to annotate zone_manager: ZoneManager instance containing zones to draw
+</ParamField>
+
+<ParamField path="opacity" type="float" required >
+  Fill opacity for zones (0.0-1.0). Default 0.3.
+</ParamField>
+
+<ParamField path="border_thickness" type="int" required >
+  Thickness of zone borders. Default 2.
+</ParamField>
+
+<ParamField path="show_counts" type="bool" required >
+  Display detection count in each zone. Default True.
+</ParamField>
+
+<ParamField path="show_names" type="bool" required >
+  Display zone names. Default True.
+</ParamField>
+
+<ParamField path="font_scale" type="float" required >
+  Scale of text labels. Default 0.7.
+</ParamField>
+
+<ParamField path="font_thickness" type="int" required >
+  Thickness of text. Default 2.
+</ParamField>
+
+<ParamField path="text_color" type="tuple, optional" required >
+  RGB color for text. If None, uses UI text color.
+</ParamField>
+
+<ParamField path="text_bg_color" type="tuple, optional" required >
+  RGB color for text background. If None, uses UI background.
+</ParamField>
+
+<ParamField path="text_bg_opacity" type="float" required >
+  Opacity of text background. Default 0.7.
+</ParamField>
+
+<ParamField path="count_position" type="str" required >
+  Position for count display ('center', 'top', 'bottom').
+</ParamField>
+
+<ParamField path="draw_filled" type="bool" required >
+  Whether to fill zones with color. Default True.
+</ParamField>
+
+<ParamField path="draw_border" type="bool" required >
+  Whether to draw zone borders. Default True.
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Annotated image with zones visualized
+</ResponseField>

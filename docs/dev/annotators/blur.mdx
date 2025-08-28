@@ -1,0 +1,111 @@
+---
+title: blur
+description: Applies blur effect to detected regions in the image with padding.
+icon: "eye-slash"
+---
+
+## Overview
+
+Applies blur effect to detected regions in the image with padding.
+
+The blur effect is achieved using Gaussian blur to obscure details in detected regions while maintaining a natural appearance.
+
+<Info>
+  Modifies the input image in-place for memory efficiency
+  Automatically adapts kernel size based on image dimensions when not specified
+</Info>
+
+## Function Signature
+
+```python
+blur(
+    image: np.ndarray,
+    results: List,
+    kernel_size: Optional[int],
+    padding_percent: float
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required >
+  Input image to apply blur on
+</ParamField>
+
+<ParamField path="results" type="List" required >
+  List of detection results containing bounding boxes. Each result must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
+</ParamField>
+
+<ParamField path="kernel_size" type="Optional[int]" optional >
+  Size of the blur kernel. Larger values create stronger blur effect. Must be odd and > 0. If None, uses adaptive sizing based on image dimensions.
+</ParamField>
+
+<ParamField path="padding_percent" type="float" required >
+  Padding to add around detection as percentage of box size. Range: 0.0-0.5. Default is 0.05 (5% from each side).
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Image with blurred regions where objects were detected. The input image is modified in-place for memory efficiency.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```python Example 1
+import cv2
+import pixelflow as pf
+
+# Load image and get model predictions
+image = cv2.imread("path/to/image.jpg")
+outputs = model.predict(image)  # Raw model outputs
+results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+
+# Apply blur with default settings
+blurred_image = pf.annotators.blur(image, results)
+
+# Apply stronger blur with custom kernel size
+blurred_image = pf.annotators.blur(image, results, kernel_size=25)
+
+# Apply blur with more padding around detections
+blurred_image = pf.annotators.blur(image, results, padding_percent=0.1)
+```
+
+</CodeGroup>
+
+## Error Handling
+
+<Warning>
+  The function will raise the following exceptions:
+  - **AssertionError**: If image is not a NumPy array
+  - **AttributeError**: If results objects don't have 'bbox' attribute
+  - **IndexError**: If bbox coordinates are invalid or outside image bounds
+</Warning>
+
+## Performance Notes
+
+<Accordion title="Performance Characteristics">
+  - Uses OpenCV's optimized Gaussian blur implementation
+  - Efficient for real-time processing
+  - Scales well with image size
+</Accordion>
+
+## Implementation Details
+
+<Note>
+  - Skips regions too small for the specified kernel size
+  - Padding is automatically clamped to prevent excessive expansion
+</Note>
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="pixelate" icon="grid" href="/annotators/pixelate">
+    Alternative privacy protection method using pixelation
+  </Card>
+  <Card title="oval" icon="circle" href="/annotators/oval">
+    Shaped region effects for selective blurring
+  </Card>
+</CardGroup>
