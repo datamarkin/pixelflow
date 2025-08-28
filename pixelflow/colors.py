@@ -219,9 +219,8 @@ def get_color_for_prediction(prediction, colors_override=None, color_manager=Non
         color = get_color_for_prediction(pred, custom_colors)
     """
     if color_manager is None:
-        # Import here to avoid circular imports
-        from . import annotate
-        color_manager = annotate.colors
+        # Create a default color manager
+        color_manager = ColorManager()
     
     # If no override, use the color manager
     if colors_override is None:
