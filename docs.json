@@ -1,51 +1,131 @@
 {
-    "$schema": "https://mintlify.com/docs.json",
-    "theme": "mint",
-    "name": "PixelFlow Docs",
-    "colors": {
-        "primary": "#ff0000"
-    },
-    "navigation": {
-        "tabs": [
-            {
-                "tab": "Guides",
-                "groups": [
-                    {
-                        "group": "Getting started",
-                        "pages": [
-                            "index",
-                            "/docs/development"
-                        ]
-                    },
-                    {
-                        "group": "API Components",
-                        "pages": [
-                            "content/components/params",
-                            "content/components/responses"
-                        ]
-                    }
-                ]
-            },
-            {
-                "tab": "Integrations",
-                "groups": [
-                    {
-                        "group": "Analytics",
-                        "pages": [
-                            "integrations/analytics/overview",
-                            "integrations/analytics/amplitude",
-                            "integrations/analytics/clearbit"
-                        ]
-                    },
-                    {
-                        "group": "SDKs",
-                        "pages": [
-                            "integrations/sdks/providers",
-                            "integrations/sdks/clients"
-                        ]
-                    }
-                ]
-            }
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "PixelFlow Documentation",
+  "colors": {
+    "primary": "#16A34A",
+    "light": "#07C983",
+    "dark": "#15803D"
+  },
+  "favicon": "/docs/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Developer Platform",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "index",
+              "docs/quickstart"
+            ]
+          },
+          {
+            "group": "Annotators",
+            "pages": [
+              "docs/dev/annotators/box",
+              "docs/dev/annotators/polygon",
+              "docs/dev/annotators/mask",
+              "docs/dev/annotators/label",
+              "docs/dev/annotators/dot",
+              "docs/dev/annotators/oval",
+              "docs/dev/annotators/blur",
+              "docs/dev/annotators/pixelate"
+            ]
+          },
+          {
+            "group": "Zones",
+            "pages": [
+              "docs/zones/polygon_zones",
+              "docs/zones/line_zones"
+            ]
+          },
+          {
+            "group": "Trackers",
+            "pages": [
+              "docs/trackers/Bytetracker",
+              "docs/tracker/Otheracker"
+            ]
+          },
+          {
+            "group": "Buffer",
+            "pages": [
+              "docs/buffer/introduction",
+              "docs/buffer/usage"
+            ]
+          },
+          {
+            "group": "Slicer",
+            "pages": [
+              "docs/slicer/introduction",
+              "docs/slicer/usage"
+            ]
+          },
+          {
+            "group": "Smoother",
+            "pages": [
+              "docs/smoother/introduction",
+              "docs/smoother/usage"
+            ]
+          }
         ]
+      },
+      {
+        "tab": "Web UI",
+        "groups": [
+          {
+            "group": "Basic Shapes",
+            "pages": [
+              "docs/dev/annotators/basics/box",
+              "docs/dev/annotators/basics/polygon",
+              "docs/dev/annotators/basics/mask",
+              "docs/dev/annotators/basics/label",
+              "docs/dev/annotators/basics/dot",
+              "docs/dev/annotators/basics/oval"
+            ]
+          },
+          {
+            "group": "Privacy Protection",
+            "pages": [
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/docs/logo/light.svg",
+    "dark": "/docs/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/datamarkin/pixelflow"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Try Datamarkin",
+      "href": "https://datamarkin.com"
     }
+  },
+  "contextual": {
+    "options": [
+     "copy",
+     "view",
+     "chatgpt",
+     "claude",
+     "perplexity",
+     "mcp",
+     "cursor",
+     "vscode"
+   ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/datamarkin/pixelflow",
+      "x": "https://x.com/datamarkin"
+    }
+  }
 }
