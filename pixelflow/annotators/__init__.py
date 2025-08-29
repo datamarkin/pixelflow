@@ -20,10 +20,10 @@ from .polygon import polygon
 from .zones import zones
 
 # TODO: Import these once implemented
-# from .filled_box import filled_box
+from .filled_box import filled_box
 # from .dot import dot
 # from .fps_counter import fps_counter
-# from .grid_overlay import grid_overlay
+from .grid_overlay import grid_overlay
 # from .heatmap import heatmap
 # from .keypoint import keypoint
 # from .keypoint_skeleton import keypoint_skeleton
