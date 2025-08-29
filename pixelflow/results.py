@@ -2,6 +2,8 @@
 
 import json
 import ast
+import cv2
+import numpy as np
 from pixelflow.validators import (validate_bbox,
                                   validate_masks,
                                   round_to_decimal,
@@ -305,7 +307,7 @@ def from_detectron2(detectron2_results) -> Results:
 
     return predictions_obj
 
-
+# TODO check/verify & improve the mask part
 def from_ultralytics(ultralytics_results) -> Results:
     """
     Converts Ultralytics YOLO results to a custom Results object.
@@ -350,6 +352,19 @@ def from_ultralytics(ultralytics_results) -> Results:
     
     # Process each detection
     num_detections = len(xyxy)
+    
+    # Get binary masks if available (shape: [num_masks, height, width])
+    binary_masks = None
+    orig_shape = None
+    if has_masks and hasattr(result.masks, 'data'):
+        # Convert masks to numpy arrays
+        binary_masks = result.masks.data.cpu().numpy()
+        # Get original image shape from masks or result
+        if hasattr(result.masks, 'orig_shape'):
+            orig_shape = result.masks.orig_shape  # (height, width)
+        elif hasattr(result, 'orig_shape'):
+            orig_shape = result.orig_shape  # (height, width)
+    
     for i in range(num_detections):
         # Basic detection info
         bbox = xyxy[i].tolist()
@@ -360,24 +375,50 @@ def from_ultralytics(ultralytics_results) -> Results:
         masks = None
         segments = None
         if has_masks:
-            # Use polygon format (xy) for segments - it's more efficient
+            # Store polygon format (xy) for segments
             segments = result.masks.xy[i]
-            # Convert to integer coordinates
             if segments is not None and len(segments) > 0:
                 segments = segments.astype(int).tolist()
-                # Store segments as masks for compatibility
-                # This maintains the expected interface without expensive pixel operations
-                masks = [segments]  # Wrap in list as expected by Prediction
             
-            # For pixel masks, we'll use the data attribute only when needed
-            # This avoids expensive resizing operations unless absolutely necessary
-            # masks.data is shape: [num_masks, height, width]
+            # Store binary mask if available
+            if binary_masks is not None:
+                # Get the binary mask for this detection
+                mask = binary_masks[i]
+                
+                # Handle letterbox padding and resize mask to original shape
+                if orig_shape is not None and mask.shape[:2] != orig_shape:
+                    # YOLO uses letterboxing: it pads to square then resizes
+                    # We need to remove padding and resize to original dimensions
+                    mask_h, mask_w = mask.shape[:2]  # Should be 640x640
+                    orig_h, orig_w = orig_shape  # Original image dimensions
+                    
+                    # Calculate the scale and padding used by YOLO
+                    scale = min(mask_h / orig_h, mask_w / orig_w)
+                    new_h, new_w = int(orig_h * scale), int(orig_w * scale)
+                    
+                    # Calculate padding
+                    pad_h = (mask_h - new_h) // 2
+                    pad_w = (mask_w - new_w) // 2
+                    
+                    # Remove padding
+                    mask = mask[pad_h:pad_h + new_h, pad_w:pad_w + new_w]
+                    
+                    # Resize to original dimensions
+                    mask = cv2.resize(mask.astype(np.uint8), 
+                                    (orig_w, orig_h),  # cv2 uses (width, height)
+                                    interpolation=cv2.INTER_NEAREST)
+                
+                mask = mask.astype(bool)
+                masks = [mask]  # Wrap in list for consistency with API
+            elif segments is not None:
+                # Fallback to polygon format if binary not available
+                masks = [segments]
         
         # Create prediction object
         prediction = Prediction(
             bbox=bbox,
-            masks=masks,  # Now properly populated with polygon segments
-            segments=segments,
+            masks=masks,  # Can be either binary mask or polygon coordinates
+            segments=segments,  # Always polygon coordinates
             keypoints=None,
             class_id=class_id,
             confidence=confidence
