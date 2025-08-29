@@ -20,7 +20,7 @@ from .polygon import polygon
 from .zones import zones
 
 # TODO: Import these once implemented
-# from .box_fill import box_fill
+# from .filled_box import filled_box
 # from .dot import dot
 # from .fps_counter import fps_counter
 # from .grid_overlay import grid_overlay
