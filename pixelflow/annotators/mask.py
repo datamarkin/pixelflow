@@ -7,7 +7,7 @@ def mask(frame: np.ndarray,
          opacity: float = 0.5,
          colors=None) -> np.ndarray:
     """
-    Overlays binary masks on a video frame with improved performance.
+    Overlays masks on a video frame, supporting both binary masks and polygon formats.
 
     Args:
         frame (np.ndarray): The video frame (BGR format).
@@ -33,16 +33,39 @@ def mask(frame: np.ndarray,
     # Create a shared overlay array (same as frame) for all masks
     overlay = np.zeros_like(frame, dtype=np.uint8)
 
-    # Process all masks at once
+    # Process all masks
     for result in results:
-        for mask in result.masks:
-            # Ensure mask dimensions match the frame
-            if mask.shape[:2] != frame.shape[:2]:
-                raise ValueError("Mask dimensions do not match frame dimensions.")
-
-            # Apply the color only to the masked regions
-            color = get_color_for_prediction(result, colors)
-            overlay[mask] = color
+        if result.masks is None:
+            continue
+            
+        color = get_color_for_prediction(result, colors)
+        
+        for mask_data in result.masks:
+            if isinstance(mask_data, np.ndarray):
+                # Binary mask format
+                if mask_data.dtype == bool:
+                    # Direct boolean mask
+                    if mask_data.shape[:2] != frame.shape[:2]:
+                        raise ValueError(f"Mask dimensions {mask_data.shape[:2]} do not match frame dimensions {frame.shape[:2]}.")
+                    overlay[mask_data] = color
+                else:
+                    # Convert to boolean if needed
+                    binary_mask = mask_data.astype(bool)
+                    if binary_mask.shape[:2] != frame.shape[:2]:
+                        raise ValueError(f"Mask dimensions {binary_mask.shape[:2]} do not match frame dimensions {frame.shape[:2]}.")
+                    overlay[binary_mask] = color
+            elif isinstance(mask_data, list):
+                # Polygon format - convert to binary mask
+                if len(mask_data) > 0:
+                    # Create a binary mask from polygon points
+                    mask_img = np.zeros(frame.shape[:2], dtype=np.uint8)
+                    points = np.array(mask_data, dtype=np.int32)
+                    if len(points.shape) == 2 and points.shape[1] == 2:
+                        # Reshape for cv2.fillPoly which expects [num_polygons, num_points, 2]
+                        points = points.reshape((-1, 1, 2))
+                        cv2.fillPoly(mask_img, [points], 1)
+                        binary_mask = mask_img.astype(bool)
+                        overlay[binary_mask] = color
 
     # Blend the overlay with the original frame in a single operation
     cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0, dst=frame)
