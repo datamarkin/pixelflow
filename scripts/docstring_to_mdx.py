@@ -410,7 +410,7 @@ def convert_file(filepath: Path, output_dir: Path):
 def get_annotator_category(func_name: str) -> str:
     """Determine the category for an annotator function."""
     categories = {
-        'basics': ['box', 'polygon', 'mask', 'label', 'dot', 'oval', 'box_fill'],
+        'basics': ['box', 'polygon', 'mask', 'label', 'dot', 'oval', 'filled_box'],
         'privacy': ['blur', 'pixelate'],
         'tracking': ['motion_trails', 'motion_dots'],
         'analysis': ['heatmap', 'zones', 'line_zone', 'line_zones'],
