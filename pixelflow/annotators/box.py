@@ -67,7 +67,6 @@ def box(
         return filled_box(image, results, opacity=opacity, colors=colors)
     
     from ..colors import get_color_for_prediction
-    from .. import draw
     
     # Get adaptive thickness if not specified
     if thickness is None:
@@ -80,6 +79,6 @@ def box(
 
         color = get_color_for_prediction(result, colors)
 
-        draw.rectangle(image, (x1, y1), (x2, y2), line_color=color, thickness=thickness)
+        cv2.rectangle(image, (x1, y1), (x2, y2), color=color, thickness=thickness)
 
     return image

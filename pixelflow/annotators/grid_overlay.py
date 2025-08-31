@@ -74,7 +74,6 @@ def grid_overlay(
         - Consider using lower grid density for better performance on large images
     """
     from ..colors import get_color_for_prediction
-    from .. import draw
     
     # Get adaptive parameters if not specified
     params = _get_adaptive_params(image)
@@ -138,11 +137,11 @@ def grid_overlay(
         # Draw vertical grid lines
         for i in range(1, cols):
             x_pos = int(x1 + (width * i / cols))
-            draw.line(image, (x_pos, y1), (x_pos, y2), line_color=color, line_thickness=thickness)
+            cv2.line(image, (x_pos, y1), (x_pos, y2), color=color, thickness=thickness)
         
         # Draw horizontal grid lines
         for i in range(1, rows):
             y_pos = int(y1 + (height * i / rows))
-            draw.line(image, (x1, y_pos), (x2, y_pos), line_color=color, line_thickness=thickness)
+            cv2.line(image, (x1, y_pos), (x2, y_pos), color=color, thickness=thickness)
     
     return image
