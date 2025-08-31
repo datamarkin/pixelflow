@@ -2,7 +2,7 @@ __version__ = "0.1.0"
 __author__ = "Datamarkin"
 
 # Import core modules
-from . import results
+from . import detections
 from . import video
 from . import annotators as annotate
 from . import colors
@@ -19,7 +19,7 @@ from .slicer import SlicedInference, auto_slice_size
 from .buffer import Buffer
 
 # Define the public API
-__all__ = ["annotate", "results", "slicer", "buffer",
+__all__ = ["annotate", "detections", "slicer", "buffer",
            "lazy_frame_generator", "Zones", "Zone", "Lines", "Line", 
            "SlicedInference", "auto_slice_size", "Buffer",
            "__version__", "__author__"]
