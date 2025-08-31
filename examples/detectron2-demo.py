@@ -65,7 +65,7 @@ lines.add_line(
     minimum_crossing_threshold=1
 )
 
-cap = cv2.VideoCapture("data/crowd.mp4")
+cap = cv2.VideoCapture("data/people.mp4")
 
 if not cap.isOpened():
     print("Error: Cannot open crowd.mp4")
@@ -86,6 +86,8 @@ while True:
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         continue
 
+
+    # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_count += 1
     
     if process_every_n_frames > 1 and frame_count % process_every_n_frames != 0:
@@ -98,7 +100,7 @@ while True:
     results = from_detectron2(outputs)
     
     if class_names:
-        for pred in results.predictions:
+        for pred in results.detections:
             if pred.class_id is not None and pred.class_id < len(class_names):
                 pred.class_name = class_names[pred.class_id]
     
@@ -119,19 +121,19 @@ while True:
         show_names=True
     )
     
-    frame = pixelflow.annotate.line_zones(frame, lines)
+    # frame = pixelflow.annotate.line_zones(frame, lines)
     
     frame = pixelflow.annotate.box(frame, results, thickness=2)
     
-    frame = pixelflow.annotate.footprint(frame, results)
+    # frame = pixelflow.annotate.footprint(frame, results)
     
-    for pred in results.predictions:
+    for pred in results.detections:
         if pred.zones:
             pred.zone_info = f"[{', '.join(pred.zone_names)}]"
         else:
             pred.zone_info = ""
     
-    frame = pixelflow.annotate.label(frame, results)
+    # frame = pixelflow.annotate.label(frame, results)
     
     metrics = tracker.get_metrics()
     zone_counts = zones.get_zone_counts()
@@ -140,7 +142,7 @@ while True:
     info_text = [
         f"FPS: {fps:.1f} | Frame: {frame_count}",
         f"Active Tracks: {metrics['active_tracks']} | Total: {metrics['total_tracks']}",
-        f"Detection: {len(results.predictions)} objects",
+        f"Detection: {len(results.detections)} objects",
         "",
         "Zone Counts:"
     ]

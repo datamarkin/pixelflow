@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pixelflow.buffer import Buffer
-from pixelflow.results import Results, Prediction
+from pixelflow.results import Detections, Detection
 
 
 def format_memory(bytes_val):
@@ -29,15 +29,15 @@ def format_memory(bytes_val):
 
 def create_dummy_results(num_detections=5):
     """Create dummy results to simulate detection output."""
-    results = Results()
+    results = Detections()
     for i in range(num_detections):
-        pred = Prediction(
+        pred = Detection(
             bbox=[100 + i*50, 100 + i*30, 200 + i*50, 200 + i*30],
             confidence=0.8 + i*0.02,
             class_id=i % 3,
             class_name=f"object_{i % 3}"
         )
-        results.add_prediction(pred)
+        results.add_detection(pred)
     return results
 
 

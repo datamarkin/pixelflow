@@ -71,7 +71,7 @@ while True:
     results = from_detectron2(outputs)
     
     if class_names:
-        for pred in results.predictions:
+        for pred in results.detections:
             if pred.class_id is not None and pred.class_id < len(class_names):
                 pred.class_name = class_names[pred.class_id]
     
@@ -105,7 +105,7 @@ while True:
     
     info_text.extend([
         "",
-        f"Detections: {len(results.predictions) if results else 0} objects"
+        f"Detections: {len(results.detections) if results else 0} objects"
     ])
     
     # Draw info panel

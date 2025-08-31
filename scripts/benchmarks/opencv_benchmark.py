@@ -16,7 +16,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 import pixelflow
-from pixelflow.results import Results, Prediction
+from pixelflow.results import Detections, Detection
 
 
 class OpenCVBenchmark:
@@ -152,14 +152,14 @@ class OpenCVBenchmark:
             for i in range(num_objects):
                 x = np.random.randint(100, 1800)
                 y = np.random.randint(100, 900)
-                predictions.append(Prediction(
+                predictions.append(Detection(
                     bbox=[x, y, x + 100, y + 100],
                     confidence=0.95,
                     class_id=i % 5,
                     class_name=f"object_{i % 5}",
                     tracker_id=i
                 ))
-            return Results(predictions=predictions)
+            return Detections(detections=predictions)
         
         cap = cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
@@ -224,14 +224,14 @@ class OpenCVBenchmark:
             for i in range(num_objects):
                 x = np.random.randint(100, 1800)
                 y = np.random.randint(100, 900)
-                predictions.append(Prediction(
+                predictions.append(Detection(
                     bbox=[x, y, x + 100, y + 100],
                     confidence=0.95,
                     class_id=i % 3,
                     class_name=f"object_{i % 3}",
                     tracker_id=i
                 ))
-            return Results(predictions=predictions)
+            return Detections(detections=predictions)
         
         mock_results = create_mock_results(5)
         
