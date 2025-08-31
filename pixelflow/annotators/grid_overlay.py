@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..results import Detections
+    from ..detections import Detections
 
 import cv2
 import numpy as np

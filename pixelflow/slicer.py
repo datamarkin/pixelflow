@@ -12,7 +12,7 @@ Designed for simplicity and performance following PixelFlow principles.
 
 import numpy as np
 from typing import List, Tuple, Callable, Optional, Union
-from .results import Detections, Detection
+from .detections import Detections, Detection
 
 
 class SlicedInference:

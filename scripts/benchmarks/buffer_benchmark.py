@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pixelflow.buffer import Buffer
-from pixelflow.results import Detections, Detection
+from pixelflow.detections import Detections, Detection
 
 
 def format_memory(bytes_val):

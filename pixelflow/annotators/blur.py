@@ -9,7 +9,7 @@ The blur effect maintains natural appearance while obscuring sensitive details.
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..results import Detections
+    from ..detections import Detections
 
 import cv2
 import numpy as np

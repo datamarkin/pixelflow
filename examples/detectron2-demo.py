@@ -14,7 +14,7 @@ from detectron2.data import MetadataCatalog
 from pixelflow.tracker import ByteTracker
 from pixelflow.zones import Zones
 from pixelflow.lines import Lines
-from pixelflow.results import from_detectron2
+from pixelflow.detections import from_detectron2
 
 print("Setting up Detectron2 with PixelFlow features...")
 

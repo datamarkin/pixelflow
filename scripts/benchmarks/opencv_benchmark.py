@@ -16,7 +16,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 import pixelflow
-from pixelflow.results import Detections, Detection
+from pixelflow.detections import Detections, Detection
 
 
 class OpenCVBenchmark:

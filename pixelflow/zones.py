@@ -257,7 +257,7 @@ class Zones:
         Returns:
             New filtered Detections object
         """
-        from pixelflow.results import Detections, Detection
+        from pixelflow.detections import Detections, Detection
         
         filtered = Detections()
         

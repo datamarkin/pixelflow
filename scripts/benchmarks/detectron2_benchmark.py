@@ -21,7 +21,7 @@ from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog
 import pixelflow
-from pixelflow.results import from_detectron2
+from pixelflow.detections import from_detectron2
 from pixelflow.tracker import ByteTracker
 
 

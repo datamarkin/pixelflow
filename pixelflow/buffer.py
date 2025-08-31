@@ -85,7 +85,7 @@ class Buffer:
             # Try to create empty results of same type as input
             try:
                 # Import here to avoid circular dependency
-                from pixelflow.results import Detections
+                from pixelflow.detections import Detections
                 empty_results = Detections()
             except:
                 # If can't import Detections, return None

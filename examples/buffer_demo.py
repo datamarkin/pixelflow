@@ -16,7 +16,7 @@ from detectron2.engine import DefaultPredictor
 from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog
 from pixelflow.buffer import Buffer
-from pixelflow.results import from_detectron2
+from pixelflow.detections import from_detectron2
 
 print("Setting up Detectron2 with PixelFlow Buffer...")
 

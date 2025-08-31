@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pixelflow as pf
 from pixelflow.slicer import SlicedInference, auto_slice_size
-from pixelflow.results import Detections, Detection
+from pixelflow.detections import Detections, Detection
 
 
 def mock_detector(image: np.ndarray, confidence=0.25) -> Detections:
