@@ -8,16 +8,13 @@ def filled_box(
     image: np.ndarray, 
     results: List, 
     opacity: Optional[float] = None, 
-    colors: Optional[List[tuple]] = None,
-    border: bool = False,
-    thickness: Optional[int] = None
+    colors: Optional[List[tuple]] = None
 ) -> np.ndarray:
     """
     Draw filled bounding boxes with opacity on detected objects.
     
     Creates semi-transparent filled rectangles for clean overlays.
     Automatically adapts opacity based on image dimensions for optimal visibility.
-    Can optionally add borders around the filled boxes.
     
     Args:
         image (np.ndarray): Input image to draw filled boxes on (BGR format)
@@ -29,10 +26,6 @@ def filled_box(
         colors (Optional[List[tuple]]): List of BGR color tuples to override default colors.
                                        Colors are mapped to unique class_ids in order of appearance.
                                        If None, uses default ColorManager colors.
-        border (bool): If True, also draws borders around the filled boxes.
-                      Default is False (no borders).
-        thickness (Optional[int]): Line thickness for borders when border=True.
-                                  Only used when border=True. If None, auto-determined.
     
     Returns:
         np.ndarray: Image with filled bounding boxes drawn. The input image is modified in-place.
@@ -46,29 +39,22 @@ def filled_box(
         >>> outputs = model.predict(image)  # Raw model outputs
         >>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
-        >>> # Draw filled boxes with automatic opacity (no borders)
+        >>> # Draw filled boxes with automatic opacity
         >>> annotated = pf.annotate.filled_box(image, results)
-        >>> 
-        >>> # Draw filled boxes with borders
-        >>> annotated = pf.annotate.filled_box(image, results, border=True)
         >>> 
         >>> # Use custom opacity for subtle overlay
         >>> annotated = pf.annotate.filled_box(image, results, opacity=0.3)
-        >>> 
-        >>> # Draw filled boxes with custom borders
-        >>> annotated = pf.annotate.filled_box(image, results, opacity=0.4, border=True, thickness=2)
         >>> 
         >>> # Override with custom colors for specific classes
         >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
         >>> annotated = pf.annotate.filled_box(image, results, opacity=0.5, colors=custom_colors)
     
     Notes:
-        - By default, no borders are drawn, only filled rectangles with transparency
+        - Filled rectangles are drawn with transparency
         - Opacity is automatically calculated based on image size if not specified
         - Typical auto-calculated opacity ranges from 0.3 to 0.5 for optimal visibility
         - Uses alpha blending for smooth transparency effect
         - Multiple overlapping boxes will create cumulative opacity effect
-        - When border=True, borders are drawn after the fill for better visibility
     """
     from ..colors import get_color_for_prediction
     
@@ -98,11 +84,5 @@ def filled_box(
         
         # Blend overlay with original image
         cv2.addWeighted(overlay, opacity, image, 1 - opacity, 0, image)
-    
-    # If border is True, draw borders on top using the box function
-    if border:
-        from .box import box as draw_box
-        # Call box function to draw borders only (not filled)
-        image = draw_box(image, results, thickness=thickness, colors=colors, filled=False)
     
     return image
