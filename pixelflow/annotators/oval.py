@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 
 
-def oval(image, results, thickness=None, start_angle: int = -45, end_angle: int = 235, colors=None):
+def oval(image: np.ndarray, detections: 'Detections', thickness=None, start_angle: int = -45, end_angle: int = 235, colors=None):
     """
     Draws elliptical footprints at the bottom of detected objects.
     
@@ -13,7 +18,7 @@ def oval(image, results, thickness=None, start_angle: int = -45, end_angle: int 
     
     Args:
         image (np.ndarray): Input image to draw footprints on
-        results: List of detection results containing bounding boxes
+        detections (Detections): Detections object containing bounding boxes
         thickness (int): Thickness of the ellipse lines. Default is 2.
         start_angle (int): Starting angle of the ellipse in degrees. 
                           Default is -45 (bottom-left).
@@ -34,11 +39,11 @@ def oval(image, results, thickness=None, start_angle: int = -45, end_angle: int 
         
     Examples:
         # Use default colors
-        annotated = oval(image, results)
+        annotated = oval(image, detections)
         
         # Override with custom colors
         custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
-        annotated = oval(image, results, colors=custom_colors)
+        annotated = oval(image, detections, colors=custom_colors)
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
@@ -49,7 +54,7 @@ def oval(image, results, thickness=None, start_angle: int = -45, end_angle: int 
     
     from ..colors import get_color_for_prediction
     
-    for result in results:
+    for result in detections:
         box = result.bbox
         x1, y1, x2, y2 = map(int, box)
         

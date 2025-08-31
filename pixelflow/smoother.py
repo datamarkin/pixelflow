@@ -8,7 +8,7 @@ and confidence fluctuations for tracked objects.
 from typing import Optional, Dict, List, Tuple, TYPE_CHECKING
 from collections import defaultdict, deque
 import numpy as np
-from pixelflow.results import Results, Prediction
+from pixelflow.results import Detections, Detection
 
 if TYPE_CHECKING:
     from pixelflow.buffer import Buffer

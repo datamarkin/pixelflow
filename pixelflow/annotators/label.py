@@ -1,3 +1,8 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import numpy as np
 from .. import colors
@@ -7,8 +12,8 @@ color_manager = colors.ColorManager()
 
 
 def label(
-        image,
-        results,
+        image: np.ndarray,
+        detections: 'Detections',
         labels=None,
         position='top_left',
         template=None,
@@ -31,7 +36,7 @@ def label(
 
     Args:
         image (np.ndarray): Input image to annotate
-        results: List of detection results containing bounding boxes
+        detections (Detections): Detections object containing bounding boxes
         labels (list, optional): Custom labels for each detection. If None, auto-generates
                                 from class_name and confidence
         position (str): Label position relative to bbox. Options:
@@ -59,13 +64,13 @@ def label(
 
     Examples:
         # Simple usage with auto-generated labels
-        enhanced_label(image, results)
+        enhanced_label(image, detections)
 
         # Custom template with tracker ID
-        enhanced_label(image, results, template="{class_name} #{tracker_id} ({confidence:.0%})")
+        enhanced_label(image, detections, template="{class_name} #{tracker_id} ({confidence:.0%})")
 
         # Advanced styling
-        enhanced_label(image, results, position='bottom_center',
+        enhanced_label(image, detections, position='bottom_center',
                       style={'font_scale': 0.7, 'bg_color': (0, 100, 200)},
                       rounded=5, shadow=True)
     """
@@ -115,7 +120,7 @@ def label(
     # Generate labels if not provided
     if labels is None:
         labels = []
-        for result in results:
+        for result in detections:
             if template:
                 # Use template formatting with safe defaults
                 try:
@@ -141,7 +146,7 @@ def label(
     # Collect label positions and sizes for overlap prevention
     label_boxes = []
 
-    for idx, (result, label_text) in enumerate(zip(results, labels)):
+    for idx, (result, label_text) in enumerate(zip(detections, labels)):
         if not label_text:
             continue
 
@@ -247,7 +252,7 @@ def label(
     # Draw labels
     for label_info in label_boxes:
         idx = label_info['idx']
-        result = results[idx]
+        result = detections[idx]
 
         # Get background color
         bg_color = style['bg_color']

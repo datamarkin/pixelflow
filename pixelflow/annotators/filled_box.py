@@ -1,4 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
@@ -6,7 +9,7 @@ from .utils import _get_adaptive_params
 
 def filled_box(
     image: np.ndarray, 
-    results: List, 
+    detections: 'Detections', 
     opacity: Optional[float] = None, 
     colors: Optional[List[tuple]] = None
 ) -> np.ndarray:
@@ -18,8 +21,8 @@ def filled_box(
     
     Args:
         image (np.ndarray): Input image to draw filled boxes on (BGR format)
-        results (List): List of detection results containing bounding boxes.
-                       Each result must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
+        detections (Detections): Detections object containing bounding boxes.
+                                Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
         opacity (Optional[float]): Fill opacity for bounding boxes.
                                   Range: [0.0-1.0] where 0 is transparent, 1 is opaque.
                                   If None, automatically determined based on image size.
@@ -37,17 +40,17 @@ def filled_box(
         >>> # Load image and get model predictions
         >>> image = cv2.imread("path/to/image.jpg")
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Draw filled boxes with automatic opacity
-        >>> annotated = pf.annotate.filled_box(image, results)
+        >>> annotated = pf.annotate.filled_box(image, detections)
         >>> 
         >>> # Use custom opacity for subtle overlay
-        >>> annotated = pf.annotate.filled_box(image, results, opacity=0.3)
+        >>> annotated = pf.annotate.filled_box(image, detections, opacity=0.3)
         >>> 
         >>> # Override with custom colors for specific classes
         >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
-        >>> annotated = pf.annotate.filled_box(image, results, opacity=0.5, colors=custom_colors)
+        >>> annotated = pf.annotate.filled_box(image, detections, opacity=0.5, colors=custom_colors)
     
     Notes:
         - Filled rectangles are drawn with transparency
@@ -69,9 +72,9 @@ def filled_box(
     opacity = max(0.0, min(1.0, opacity))
     
     # First draw the filled boxes
-    for result in results:
-        box = result.bbox
-        x1, y1, x2, y2 = map(int, box)
+    for result in detections:
+        bbox = result.bbox
+        x1, y1, x2, y2 = map(int, bbox)
         
         # Get color for this prediction
         color = get_color_for_prediction(result, colors)

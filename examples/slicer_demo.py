@@ -24,17 +24,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pixelflow as pf
 from pixelflow.slicer import SlicedInference, auto_slice_size
-from pixelflow.results import Results, Prediction
+from pixelflow.results import Detections, Detection
 
 
-def mock_detector(image: np.ndarray, confidence=0.25) -> Results:
+def mock_detector(image: np.ndarray, confidence=0.25) -> Detections:
     """
     Mock object detector that creates fake detections for testing.
     
     This simulates a real detector by finding bright regions in the image
     and creating bounding boxes around them.
     """
-    results = Results()
+    results = Detections()
     
     # Convert to grayscale for detection
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -48,13 +48,13 @@ def mock_detector(image: np.ndarray, confidence=0.25) -> Results:
             x, y, w, h = cv2.boundingRect(contour)
             
             # Create a prediction
-            prediction = Prediction(
+            prediction = Detection(
                 bbox=[x, y, x + w, y + h],
                 class_id=0,
                 class_name="bright_object",
                 confidence=0.8 + 0.2 * np.random.random()  # Random confidence
             )
-            results.add_prediction(prediction)
+            results.add_detection(prediction)
     
     return results
 
@@ -69,7 +69,7 @@ def yolo_detector_wrapper(image: np.ndarray, model, confidence=0.25) -> Results:
         confidence: Confidence threshold
         
     Returns:
-        Results object with detections
+        Detections object with detections
     """
     try:
         # Run YOLO inference
@@ -81,7 +81,7 @@ def yolo_detector_wrapper(image: np.ndarray, model, confidence=0.25) -> Results:
     
     except Exception as e:
         print(f"YOLO detection failed: {e}")
-        return Results()
+        return Detections()
 
 
 def detectron2_detector_wrapper(image: np.ndarray, predictor, confidence=0.25) -> Results:
@@ -94,7 +94,7 @@ def detectron2_detector_wrapper(image: np.ndarray, predictor, confidence=0.25) -
         confidence: Confidence threshold
         
     Returns:
-        Results object with detections
+        Detections object with detections
     """
     try:
         # Run Detectron2 inference
@@ -109,7 +109,7 @@ def detectron2_detector_wrapper(image: np.ndarray, predictor, confidence=0.25) -
     
     except Exception as e:
         print(f"Detectron2 detection failed: {e}")
-        return Results()
+        return Detections()
 
 
 def create_test_image(width: int = 2000, height: int = 1500) -> np.ndarray:

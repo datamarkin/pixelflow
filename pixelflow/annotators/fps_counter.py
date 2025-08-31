@@ -1,9 +1,15 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import time
+import numpy as np
 from .utils import _get_adaptive_params
 
 
-def fps_counter(image, results, thickness=None):
+def fps_counter(image: np.ndarray, detections: 'Detections', thickness=None):
     # Get current time
     current_time = time.time()
 

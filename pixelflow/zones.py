@@ -183,23 +183,23 @@ class Zones:
         Update detection results with zone information.
         
         This method checks each detection against all zones and updates:
-        - prediction.zones: List of zone IDs the detection is in
-        - prediction.zone_names: List of zone names (for convenience)
+        - detection.zones: List of zone IDs the detection is in
+        - detection.zone_names: List of zone names (for convenience)
         - Zone statistics (current_count, total_entered)
         
         Args:
-            results: Results object containing predictions
+            results: Detections object containing detections
             
         Returns:
-            Updated Results object (modified in-place)
+            Updated Detections object (modified in-place)
         """
         # Reset current counts for all zones
         for zone in self.zones:
             zone.current_count = 0
         
-        # Check each prediction against all zones
-        for prediction in results.predictions:
-            if prediction.bbox is None:
+        # Check each detection against all zones
+        for detection in results.detections:
+            if detection.bbox is None:
                 continue
             
             # Find which zones this detection is in
@@ -207,14 +207,14 @@ class Zones:
             zone_names = []
             
             for zone in self.zones:
-                if zone.check_detection(prediction.bbox, prediction.tracker_id):
+                if zone.check_detection(detection.bbox, detection.tracker_id):
                     zones_in.append(zone.zone_id)
                     zone_names.append(zone.name)
                     zone.current_count += 1
             
-            # Update prediction with zone information
-            prediction.zones = zones_in
-            prediction.zone_names = zone_names
+            # Update detection with zone information
+            detection.zones = zones_in
+            detection.zone_names = zone_names
         
         return results
     
@@ -250,28 +250,28 @@ class Zones:
         Filter results to only include detections in specified zones.
         
         Args:
-            results: Results object to filter
+            results: Detections object to filter
             zone_ids: List of zone IDs to filter by
             exclude: If True, exclude detections in specified zones (default: include)
             
         Returns:
-            New filtered Results object
+            New filtered Detections object
         """
-        from pixelflow.results import Results, Prediction
+        from pixelflow.results import Detections, Detection
         
-        filtered = Results()
+        filtered = Detections()
         
-        for prediction in results.predictions:
-            if not hasattr(prediction, 'zones') or prediction.zones is None:
+        for detection in results.detections:
+            if not hasattr(detection, 'zones') or detection.zones is None:
                 # If no zone info, include if we're excluding
                 if exclude:
-                    filtered.predictions.append(prediction)
+                    filtered.detections.append(detection)
             else:
-                # Check if prediction is in any of the specified zones
-                in_specified_zones = any(z in zone_ids for z in prediction.zones)
+                # Check if detection is in any of the specified zones
+                in_specified_zones = any(z in zone_ids for z in detection.zones)
                 
                 if (in_specified_zones and not exclude) or (not in_specified_zones and exclude):
-                    filtered.predictions.append(prediction)
+                    filtered.detections.append(detection)
         
         return filtered
     

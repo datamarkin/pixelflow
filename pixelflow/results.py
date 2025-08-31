@@ -9,7 +9,6 @@ from pixelflow.validators import (validate_bbox,
                                   round_to_decimal,
                                   convert_datamarkin_masks,
                                   simplify_polygon)
-from pixelflow.zones import Zones
 from typing import (List,
                     Iterator)
 
@@ -37,7 +36,7 @@ class KeyPoint:
         }
 
 
-class Prediction:
+class Detection:
     def __init__(self, inference_id=None, bbox=None, masks=None, segments=None, keypoints: List[KeyPoint] = None, class_id=None,
                  class_name=None, labels=None, confidence=None, tracker_id=None, data=None, zones=None, zone_names=None,
                  line_crossings=None):
@@ -90,20 +89,19 @@ class Prediction:
             self.masks = [simplify_polygon(mask, tolerance, preserve_topology) for mask in self.masks]
 
 
-class Results:
-    def __init__(self, zones: 'Zones' = None):
-        self.predictions: List[Prediction] = []
-        self.zones = zones  # Store the zones object if provided
+class Detections:
+    def __init__(self):
+        self.detections: List[Detection] = []
 
     def show(self):
         # Display the annotated image
         pass
 
-    def add_prediction(self, prediction: Prediction):
+    def add_detection(self, detection: Detection):
         """
-        Add a prediction to the list.
+        Add a detection to the list.
         """
-        self.predictions.append(prediction)
+        self.detections.append(detection)
     
     def update_zones(self, zone_manager):
         """
@@ -120,28 +118,28 @@ class Results:
         return self
 
     def __len__(self):
-        return len(self.predictions)
+        return len(self.detections)
 
-    def __iter__(self) -> Iterator[Prediction]:
-        return iter(self.predictions)
+    def __iter__(self) -> Iterator[Detection]:
+        return iter(self.detections)
 
-    def __getitem__(self, index: int) -> Prediction:
-        return self.predictions[index]
+    def __getitem__(self, index: int) -> Detection:
+        return self.detections[index]
 
-    def filter_by_confidence(self, threshold: float) -> 'Results':
+    def filter_by_confidence(self, threshold: float) -> 'Detections':
         """
-        Returns a new Predictions object containing only predictions
+        Returns a new Detections object containing only detections
         with a confidence score greater than or equal to the given threshold.
         """
-        filtered_predictions = Results()
-        for prediction in self.predictions:
-            if prediction.confidence is not None and prediction.confidence >= threshold:
-                filtered_predictions.add_prediction(prediction)
-        return filtered_predictions
+        filtered_detections = Detections()
+        for detection in self.detections:
+            if detection.confidence is not None and detection.confidence >= threshold:
+                filtered_detections.add_detection(detection)
+        return filtered_detections
 
-    def filter_by_class_id(self, class_ids) -> 'Results':
+    def filter_by_class_id(self, class_ids) -> 'Detections':
         """
-        Returns a new Results object containing only predictions
+        Returns a new Detections object containing only detections
         with class_id matching one of the provided class_ids.
         
         Args:
@@ -151,59 +149,58 @@ class Results:
         if not isinstance(class_ids, (list, tuple)):
             class_ids = [class_ids]
             
-        filtered_predictions = Results()
-        for prediction in self.predictions:
-            if prediction.class_id is not None and prediction.class_id in class_ids:
-                filtered_predictions.add_prediction(prediction)
-        return filtered_predictions
+        filtered_detections = Detections()
+        for detection in self.detections:
+            if detection.class_id is not None and detection.class_id in class_ids:
+                filtered_detections.add_detection(detection)
+        return filtered_detections
 
     def simplify(self, tolerance: float = 2.0, preserve_topology: bool = True):
         """
-        Simplifies the masks of all predictions in the Predictions object.
+        Simplifies the masks of all detections in the Detections object.
 
         Args:
             tolerance (float): The tolerance factor for simplification.
             preserve_topology (bool): Whether to preserve the topology.
         """
-        for prediction in self.predictions:
-            prediction.simplify_masks(tolerance=tolerance, preserve_topology=preserve_topology)
+        for detection in self.detections:
+            detection.simplify_masks(tolerance=tolerance, preserve_topology=preserve_topology)
         return self
 
     def to_json(self):
         """
-        Converts the list of predictions into a JSON string.
+        Converts the list of detections into a JSON string.
         """
-        predictions_dict = [prediction.to_dict() for prediction in self.predictions]
-        return json.dumps(predictions_dict, indent=4)
+        detections_dict = [detection.to_dict() for detection in self.detections]
+        return json.dumps(detections_dict, indent=4)
 
     def to_dict(self):
         """
-        Converts the list of predictions into a JSON string.
+        Converts the list of detections into a dictionary.
         """
-        return [prediction.to_dict() for prediction in self.predictions]
+        return [detection.to_dict() for detection in self.detections]
 
     def to_json_with_metrics(self) -> str:
         """
-        Converts the list of predictions into a JSON string.
+        Converts the list of detections into a JSON string.
         More to come here
         """
-        predictions_dict = [prediction.to_dict() for prediction in self.predictions]
-        return json.dumps(predictions_dict, indent=4)
+        detections_dict = [detection.to_dict() for detection in self.detections]
+        return json.dumps(detections_dict, indent=4)
 
 
-def from_datamarkin_api(api_response: dict, zones: Zones = None) -> Results:
+def from_datamarkin_api(api_response: dict) -> Detections:
     """
-    Converts the Datamarkin API response to a `Predictions` object, filtering based on zones.
+    Converts the Datamarkin API response to a `Detections` object.
 
     Args:
         api_response (dict): The API response in dictionary format.
-        zones (Zones, optional): The Zones object for managing included/excluded zones. If None, no filtering is applied.
 
     Returns:
-        Predictions: The corresponding Predictions object.
+        Detections: The corresponding Detections object.
     """
 
-    predictions_obj = Results()
+    detections_obj = Detections()
 
     for obj in api_response.get("predictions", {}).get("objects", []):
         bbox = obj.get("bbox", [])
@@ -212,40 +209,40 @@ def from_datamarkin_api(api_response: dict, zones: Zones = None) -> Results:
         class_name = obj.get("class", "")
         confidence = obj.get("bbox_score", None)
 
-        # Create the Prediction object
-        prediction = Prediction(
+        # Create the Detection object
+        detection = Detection(
             bbox=bbox,
-            mask=mask,
+            masks=mask,
             keypoints=keypoints,
             class_id=class_name,
             confidence=confidence,
         )
 
         # Add the prediction to the list
-        predictions_obj.add_prediction(prediction)
+        detections_obj.add_detection(detection)
 
-    return predictions_obj
+    return detections_obj
 
 
 
-def from_detectron2(detectron2_results) -> Results:
+def from_detectron2(detectron2_results) -> Detections:
     """
-    Converts Detectron2 results to a custom Results object.
+    Converts Detectron2 results to a custom Detections object.
 
     Args:
         detectron2_results: Detectron2 inference results containing instances with prediction data.
 
     Returns:
-        Results: A unified Results object containing predictions.
+        Detections: A unified Detections object containing detections.
     """
-    predictions_obj = Results()
+    detections_obj = Detections()
     
     # Get instances and ensure they're on CPU for processing
     instances = detectron2_results["instances"].to("cpu")
     
     # Check if we have any instances
     if len(instances) == 0:
-        return predictions_obj
+        return detections_obj
 
     # Extract prediction data
     # Bounding boxes - Detectron2 uses XYXY format
@@ -292,8 +289,8 @@ def from_detectron2(detectron2_results) -> Results:
             # Convert to PixelFlow KeyPoint format if needed
             # This would need to be implemented based on your KeyPoint class
         
-        # Create a Prediction object
-        prediction = Prediction(
+        # Create a Detection object
+        detection = Detection(
             bbox=bbox,
             masks=[mask] if mask is not None else None,
             segments=None,
@@ -302,15 +299,15 @@ def from_detectron2(detectron2_results) -> Results:
             confidence=confidence
         )
 
-        # Add the prediction to the Results object
-        predictions_obj.add_prediction(prediction)
+        # Add the detection to the Detections object
+        detections_obj.add_detection(detection)
 
-    return predictions_obj
+    return detections_obj
 
 # TODO check/verify & improve the mask part
-def from_ultralytics(ultralytics_results) -> Results:
+def from_ultralytics(ultralytics_results) -> Detections:
     """
-    Converts Ultralytics YOLO results to a custom Results object.
+    Converts Ultralytics YOLO results to a custom Detections object.
     
     Supports both detection and segmentation models.
     
@@ -318,13 +315,13 @@ def from_ultralytics(ultralytics_results) -> Results:
         ultralytics_results: YOLO results from the Ultralytics library (single result object or list).
 
     Returns:
-        Results: A unified Results object containing predictions.
+        Detections: A unified Detections object containing detections.
     """
-    predictions_obj = Results()
+    detections_obj = Detections()
     
     # Handle empty results
     if not ultralytics_results:
-        return predictions_obj
+        return detections_obj
     
     # Handle both single result and list of results
     if isinstance(ultralytics_results, list):
@@ -336,7 +333,7 @@ def from_ultralytics(ultralytics_results) -> Results:
     
     # Handle case where there are no detections
     if result.boxes is None or len(result.boxes) == 0:
-        return predictions_obj
+        return detections_obj
     
     # Get all box data in one tensor transfer (more efficient)
     boxes_data = result.boxes.data.cpu().numpy()
@@ -414,8 +411,8 @@ def from_ultralytics(ultralytics_results) -> Results:
                 # Fallback to polygon format if binary not available
                 masks = [segments]
         
-        # Create prediction object
-        prediction = Prediction(
+        # Create detection object
+        detection = Detection(
             bbox=bbox,
             masks=masks,  # Can be either binary mask or polygon coordinates
             segments=segments,  # Always polygon coordinates
@@ -424,14 +421,14 @@ def from_ultralytics(ultralytics_results) -> Results:
             confidence=confidence
         )
         
-        predictions_obj.add_prediction(prediction)
+        detections_obj.add_detection(detection)
     
     # Store the original YOLO masks data for later use if needed
     # This avoids processing masks until they're actually used
     if has_masks:
-        predictions_obj._ultralytics_masks = result.masks
+        detections_obj._ultralytics_masks = result.masks
     
-    return predictions_obj
+    return detections_obj
 
 
 def from_transformers(transformers_results):
@@ -442,9 +439,9 @@ def from_sam(sam_results):
     pass
 
 
-def from_datamarkin_csv(group, height, width) -> Results:
+def from_datamarkin_csv(group, height, width) -> Detections:
     """
-    Converts CSV data to a `Predictions` object.
+    Converts CSV data to a `Detections` object.
 
     Args:
         group: The pandas DataFrame group with the CSV rows.
@@ -452,10 +449,10 @@ def from_datamarkin_csv(group, height, width) -> Results:
         width: Image width to denormalize the bounding box and segmentation coordinates.
 
     Returns:
-        Predictions: The corresponding Predictions object.
+        Detections: The corresponding Detections object.
     """
 
-    predictions_obj = Results()
+    detections_obj = Detections()
 
     for index, row in group.iterrows():
         # Get the bounding box coordinates and denormalize them
@@ -472,17 +469,17 @@ def from_datamarkin_csv(group, height, width) -> Results:
             y = int(segmentation_list[i + 1] * height)
             segmentation_points.append((x, y))  # Convert to tuple for polygon points
 
-        # Create the Prediction object
-        prediction = Prediction(
+        # Create the Detection object
+        detection = Detection(
             bbox=[xmin, ymin, xmax, ymax],
-            mask=[segmentation_points],  # Add mask as list of lists of tuples
+            masks=[segmentation_points],  # Add mask as list of lists of tuples
             keypoints=None,  # TODO
             class_id=row['class'],
             confidence=row.get('confidence', None)  # Add confidence if available
         )
 
         # Add the prediction to the predictions list
-        predictions_obj.add_prediction(prediction)
+        detections_obj.add_detection(detection)
 
-    return predictions_obj
+    return detections_obj
 

@@ -1,4 +1,8 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
@@ -6,7 +10,7 @@ from .utils import _get_adaptive_params
 
 def grid_overlay(
     image: np.ndarray,
-    results: List,
+    detections: 'Detections',
     grid_size: Optional[Tuple[int, int]] = None,
     thickness: Optional[int] = None,
     colors: Optional[List[tuple]] = None,
@@ -22,8 +26,8 @@ def grid_overlay(
     
     Args:
         image (np.ndarray): Input image to draw grid overlays on (BGR format)
-        results (List): List of detection results containing bounding boxes.
-                       Each result must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
+        detections (Detections): Detections object containing bounding boxes.
+                                Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
         grid_size (Optional[Tuple[int, int]]): Grid dimensions as (rows, cols).
                                                If None, automatically calculated based on box size.
                                                Example: (3, 4) creates 3 horizontal and 4 vertical divisions.
@@ -47,19 +51,19 @@ def grid_overlay(
         >>> # Load image and get model predictions
         >>> image = cv2.imread("path/to/image.jpg")
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Draw grids with automatic sizing based on box dimensions
-        >>> annotated = pf.annotate.grid_overlay(image, results)
+        >>> annotated = pf.annotate.grid_overlay(image, detections)
         >>> 
         >>> # Use fixed 4x4 grid for all boxes
-        >>> annotated = pf.annotate.grid_overlay(image, results, grid_size=(4, 4))
+        >>> annotated = pf.annotate.grid_overlay(image, detections, grid_size=(4, 4))
         >>> 
         >>> # Create filled checkerboard pattern with custom opacity
-        >>> annotated = pf.annotate.grid_overlay(image, results, filled=True, opacity=0.2)
+        >>> annotated = pf.annotate.grid_overlay(image, detections, filled=True, opacity=0.2)
         >>> 
         >>> # Fine grid with thin lines for precise measurement
-        >>> annotated = pf.annotate.grid_overlay(image, results, grid_size=(8, 8), thickness=1)
+        >>> annotated = pf.annotate.grid_overlay(image, detections, grid_size=(8, 8), thickness=1)
     
     Notes:
         - Auto-sizing creates approximately one grid line every 50 pixels
@@ -89,7 +93,7 @@ def grid_overlay(
     if opacity is not None:
         opacity = max(0.0, min(1.0, opacity))
     
-    for result in results:
+    for result in detections:
         box = result.bbox
         x1, y1, x2, y2 = map(int, box)
         

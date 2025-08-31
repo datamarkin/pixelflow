@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 
 
-def pixelate(image, results, pixel_size=None, padding_percent: float = 0.05):
+def pixelate(image: np.ndarray, detections: 'Detections', pixel_size=None, padding_percent: float = 0.05):
     """
     Applies pixelation effect to detected regions in the image with padding.
     
@@ -15,7 +20,7 @@ def pixelate(image, results, pixel_size=None, padding_percent: float = 0.05):
     
     Args:
         image (np.ndarray): Input image to apply pixelation on
-        results: List of detection results containing bounding boxes
+        detections (Detections): Detections object containing bounding boxes
         pixel_size (int): Size of the pixelation blocks. Larger values create 
                          more pixelated/blocky appearance. Default is 10 (softer).
                          Must be > 0.
@@ -45,7 +50,7 @@ def pixelate(image, results, pixel_size=None, padding_percent: float = 0.05):
     
     image_height, image_width = image.shape[:2]
     
-    for result in results:
+    for result in detections:
         box = result.bbox
         x1, y1, x2, y2 = map(int, box)
         

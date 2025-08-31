@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import numpy as np
 
 
 def mask(frame: np.ndarray,
-         results,
+         detections: 'Detections',
          opacity: float = 0.5,
          colors=None) -> np.ndarray:
     """
@@ -11,7 +16,7 @@ def mask(frame: np.ndarray,
 
     Args:
         frame (np.ndarray): The video frame (BGR format).
-        results: List of results containing masks (e.g., from a model's output).
+        detections (Detections): Detections object containing masks.
         opacity (float): Opacity level for blending masks with the frame (0.0 to 1.0).
         colors (list, optional): List of BGR color tuples to override default colors.
                                Colors are mapped to unique class_ids in order of appearance.
@@ -22,11 +27,11 @@ def mask(frame: np.ndarray,
         
     Examples:
         # Use default colors
-        annotated = mask(image, results)
+        annotated = mask(image, detections)
         
         # Override with custom colors
         custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
-        annotated = mask(image, results, colors=custom_colors)
+        annotated = mask(image, detections, colors=custom_colors)
     """
     from ..colors import get_color_for_prediction
     
@@ -34,7 +39,7 @@ def mask(frame: np.ndarray,
     overlay = np.zeros_like(frame, dtype=np.uint8)
 
     # Process all masks
-    for result in results:
+    for result in detections:
         if result.masks is None:
             continue
             

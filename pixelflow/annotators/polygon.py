@@ -1,15 +1,20 @@
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 
 
-def polygon(image: np.ndarray, results, thickness=None, colors=None) -> np.ndarray:
+def polygon(image: np.ndarray, detections: 'Detections', thickness=None, colors=None) -> np.ndarray:
     """
     Draw polygon outlines on detected objects.
     
     Args:
         image (np.ndarray): Input image to draw polygons on
-        results: List of detection results containing segments
+        detections (Detections): Detections object containing segments
         thickness (int): Line thickness for polygon outlines. Default is 2.
         colors (list, optional): List of BGR color tuples to override default colors.
                                 Colors are mapped to unique class_ids in order of appearance.
@@ -20,11 +25,11 @@ def polygon(image: np.ndarray, results, thickness=None, colors=None) -> np.ndarr
         
     Examples:
         # Use default colors
-        annotated = polygon(image, results)
+        annotated = polygon(image, detections)
         
         # Override with custom colors
         custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
-        annotated = polygon(image, results, colors=custom_colors)
+        annotated = polygon(image, detections, colors=custom_colors)
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
@@ -35,7 +40,7 @@ def polygon(image: np.ndarray, results, thickness=None, colors=None) -> np.ndarr
         params = _get_adaptive_params(image)
         thickness = params['thickness']
 
-    for result in results:
+    for result in detections:
         # Iterate over the segments in the result
         # Convert the points to a NumPy array and reshape for OpenCV
         polygon = np.array(result.segments, dtype=np.int32).reshape((-1, 1, 2))

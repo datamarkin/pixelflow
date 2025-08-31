@@ -12,7 +12,7 @@ Designed for simplicity and performance following PixelFlow principles.
 
 import numpy as np
 from typing import List, Tuple, Callable, Optional, Union
-from .results import Results, Prediction
+from .results import Detections, Detection
 
 
 class SlicedInference:
@@ -102,24 +102,24 @@ class SlicedInference:
         
         return slices
     
-    def shift_predictions(self, predictions: Results, offset_x: int, offset_y: int, slice_id: int) -> Results:
+    def shift_predictions(self, predictions: Detections, offset_x: int, offset_y: int, slice_id: int) -> Detections:
         """
         Shift prediction coordinates from slice space to full image space.
         
         Args:
-            predictions: Results object with predictions in slice coordinates
+            predictions: Detections object with detections in slice coordinates
             offset_x: X offset of the slice in the full image
             offset_y: Y offset of the slice in the full image
             slice_id: ID of the source slice for tracking
             
         Returns:
-            Results object with shifted coordinates
+            Detections object with shifted coordinates
         """
-        shifted_results = Results()
+        shifted_results = Detections()
         
         for pred in predictions:
             # Create a new prediction with shifted coordinates
-            shifted_pred = Prediction(
+            shifted_pred = Detection(
                 inference_id=pred.inference_id,
                 bbox=[
                     pred.bbox[0] + offset_x,
@@ -136,7 +136,7 @@ class SlicedInference:
                 tracker_id=pred.tracker_id,
                 data={'slice_id': slice_id} if pred.data is None else {**pred.data, 'slice_id': slice_id}
             )
-            shifted_results.add_prediction(shifted_pred)
+            shifted_results.add_detection(shifted_pred)
         
         return shifted_results
     
@@ -229,7 +229,7 @@ class SlicedInference:
         
         return x_overlap and y_overlap
     
-    def merge_predictions(self, all_predictions: List[Prediction], slices: List[Tuple]) -> Results:
+    def merge_predictions(self, all_predictions: List[Detection], slices: List[Tuple]) -> Detections:
         """
         Merge predictions from all slices using intelligent NMS/NMM.
         
@@ -243,15 +243,15 @@ class SlicedInference:
             slices: List of slice coordinates for adjacency checking
             
         Returns:
-            Merged Results object
+            Merged Detections object
         """
         if not all_predictions:
-            return Results()
+            return Detections()
         
         # Sort predictions by confidence (descending)
         sorted_preds = sorted(all_predictions, key=lambda x: x.confidence or 0, reverse=True)
         
-        merged_results = Results()
+        merged_results = Detections()
         suppressed = set()
         
         for i, pred_i in enumerate(sorted_preds):
@@ -304,14 +304,14 @@ class SlicedInference:
             if self.merge_mode == 'nmm' and len(merge_candidates) > 1:
                 # Merge boxes by weighted average based on confidence
                 merged_pred = self._merge_boxes(merge_candidates)
-                merged_results.add_prediction(merged_pred)
+                merged_results.add_detection(merged_pred)
             else:
                 # Standard NMS - keep highest confidence
-                merged_results.add_prediction(pred_i)
+                merged_results.add_detection(pred_i)
         
         return merged_results
     
-    def _merge_boxes(self, predictions: List[Prediction]) -> Prediction:
+    def _merge_boxes(self, predictions: List[Detection]) -> Detection:
         """
         Merge multiple predictions into one using weighted average.
         
@@ -335,7 +335,7 @@ class SlicedInference:
         # Use highest confidence
         max_conf_pred = max(predictions, key=lambda x: x.confidence or 0)
         
-        return Prediction(
+        return Detection(
             bbox=merged_bbox,
             class_id=max_conf_pred.class_id,
             class_name=max_conf_pred.class_name,
@@ -351,18 +351,18 @@ class SlicedInference:
         detector_func: Callable,
         verbose: bool = False,
         **detector_kwargs
-    ) -> Results:
+    ) -> Detections:
         """
         Run sliced inference on an image.
         
         Args:
             image: Input image as numpy array
-            detector_func: Detection function that takes an image and returns Results
+            detector_func: Detection function that takes an image and returns Detections
             verbose: Print progress information
             **detector_kwargs: Additional arguments to pass to detector_func
             
         Returns:
-            Merged Results object with all detections
+            Merged Detections object with all detections
         """
         image_height, image_width = image.shape[:2]
         
@@ -383,19 +383,19 @@ class SlicedInference:
             slice_results = detector_func(slice_img, **detector_kwargs)
             
             # Handle different return types
-            if not isinstance(slice_results, Results):
+            if not isinstance(slice_results, Detections):
                 # Assume it's a raw detection output that needs conversion
                 # This allows flexibility with different detector formats
                 if hasattr(slice_results, '__iter__'):
-                    slice_results = Results()  # Create empty Results if needed
+                    slice_results = Detections()  # Create empty Detections if needed
                 else:
-                    slice_results = Results()
+                    slice_results = Detections()
             
             # Shift coordinates to full image space
             shifted_results = self.shift_predictions(slice_results, x1, y1, slice_id)
             
             # Collect all predictions
-            all_predictions.extend(shifted_results.predictions)
+            all_predictions.extend(shifted_results.detections)
             
             if verbose:
                 print(f"Slice {slice_id}: {len(slice_results)} detections")

@@ -1,3 +1,11 @@
-def keypoint(image, results, thickness=None):
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
+import numpy as np
+
+
+def keypoint(image: np.ndarray, detections: 'Detections', thickness=None):
     # TODO: Implement keypoint visualization (e.g., pose estimation)
     return image

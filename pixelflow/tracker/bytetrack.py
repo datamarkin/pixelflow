@@ -47,7 +47,7 @@ class ByteTracker:
         minimum_matching_threshold: IoU threshold for first-stage matching with high confidence detections (default: 0.7)
         minimum_consecutive_frames: Minimum frames before considering a track valid (default: 3)
         second_match_threshold: IoU threshold for second-stage matching with low confidence detections (default: 0.5)
-        assignment_threshold: IoU threshold for assigning tracker IDs to predictions (default: 0.3)
+        assignment_threshold: IoU threshold for assigning tracker IDs to detections (default: 0.3)
     """
     
     def __init__(
@@ -84,15 +84,15 @@ class ByteTracker:
         # Metrics
         self.metrics = TrackerMetrics()
         
-    def update(self, results: 'Results') -> 'Results':
+    def update(self, results: 'Detections') -> 'Detections':
         """
-        Update tracker with new detections from Results object.
+        Update tracker with new detections from Detections object.
         
         Args:
-            results: Results object containing predictions with bboxes and confidences
+            results: Detections object containing detections with bboxes and confidences
         
         Returns:
-            Results object with tracker_id assigned to each prediction
+            Detections object with tracker_id assigned to each detection
         """
         self.frame_id += 1
         self.metrics.total_frames = self.frame_id
@@ -102,18 +102,18 @@ class ByteTracker:
         lost_tracks = []
         removed_tracks = []
         
-        # Extract detection data from Results
+        # Extract detection data from Detections
         if len(results) == 0:
             # No detections, just update existing tracks
             self._update_tracks_no_detections()
             return results
         
-        # Convert predictions to numpy arrays
+        # Convert detections to numpy arrays
         bboxes = []
         scores = []
         class_ids = []
         
-        for pred in results.predictions:
+        for pred in results.detections:
             if pred.bbox is not None and pred.confidence is not None:
                 # Convert bbox from [x1, y1, x2, y2] to [x1, y1, x2, y2]
                 bboxes.append(pred.bbox)
@@ -272,28 +272,28 @@ class ByteTracker:
         # Update metrics
         self._update_metrics()
         
-        # Assign tracker IDs to predictions
+        # Assign tracker IDs to detections
         self._assign_tracker_ids(results, output_tracks)
         
         return results
     
-    def _assign_tracker_ids(self, results: 'Results', tracks: List[STrack]):
+    def _assign_tracker_ids(self, results: 'Detections', tracks: List[STrack]):
         """
-        Assign tracker IDs to predictions in Results object.
+        Assign tracker IDs to detections in Detections object.
         
         Args:
-            results: Results object to update
+            results: Detections object to update
             tracks: List of active tracks
         """
         if len(tracks) == 0:
             # No tracks, clear all tracker IDs
-            for pred in results.predictions:
+            for pred in results.detections:
                 pred.tracker_id = None
             return
         
-        # Get bounding boxes from predictions and tracks
+        # Get bounding boxes from detections and tracks
         pred_boxes = []
-        for pred in results.predictions:
+        for pred in results.detections:
             if pred.bbox is not None:
                 pred_boxes.append(pred.bbox)
             else:
@@ -305,7 +305,7 @@ class ByteTracker:
         pred_boxes = np.array(pred_boxes)
         track_boxes = np.array([track.tlbr for track in tracks])
         
-        # Calculate IoU between predictions and tracks
+        # Calculate IoU between detections and tracks
         ious = matching.box_iou_batch(pred_boxes, track_boxes)
         
         # Assign tracker IDs based on best IoU match

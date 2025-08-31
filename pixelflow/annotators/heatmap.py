@@ -1,3 +1,11 @@
-def heatmap(image, results, thickness=None):
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
+import numpy as np
+
+
+def heatmap(image: np.ndarray, detections: 'Detections', thickness=None):
     # TODO: Implement heatmap visualization for detection density
     return image

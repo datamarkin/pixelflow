@@ -6,7 +6,11 @@ for privacy protection, aesthetic effects, or focus redirection in computer visi
 The blur effect maintains natural appearance while obscuring sensitive details.
 """
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
@@ -16,7 +20,7 @@ __all__ = ["blur"]
 
 def blur(
     image: np.ndarray, 
-    results: List, 
+    detections: 'Detections', 
     kernel_size: Optional[int] = None, 
     padding_percent: float = 0.05
 ) -> np.ndarray:
@@ -28,8 +32,8 @@ def blur(
     
     Args:
         image (np.ndarray): Input image to apply blur on
-        results (List): List of detection results containing bounding boxes.
-                       Each result must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
+        detections (Detections): Detections object containing bounding boxes.
+                                Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
         kernel_size (Optional[int]): Size of the blur kernel. Larger values create
                                    stronger blur effect. Must be odd and > 0. 
                                    If None, uses adaptive sizing based on image dimensions.
@@ -52,16 +56,16 @@ def blur(
         >>> # Load image and get model predictions
         >>> image = cv2.imread("path/to/image.jpg")
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Apply blur with default settings
-        >>> blurred_image = pf.annotators.blur(image, results)
+        >>> blurred_image = pf.annotators.blur(image, detections)
         >>> 
         >>> # Apply stronger blur with custom kernel size
-        >>> blurred_image = pf.annotators.blur(image, results, kernel_size=25)
+        >>> blurred_image = pf.annotators.blur(image, detections, kernel_size=25)
         >>> 
         >>> # Apply blur with more padding around detections
-        >>> blurred_image = pf.annotators.blur(image, results, padding_percent=0.1)
+        >>> blurred_image = pf.annotators.blur(image, detections, padding_percent=0.1)
     
     Notes:
         - Modifies the input image in-place for memory efficiency
@@ -95,7 +99,7 @@ def blur(
     
     image_height, image_width = image.shape[:2]
     
-    for result in results:
+    for result in detections:
         box = result.bbox
         x1, y1, x2, y2 = map(int, box)
         

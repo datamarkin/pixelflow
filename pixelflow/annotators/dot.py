@@ -1,3 +1,11 @@
-def dot(image, results, thickness=None):
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..results import Detections
+
+import numpy as np
+
+
+def dot(image: np.ndarray, detections: 'Detections', thickness=None):
     # TODO: Implement center dot annotation for detected objects
     return image
