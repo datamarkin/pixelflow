@@ -8,3 +8,4 @@ pixelflow.egg-info/
 .DS_Store
 /pixelflow/__pycache__
 /examples/ultralytics
+/pixelflow/annotators/__pycache__
