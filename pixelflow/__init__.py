@@ -10,6 +10,7 @@ from . import zones
 from . import lines
 from . import slicer
 from . import buffer
+from . import timer
 
 # Import specific functions for top-level access
 from .video import lazy_frame_generator
@@ -17,9 +18,10 @@ from .zones import Zones, Zone
 from .lines import Lines, Line
 from .slicer import SlicedInference, auto_slice_size
 from .buffer import Buffer
+from .timer import TimeTracker
 
 # Define the public API
-__all__ = ["annotate", "detections", "slicer", "buffer",
-           "lazy_frame_generator", "Zones", "Zone", "Lines", "Line", 
+__all__ = ["annotate", "detections", "slicer", "buffer", "timer",
+           "lazy_frame_generator", "Zones", "Zone", "Lines", "Line", "TimeTracker",
            "SlicedInference", "auto_slice_size", "Buffer",
            "__version__", "__author__"]
