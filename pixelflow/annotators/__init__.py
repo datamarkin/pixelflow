@@ -9,6 +9,7 @@ allowing easy chaining of annotation operations.
 """
 
 # Import implemented annotator functions
+from .anchors import anchors
 from .blur import blur
 from .box import box
 from .label import label
@@ -37,6 +38,7 @@ from .utils import _get_adaptive_params, ADAPTIVE_SCALE_MULTIPLIER
 # Define public API
 __all__ = [
     # Core annotators
+    'anchors',
     'box',
     'label',
     'mask',
