@@ -1,20 +1,18 @@
 # BGR format for OpenCV compatibility
 # Scientifically chosen for maximum perceptual distinction
-
-# 20 perceptually distinct colors optimized for visibility
 # Ordered to maximize distinction between adjacent colors
 
 DEFAULT_PALETTE = [
-    (255, 127, 14),   # Vivid Orange
-    (31, 119, 180),   # Strong Blue  
-    (44, 160, 44),    # Green
-    (214, 39, 40),    # Vivid Red
+    (255, 127, 14),  # Vivid Orange
+    (31, 119, 180),  # Strong Blue
+    (44, 160, 44),  # Green
+    (214, 39, 40),  # Vivid Red
     (148, 103, 189),  # Purple
-    (140, 86, 75),    # Brown
+    (140, 86, 75),  # Brown
     (227, 119, 194),  # Pink
     (127, 127, 127),  # Gray
-    (188, 189, 34),   # Olive
-    (23, 190, 207),   # Cyan
+    (188, 189, 34),  # Olive
+    (23, 190, 207),  # Cyan
     (255, 187, 120),  # Light Orange
     (174, 199, 232),  # Light Blue
     (152, 223, 138),  # Light Green
@@ -27,233 +25,76 @@ DEFAULT_PALETTE = [
     (158, 218, 229),  # Light Cyan
 ]
 
-# Preset UI colors for consistent styling across the library
-UI_COLORS = {
-    'text': (255, 255, 255),           # White text (default)
-    'text_dark': (0, 0, 0),            # Black text
-    'text_accent': (0, 255, 255),      # Yellow accent text
-    'background': (0, 0, 0),           # Black background
-    'background_light': (255, 255, 255), # White background
-    'background_overlay': (40, 40, 40),  # Dark overlay background
-    'shadow': (50, 50, 50),            # Shadow color
-    'success': (0, 255, 0),            # Green for success
-    'warning': (0, 165, 255),          # Orange for warnings
-    'error': (0, 0, 255),              # Red for errors
-    'info': (255, 255, 0),             # Cyan for info
-    'accent': (255, 0, 255),           # Magenta accent
-    'grid': (128, 128, 128),           # Grid lines
-    'border': (200, 200, 200),         # Border color
-    'fps': (0, 255, 0),                # FPS counter color
-}
+# High contrast palette for better visibility
+VIBRANT_PALETTE = [
+    (0, 0, 255),  # Pure Red
+    (0, 255, 0),  # Pure Green
+    (255, 0, 0),  # Pure Blue
+    (0, 255, 255),  # Yellow
+    (255, 0, 255),  # Magenta
+    (255, 255, 0),  # Cyan
+    (0, 128, 255),  # Orange
+    (255, 0, 128),  # Purple
+    (128, 255, 0),  # Lime
+    (0, 128, 128),  # Olive
+    (128, 0, 128),  # Maroon
+    (128, 128, 0),  # Navy
+    (64, 224, 208),  # Turquoise
+    (250, 128, 114),  # Salmon
+    (255, 215, 0),  # Gold
+    (255, 105, 180),  # Hot Pink
+    (0, 191, 255),  # Deep Sky Blue
+    (50, 205, 50),  # Lime Green
+    (255, 20, 147),  # Deep Pink
+    (255, 140, 0),  # Dark Orange
+]
 
-# Alternative palette styles
+# Soft pastel colors for subtle annotations
+PASTEL_PALETTE = [
+    (203, 195, 255),  # Pastel Red
+    (195, 255, 203),  # Pastel Green
+    (255, 203, 195),  # Pastel Blue
+    (195, 255, 255),  # Pastel Yellow
+    (255, 195, 255),  # Pastel Magenta
+    (255, 255, 195),  # Pastel Cyan
+    (195, 225, 255),  # Pastel Orange
+    (255, 195, 225),  # Pastel Purple
+    (225, 255, 195),  # Pastel Lime
+    (214, 234, 248),  # Pastel Sky
+    (250, 219, 216),  # Pastel Rose
+    (253, 235, 208),  # Pastel Peach
+    (222, 234, 210),  # Pastel Mint
+    (239, 224, 255),  # Pastel Lavender
+    (255, 245, 215),  # Pastel Cream
+    (230, 244, 241),  # Pastel Teal
+    (255, 239, 213),  # Pastel Apricot
+    (241, 238, 252),  # Pastel Periwinkle
+    (255, 250, 230),  # Pastel Beige
+    (240, 255, 240),  # Pastel Honeydew
+]
+
+# Palette dictionary for easy selection
 PALETTES = {
     'default': DEFAULT_PALETTE,
-    'vibrant': [
-        (0, 0, 255),      # Pure Red
-        (0, 255, 0),      # Pure Green  
-        (255, 0, 0),      # Pure Blue
-        (0, 255, 255),    # Yellow
-        (255, 0, 255),    # Magenta
-        (255, 255, 0),    # Cyan
-        (0, 128, 255),    # Orange
-        (255, 0, 128),    # Purple
-        (128, 255, 0),    # Lime
-        (0, 128, 128),    # Olive
-        (128, 0, 128),    # Maroon
-        (128, 128, 0),    # Navy
-        (64, 224, 208),   # Turquoise
-        (250, 128, 114),  # Salmon
-        (255, 215, 0),    # Gold
-        (255, 105, 180),  # Hot Pink
-        (0, 191, 255),    # Deep Sky Blue
-        (50, 205, 50),    # Lime Green
-        (255, 20, 147),   # Deep Pink
-        (255, 140, 0),    # Dark Orange
-    ],
-    'pastel': [
-        (203, 195, 255),  # Pastel Red
-        (195, 255, 203),  # Pastel Green
-        (255, 203, 195),  # Pastel Blue
-        (195, 255, 255),  # Pastel Yellow
-        (255, 195, 255),  # Pastel Magenta
-        (255, 255, 195),  # Pastel Cyan
-        (195, 225, 255),  # Pastel Orange
-        (255, 195, 225),  # Pastel Purple
-        (225, 255, 195),  # Pastel Lime
-        (214, 234, 248),  # Pastel Sky
-        (250, 219, 216),  # Pastel Rose
-        (253, 235, 208),  # Pastel Peach
-        (222, 234, 210),  # Pastel Mint
-        (239, 224, 255),  # Pastel Lavender
-        (255, 245, 215),  # Pastel Cream
-        (230, 244, 241),  # Pastel Teal
-        (255, 239, 213),  # Pastel Apricot
-        (241, 238, 252),  # Pastel Periwinkle
-        (255, 250, 230),  # Pastel Beige
-        (240, 255, 240),  # Pastel Honeydew
-    ],
+    'vibrant': VIBRANT_PALETTE,
+    'pastel': PASTEL_PALETTE
 }
 
 
-class ColorManager:
+def get_color_for_prediction(prediction, colors_override=None, palette='default'):
     """
-    Manages color assignment for classes and UI elements.
-    
-    Features:
-    - Deterministic color assignment for class IDs
-    - Semantic UI color presets
-    - Support for multiple palette styles
-    - Automatic color generation beyond palette size
-    """
-    
-    def __init__(self, palette='default', seed=None):
-        """
-        Initialize ColorManager with specified palette.
-        
-        Args:
-            palette: Palette name ('default', 'vibrant', 'pastel') or custom list of BGR tuples
-            seed: Optional seed for reproducible color generation (not used in current implementation)
-        """
-        if isinstance(palette, str):
-            self.palette = PALETTES.get(palette, DEFAULT_PALETTE).copy()
-        elif isinstance(palette, list):
-            self.palette = palette.copy()
-        else:
-            self.palette = DEFAULT_PALETTE.copy()
-            
-        self.assigned_colors = {}  # class_id -> color mapping
-        self.ui_colors = UI_COLORS.copy()  # Mutable UI colors
-        self.seed = seed
-    
-    def get_color(self, class_id):
-        """
-        Get deterministic color for a class ID.
-        
-        Args:
-            class_id: Integer class identifier
-            
-        Returns:
-            BGR color tuple for the class
-        """
-        if class_id not in self.assigned_colors:
-            # Calculate color index
-            idx = len(self.assigned_colors)
-            
-            if idx < len(self.palette):
-                # Use color from palette
-                color = self.palette[idx]
-            else:
-                # Generate additional color when palette is exhausted
-                # Use modulo to cycle through palette with slight variations
-                base_idx = idx % len(self.palette)
-                base_color = self.palette[base_idx]
-                
-                # Apply brightness variation based on cycle number
-                cycle = idx // len(self.palette)
-                factor = 1.0 - (cycle * 0.2)  # Darken by 20% each cycle
-                factor = max(0.3, factor)  # Don't go below 30% brightness
-                
-                color = tuple(int(c * factor) for c in base_color)
-            
-            self.assigned_colors[class_id] = color
-            
-        return self.assigned_colors[class_id]
-    
-    def ui(self, name):
-        """
-        Get UI color by semantic name.
-        
-        Args:
-            name: UI element name ('text', 'background', 'shadow', etc.)
-            
-        Returns:
-            BGR color tuple for the UI element
-        """
-        return self.ui_colors.get(name, (128, 128, 128))
-    
-    def set_ui(self, name, color):
-        """
-        Override a UI color.
-        
-        Args:
-            name: UI element name to override
-            color: BGR color tuple
-        """
-        self.ui_colors[name] = color
-    
-    def reset_assignments(self):
-        """Reset class color assignments while keeping UI colors."""
-        self.assigned_colors = {}
-    
-    def get_palette_info(self):
-        """Get information about current palette."""
-        return {
-            'palette_size': len(self.palette),
-            'assigned_classes': len(self.assigned_colors),
-            'ui_colors': list(self.ui_colors.keys())
-        }
+    Ultra-fast color assignment for predictions.
 
-
-def get_color_for_prediction(prediction, colors_override=None, color_manager=None):
-    """
-    Get color for a prediction with optional color override list.
-    
-    This function provides a simple way to override colors by mapping unique class_ids
-    to a list of color tuples in order of first appearance.
-    
     Args:
-        prediction: Prediction object with class_id attribute
-        colors_override: Optional list of BGR color tuples to use instead of defaults
-        color_manager: ColorManager instance to use for fallback (uses global if None)
-    
+        prediction: Object with class_id attribute
+        colors_override: Optional list of BGR color tuples (highest priority)
+        palette: Palette name ('default', 'vibrant', 'pastel') - ignored if colors_override is provided
+
     Returns:
         BGR color tuple for the prediction
-    
-    Examples:
-        # Use default colors
-        color = get_color_for_prediction(pred)
-        
-        # Override with custom colors
-        custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
-        color = get_color_for_prediction(pred, custom_colors)
     """
-    if color_manager is None:
-        # Create a default color manager
-        color_manager = ColorManager()
-    
-    # If no override, use the color manager
-    if colors_override is None:
-        return color_manager.get_color(prediction.class_id)
-    
-    # If override is provided but not a list, fall back to color manager
-    if not isinstance(colors_override, list):
-        return color_manager.get_color(prediction.class_id)
-    
-    # If override list is empty, fall back to color manager
-    if len(colors_override) == 0:
-        return color_manager.get_color(prediction.class_id)
-    
-    # Get unique class_ids from color manager's assigned_colors
-    # This maintains the order of first appearance
-    unique_class_ids = list(color_manager.assigned_colors.keys())
-    
-    # If this class_id hasn't been seen before, we need to determine its index
-    if prediction.class_id not in unique_class_ids:
-        # This will cause the color manager to assign it, maintaining order
-        color_manager.get_color(prediction.class_id)
-        unique_class_ids = list(color_manager.assigned_colors.keys())
-    
-    # Find the index of this class_id in the unique list
-    try:
-        class_index = unique_class_ids.index(prediction.class_id)
-    except ValueError:
-        # Fallback if something goes wrong
-        return color_manager.get_color(prediction.class_id)
-    
-    # If we have a color for this index, use it
-    if class_index < len(colors_override):
-        return colors_override[class_index]
-    
-    # If index is beyond our override list, fall back to color manager
-    return color_manager.get_color(prediction.class_id)
+    if colors_override:
+        return colors_override[prediction.class_id % len(colors_override)]
+
+    active = PALETTES.get(palette, DEFAULT_PALETTE)
+    return active[prediction.class_id % len(active)]
