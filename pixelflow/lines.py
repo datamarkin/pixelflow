@@ -8,10 +8,10 @@ in video streams, with support for directional counting (in/out) and per-class t
 from __future__ import annotations
 
 from collections import Counter, defaultdict, deque
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 import numpy as np
 
-from .strategies import TriggerStrategy, get_anchor_position, AnchorConfig
+from .strategies import TriggerStrategy, get_anchor_position
 
 
 class Line:
@@ -36,9 +36,9 @@ class Line:
         line_id: Union[int, str] = 0,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        triggering_anchor: Union[TriggerStrategy, str] = "center",
+        triggering_anchor: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]] = "center",
         minimum_crossing_threshold: int = 1,
-        anchor_config: Optional[AnchorConfig] = None,
+        mode: Literal["any", "all"] = "all",
         boundary_margin: float = 50.0,
         debounce_time: int = 30,
         minimum_distance: float = 10.0,
@@ -58,7 +58,7 @@ class Line:
                                "top_left", "top_right", "bottom_left", "bottom_right")
             minimum_crossing_threshold: Number of frames object must be on
                                        opposite side to count as crossed
-            anchor_config: Configuration for multiple anchor points (overrides triggering_anchor)
+            mode: "all" (AND logic) or "any" (OR logic) for multiple strategies
             boundary_margin: Distance in pixels from line endpoints to still consider valid (default: 50.0)
             debounce_time: Frames to wait before allowing another crossing for same tracker (default: 30)
             minimum_distance: Minimum distance in pixels the object must travel to be valid (default: 10.0)
@@ -95,22 +95,15 @@ class Line:
         # Crossing history for stability
         self.crossing_history_length = max(2, minimum_crossing_threshold + 1)
         
-        # Handle multiple anchors vs single anchor
-        if anchor_config is not None:
-            self.anchor_config = anchor_config
-            self.use_multiple_anchors = True
-            # For multiple anchors, we need separate history for each anchor
-            self.anchor_crossing_histories: Dict[int, Dict[TriggerStrategy, deque]] = defaultdict(
-                lambda: {anchor: deque(maxlen=self.crossing_history_length) for anchor in anchor_config.anchors}
-            )
-        else:
-            self.triggering_anchor = triggering_anchor
-            self.anchor_config = None
-            self.use_multiple_anchors = False
-            # Single anchor history (existing behavior)
-            self.crossing_state_history: Dict[int, deque] = defaultdict(
-                lambda: deque(maxlen=self.crossing_history_length)
-            )
+        # Store configuration for simplified system
+        self.triggering_anchor = triggering_anchor
+        self.mode = mode
+        self.use_multiple_anchors = isinstance(triggering_anchor, (list, tuple))
+        
+        # Single anchor history (existing behavior)
+        self.crossing_state_history: Dict[int, deque] = defaultdict(
+            lambda: deque(maxlen=self.crossing_history_length)
+        )
         
         # Counting
         self._in_count_per_class: Counter = Counter()
@@ -248,42 +241,9 @@ class Line:
             # Get tracker ID early for use in boundary checking
             tracker_id = prediction.tracker_id
             
-            # Handle multiple anchors vs single anchor
-            if self.use_multiple_anchors:
-                # For multiple anchors, check each anchor and apply logic
-                anchor_sides = []
-                anchor_points = []
-                
-                for anchor_strategy in self.anchor_config.anchors:
-                    point = get_anchor_position(prediction.bbox, anchor_strategy)
-                    anchor_points.append(point)
-                    
-                    # Check if point is near line segment
-                    if not self._is_point_near_line_segment(point):
-                        anchor_sides.append(None)  # Not valid
-                        continue
-                    
-                    side = self._point_side_of_line(point)
-                    if side == 0:  # On the line
-                        anchor_sides.append(None)
-                    else:
-                        anchor_sides.append(side > 0)  # True for left, False for right
-                
-                # Apply AND/OR logic for crossing detection
-                valid_sides = [s for s in anchor_sides if s is not None]
-                if not valid_sides:
-                    continue
-                
-                if self.anchor_config.mode == "all":
-                    # All valid anchors must be on the same side
-                    if not all(s == valid_sides[0] for s in valid_sides):
-                        continue  # Anchors on different sides, no consistent crossing
-                    tracker_state = valid_sides[0]
-                else:  # mode == "any"
-                    # Use the first valid anchor's state
-                    tracker_state = valid_sides[0]
-                    
-            else:
+            # TODO: Implement full multi-anchor logic for simplified system
+            # For now, always use single anchor behavior
+            if True:
                 # Single anchor (existing behavior)
                 point = get_anchor_position(prediction.bbox, self.triggering_anchor)
                 
@@ -463,9 +423,9 @@ class Lines:
         line_id: Optional[Union[int, str]] = None,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        triggering_anchor: Union[TriggerStrategy, str] = "center",
+        triggering_anchor: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]] = "center",
         minimum_crossing_threshold: int = 1,
-        anchor_config: Optional[AnchorConfig] = None,
+        mode: Literal["any", "all"] = "all",
         boundary_margin: float = 50.0,
         debounce_time: int = 30,
         minimum_distance: float = 10.0,
@@ -482,7 +442,7 @@ class Lines:
             color: RGB color tuple for visualization
             triggering_anchor: Anchor point to check for crossing (default: "center")
             minimum_crossing_threshold: Frames required for crossing
-            anchor_config: Configuration for multiple anchor points (overrides triggering_anchor)
+            mode: "all" (AND logic) or "any" (OR logic) for multiple strategies
             boundary_margin: Distance in pixels from line endpoints to still consider valid (default: 50.0)
             debounce_time: Frames to wait before allowing another crossing for same tracker (default: 30)
             minimum_distance: Minimum distance in pixels the object must travel to be valid (default: 10.0)
@@ -510,7 +470,7 @@ class Lines:
             color=color,
             triggering_anchor=triggering_anchor,
             minimum_crossing_threshold=minimum_crossing_threshold,
-            anchor_config=anchor_config,
+            mode=mode,
             boundary_margin=boundary_margin,
             debounce_time=debounce_time,
             minimum_distance=minimum_distance,

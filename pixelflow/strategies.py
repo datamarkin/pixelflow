@@ -3,7 +3,7 @@ Strategies for detection and trigger logic used across PixelFlow components.
 """
 
 from enum import Enum
-from typing import List, Tuple, Optional, Union, Literal
+from typing import List, Tuple, Union, Literal
 from shapely.geometry import Polygon, Point, box
 
 
@@ -49,66 +49,11 @@ class TriggerStrategy(Enum):
     OVERLAP = "overlap"  # Check if bbox overlaps with region
     CONTAINS = "contains"  # Check if region fully contains the bbox
     PERCENTAGE = "percentage"  # Check if overlap percentage exceeds threshold
-    MULTI_ANCHOR = "multi_anchor"  # Check multiple anchor points with AND/OR logic
     TOP_CENTER = "top_center"  # Check if top center point is in region
     LEFT_CENTER = "left_center"  # Check if left center point is in region  
     RIGHT_CENTER = "right_center"  # Check if right center point is in region
 
 
-class AnchorConfig:
-    """
-    Configuration for multiple anchor point checking.
-    
-    This class defines how multiple anchor points should be evaluated together.
-    Useful for cases where you need both corners of a bounding box to cross a line,
-    or when you want any of several anchor points to trigger a zone detection.
-    
-    Examples:
-        # Both bottom-right and top-left must cross the line
-        config = AnchorConfig(["bottom_right", "top_left"], mode="all")
-        
-        # Either center or bottom center can trigger the zone
-        config = AnchorConfig(["center", "bottom_center"], mode="any")
-        
-        # All four corners must be inside the zone
-        config = AnchorConfig(["top_left", "top_right", "bottom_left", "bottom_right"], mode="all")
-    """
-    
-    def __init__(
-        self, 
-        anchors: List[Union[TriggerStrategy, str]], 
-        mode: Literal["all", "any"] = "all"
-    ):
-        """
-        Initialize anchor configuration.
-        
-        Args:
-            anchors: List of anchor strategies to check
-            mode: "all" requires all anchors to pass (AND logic)
-                  "any" requires at least one anchor to pass (OR logic)
-        """
-        # Convert string anchors to TriggerStrategy enum
-        self.anchors = []
-        for anchor in anchors:
-            if isinstance(anchor, str):
-                try:
-                    self.anchors.append(TriggerStrategy(anchor))
-                except ValueError:
-                    valid_strategies = [s.value for s in TriggerStrategy if s != TriggerStrategy.MULTI_ANCHOR]
-                    raise ValueError(
-                        f"Invalid anchor '{anchor}'. "
-                        f"Valid options are: {', '.join(valid_strategies)}"
-                    )
-            else:
-                self.anchors.append(anchor)
-        
-        if not self.anchors:
-            raise ValueError("At least one anchor must be specified")
-            
-        if mode not in ["all", "any"]:
-            raise ValueError("Mode must be 'all' or 'any'")
-            
-        self.mode = mode
 
 
 def get_anchor_position(bbox: List[float], strategy: TriggerStrategy) -> Tuple[float, float]:
@@ -147,69 +92,80 @@ def get_anchor_position(bbox: List[float], strategy: TriggerStrategy) -> Tuple[f
         return ((x1 + x2) / 2, (y1 + y2) / 2)
 
 
-def check_multiple_anchors(
-    bbox: List[float],
-    anchor_config: AnchorConfig,
-    region: Polygon,
-    overlap_threshold: float = 0.5
-) -> bool:
-    """
-    Check multiple anchor points with AND/OR logic.
-    
-    This function evaluates multiple anchor points according to the provided
-    configuration, allowing for complex detection scenarios like requiring
-    both corners to cross a line or any of several points to be in a zone.
-    
-    Args:
-        bbox: Bounding box in [x1, y1, x2, y2] format
-        anchor_config: Configuration specifying which anchors to check and how
-        region: Shapely Polygon representing the region
-        overlap_threshold: Threshold for PERCENTAGE strategy (0.0 to 1.0)
-        
-    Returns:
-        True if detection meets the anchor configuration criteria, False otherwise
-    """
-    results = []
-    
-    for anchor_strategy in anchor_config.anchors:
-        # Use the existing single anchor checking logic
-        result = check_detection_in_region(bbox, anchor_strategy, region, overlap_threshold)
-        results.append(result)
-    
-    # Apply AND/OR logic based on mode
-    if anchor_config.mode == "all":
-        return all(results)
-    else:  # mode == "any"
-        return any(results)
 
 
 def check_detection_in_region(
     bbox: List[float], 
-    strategy: TriggerStrategy, 
+    strategy: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]], 
     region: Polygon, 
     overlap_threshold: float = 0.5,
-    anchor_config: Optional[AnchorConfig] = None
+    mode: Literal["any", "all"] = "all"
 ) -> bool:
     """
     Check if a detection is within a region based on the trigger strategy.
     
     Args:
         bbox: Bounding box in [x1, y1, x2, y2] format
-        strategy: Strategy for determining if detection is in region
+        strategy: Strategy for determining if detection is in region. Can be:
+                 - Single string (e.g., "center")
+                 - List of strings (e.g., ["center", "bottom_center"])
+                 - Single TriggerStrategy enum
+                 - List of TriggerStrategy enums
         region: Shapely Polygon representing the region
         overlap_threshold: Threshold for PERCENTAGE strategy (0.0 to 1.0)
-        anchor_config: Configuration for MULTI_ANCHOR strategy (required when strategy is MULTI_ANCHOR)
+        mode: "all" (AND logic) or "any" (OR logic) for multiple strategies. Default: "all"
         
     Returns:
         True if detection is in region according to strategy, False otherwise
     """
-    x1, y1, x2, y2 = bbox
+    # Convert strategy to list of TriggerStrategy enums for uniform processing
+    strategies_to_check = []
     
-    # Handle multi-anchor strategy first
-    if strategy == TriggerStrategy.MULTI_ANCHOR:
-        if anchor_config is None:
-            raise ValueError("anchor_config is required when using MULTI_ANCHOR strategy")
-        return check_multiple_anchors(bbox, anchor_config, region, overlap_threshold)
+    if isinstance(strategy, (list, tuple)):
+        for s in strategy:
+            if isinstance(s, str):
+                strategies_to_check.append(TriggerStrategy(s))
+            else:
+                strategies_to_check.append(s)
+    else:
+        # Single strategy
+        if isinstance(strategy, str):
+            strategies_to_check = [TriggerStrategy(strategy)]
+        else:
+            strategies_to_check = [strategy]
+    
+    # Check each strategy
+    results = []
+    for single_strategy in strategies_to_check:
+        result = _check_single_strategy(bbox, single_strategy, region, overlap_threshold)
+        results.append(result)
+    
+    # Apply AND/OR logic
+    if mode == "all":
+        return all(results)
+    else:  # mode == "any"
+        return any(results)
+
+
+def _check_single_strategy(
+    bbox: List[float],
+    strategy: TriggerStrategy,
+    region: Polygon,
+    overlap_threshold: float = 0.5
+) -> bool:
+    """
+    Check a single strategy against a region.
+    
+    Args:
+        bbox: Bounding box in [x1, y1, x2, y2] format
+        strategy: Single TriggerStrategy to check
+        region: Shapely Polygon representing the region
+        overlap_threshold: Threshold for PERCENTAGE strategy (0.0 to 1.0)
+        
+    Returns:
+        True if detection meets the strategy criteria, False otherwise
+    """
+    x1, y1, x2, y2 = bbox
     
     # Create bbox polygon for geometric operations
     bbox_poly = box(x1, y1, x2, y2)
