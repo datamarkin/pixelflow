@@ -39,7 +39,7 @@ class KeyPoint:
 class Detection:
     def __init__(self, inference_id=None, bbox=None, masks=None, segments=None, keypoints: List[KeyPoint] = None, class_id=None,
                  class_name=None, labels=None, confidence=None, tracker_id=None, data=None, zones=None, zone_names=None,
-                 line_crossings=None):
+                 line_crossings=None, first_seen_time=None, total_time=0.0):
         self.inference_id = inference_id
         self.bbox = validate_bbox(bbox) if bbox is not None else None
         self.masks = masks
@@ -54,6 +54,8 @@ class Detection:
         self.zones = zones if zones is not None else []  # List of zone IDs
         self.zone_names = zone_names if zone_names is not None else []  # List of zone names
         self.line_crossings = line_crossings if line_crossings is not None else []  # List of line crossing events
+        self.first_seen_time = first_seen_time  # Timestamp/frame when first detected
+        self.total_time = total_time  # Total time since first detection (in seconds)
 
     def to_dict(self):
         """
@@ -73,7 +75,9 @@ class Detection:
             "data": self.data,
             "zones": self.zones,
             "zone_names": self.zone_names,
-            "line_crossings": self.line_crossings
+            "line_crossings": self.line_crossings,
+            "first_seen_time": self.first_seen_time,
+            "total_time": self.total_time
         }
 
     def simplify_masks(self, tolerance: float = 2.0, preserve_topology: bool = True):
