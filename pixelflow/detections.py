@@ -339,10 +339,15 @@ def from_ultralytics(ultralytics_results) -> Detections:
     boxes_data = result.boxes.data.cpu().numpy()
     
     # Extract components from the tensor
-    # Format: [x1, y1, x2, y2, conf, class_id, ...]
+    # Format: [x1, y1, x2, y2, conf, class_id, ...] or [x1, y1, x2, y2, conf, class_id, track_id]
     xyxy = boxes_data[:, :4]  # Bounding boxes
     confidences = boxes_data[:, 4]  # Confidence scores  
     class_ids = boxes_data[:, 5].astype(int)  # Class IDs
+    
+    # Check if tracker IDs are available (when using model.track())
+    tracker_ids = None
+    if hasattr(result.boxes, 'id') and result.boxes.id is not None:
+        tracker_ids = result.boxes.id.cpu().numpy().astype(int)
     
     # Check if we have segmentation masks
     has_masks = hasattr(result, 'masks') and result.masks is not None
@@ -367,6 +372,11 @@ def from_ultralytics(ultralytics_results) -> Detections:
         bbox = xyxy[i].tolist()
         confidence = float(confidences[i])
         class_id = int(class_ids[i])
+        
+        # Get tracker ID if available
+        tracker_id = None
+        if tracker_ids is not None:
+            tracker_id = int(tracker_ids[i])
         
         # Handle masks if available
         masks = None
@@ -418,7 +428,8 @@ def from_ultralytics(ultralytics_results) -> Detections:
             segments=segments,  # Always polygon coordinates
             keypoints=None,
             class_id=class_id,
-            confidence=confidence
+            confidence=confidence,
+            tracker_id=tracker_id
         )
         
         detections_obj.add_detection(detection)
