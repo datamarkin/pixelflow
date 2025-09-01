@@ -34,8 +34,8 @@ def mask(frame: np.ndarray,
         custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
         annotated = mask(image, detections, colors=custom_colors)
     """
-    # Create a shared overlay array (same as frame) for all masks
-    overlay = np.zeros_like(frame, dtype=np.uint8)
+    # Work with a copy to avoid modifying the original frame
+    result_frame = frame.copy()
 
     # Process all masks
     for result in detections:
@@ -51,13 +51,19 @@ def mask(frame: np.ndarray,
                     # Direct boolean mask
                     if mask_data.shape[:2] != frame.shape[:2]:
                         raise ValueError(f"Mask dimensions {mask_data.shape[:2]} do not match frame dimensions {frame.shape[:2]}.")
-                    overlay[mask_data] = color
+                    binary_mask = mask_data
                 else:
                     # Convert to boolean if needed
                     binary_mask = mask_data.astype(bool)
                     if binary_mask.shape[:2] != frame.shape[:2]:
                         raise ValueError(f"Mask dimensions {binary_mask.shape[:2]} do not match frame dimensions {frame.shape[:2]}.")
-                    overlay[binary_mask] = color
+                
+                # Apply color only to masked regions with opacity blending
+                result_frame[binary_mask] = (
+                    opacity * np.array(color) + 
+                    (1 - opacity) * result_frame[binary_mask]
+                ).astype(np.uint8)
+                
             elif isinstance(mask_data, list):
                 # Polygon format - convert to binary mask
                 if len(mask_data) > 0:
@@ -69,9 +75,11 @@ def mask(frame: np.ndarray,
                         points = points.reshape((-1, 1, 2))
                         cv2.fillPoly(mask_img, [points], 1)
                         binary_mask = mask_img.astype(bool)
-                        overlay[binary_mask] = color
+                        
+                        # Apply color only to masked regions with opacity blending
+                        result_frame[binary_mask] = (
+                            opacity * np.array(color) + 
+                            (1 - opacity) * result_frame[binary_mask]
+                        ).astype(np.uint8)
 
-    # Blend the overlay with the original frame in a single operation
-    cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0, dst=frame)
-
-    return frame
+    return result_frame
