@@ -5,6 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
+from ..colors import get_color_for_prediction
 
 
 def mask(frame: np.ndarray,
@@ -33,8 +34,6 @@ def mask(frame: np.ndarray,
         custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
         annotated = mask(image, detections, colors=custom_colors)
     """
-    from ..colors import get_color_for_prediction
-    
     # Create a shared overlay array (same as frame) for all masks
     overlay = np.zeros_like(frame, dtype=np.uint8)
 

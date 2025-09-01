@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
+from ..colors import get_color_for_prediction
 
 
 def grid_overlay(
@@ -77,8 +78,6 @@ def grid_overlay(
         - Filled mode with opacity uses alpha blending which may impact performance
         - Consider using lower grid density for better performance on large images
     """
-    from ..colors import get_color_for_prediction
-    
     # Get adaptive parameters if not specified
     params = _get_adaptive_params(image)
     if thickness is None:

@@ -2,9 +2,11 @@ from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..detections import Detections
+
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
+from ..colors import get_color_for_prediction
 
 
 def box(
@@ -51,8 +53,6 @@ def box(
         >>> # Use custom thickness for smaller images
         >>> annotated = pf.annotate.box(image, detections, thickness=1)
     """
-    from ..colors import get_color_for_prediction
-    
     # Get adaptive thickness if not specified
     if thickness is None:
         params = _get_adaptive_params(image)

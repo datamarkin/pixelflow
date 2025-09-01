@@ -2,9 +2,11 @@ from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..detections import Detections
+
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
+from ..colors import get_color_for_prediction
 
 
 def filled_box(
@@ -59,8 +61,6 @@ def filled_box(
         - Uses alpha blending for smooth transparency effect
         - Multiple overlapping boxes will create cumulative opacity effect
     """
-    from ..colors import get_color_for_prediction
-    
     # Get adaptive opacity if not specified
     if opacity is None:
         params = _get_adaptive_params(image)

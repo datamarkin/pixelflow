@@ -5,10 +5,8 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .. import colors
+from ..colors import get_color_for_prediction, DEFAULT_PALETTE
 from .utils import _get_adaptive_params
-
-color_manager = colors.ColorManager()
 
 
 def label(
@@ -91,7 +89,7 @@ def label(
     default_style = {
         'font_scale': params['font_scale'],
         'font_thickness': params['font_thickness'],
-        'font_color': color_manager.ui('text'),
+        'font_color': (255, 255, 255),  # White text
         'bg_color': 'auto',
         'border_color': None,
         'border_width': 0
@@ -257,7 +255,7 @@ def label(
         # Get background color
         bg_color = style['bg_color']
         if bg_color == 'auto':
-            bg_color = color_manager.get_color(result.class_id)
+            bg_color = get_color_for_prediction(result)
 
         # Create overlay for transparency
         overlay = image.copy()
@@ -265,7 +263,7 @@ def label(
         # Draw shadow if enabled
         if shadow:
             shadow_offset = params['shadow_offset']
-            shadow_color = color_manager.ui('shadow')
+            shadow_color = (50, 50, 50)  # Shadow color
             if rounded > 0:
                 _draw_rounded_rectangle(
                     overlay,

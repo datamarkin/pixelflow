@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
+from ..colors import get_color_for_prediction
 
 
 def polygon(image: np.ndarray, detections: 'Detections', thickness=None, colors=None) -> np.ndarray:
@@ -32,8 +33,6 @@ def polygon(image: np.ndarray, detections: 'Detections', thickness=None, colors=
         annotated = polygon(image, detections, colors=custom_colors)
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
-    
-    from ..colors import get_color_for_prediction
     
     # Get adaptive thickness if not specified
     if thickness is None:

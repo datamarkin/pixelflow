@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
+from ..colors import get_color_for_prediction
 
 
 def oval(image: np.ndarray, detections: 'Detections', thickness=None, start_angle: int = -45, end_angle: int = 235, colors=None):
@@ -51,8 +52,6 @@ def oval(image: np.ndarray, detections: 'Detections', thickness=None, start_angl
     if thickness is None:
         params = _get_adaptive_params(image)
         thickness = params['thickness']
-    
-    from ..colors import get_color_for_prediction
     
     for result in detections:
         box = result.bbox
