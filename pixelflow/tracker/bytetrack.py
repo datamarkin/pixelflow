@@ -309,7 +309,7 @@ class ByteTracker:
         ious = matching.box_iou_batch(pred_boxes, track_boxes)
         
         # Assign tracker IDs based on best IoU match
-        for i, pred in enumerate(results.predictions):
+        for i, pred in enumerate(results.detections):
             if np.max(ious[i]) > self.assignment_threshold:  # Minimum IoU threshold for assignment
                 best_track_idx = np.argmax(ious[i])
                 pred.tracker_id = tracks[best_track_idx].track_id

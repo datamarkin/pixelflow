@@ -226,7 +226,7 @@ class Line:
         """
         # Increment frame counter for temporal tracking
         self.frame_count += 1
-        n_detections = len(detections.predictions) if hasattr(detections, 'predictions') else 0
+        n_detections = len(detections.detections)
         crossed_in = np.full(n_detections, False)
         crossed_out = np.full(n_detections, False)
         
@@ -234,7 +234,7 @@ class Line:
             return crossed_in, crossed_out
         
         # Process each detection
-        predictions = detections.predictions if hasattr(detections, 'predictions') else []
+        predictions = detections.detections
         
         for i, prediction in enumerate(predictions):
             # Skip if no tracker_id
@@ -550,24 +550,23 @@ class Lines:
         for line in self.lines:
             crossed_in, crossed_out = line.trigger(results)
             
-            # Update predictions with crossing info
-            if hasattr(results, 'predictions'):
-                for i, prediction in enumerate(results.predictions):
-                    if not hasattr(prediction, 'line_crossings'):
-                        prediction.line_crossings = []
-                    
-                    if crossed_in[i]:
-                        prediction.line_crossings.append({
-                            'line_id': line.line_id,
-                            'line_name': line.name,
-                            'direction': 'in'
-                        })
-                    elif crossed_out[i]:
-                        prediction.line_crossings.append({
-                            'line_id': line.line_id,
-                            'line_name': line.name,
-                            'direction': 'out'
-                        })
+            # Update detections with crossing info
+            for i, detection in enumerate(results.detections):
+                if not hasattr(detection, 'line_crossings'):
+                    detection.line_crossings = []
+                
+                if crossed_in[i]:
+                    detection.line_crossings.append({
+                        'line_id': line.line_id,
+                        'line_name': line.name,
+                        'direction': 'in'
+                    })
+                elif crossed_out[i]:
+                    detection.line_crossings.append({
+                        'line_id': line.line_id,
+                        'line_name': line.name,
+                        'direction': 'out'
+                    })
         
         return results
     
