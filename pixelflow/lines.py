@@ -11,7 +11,7 @@ from collections import Counter, defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
-from .strategies import TriggerStrategy, get_anchor_position
+from .strategies import TriggerStrategy, get_anchor_position, AnchorConfig
 
 
 class Line:
@@ -38,6 +38,10 @@ class Line:
         color: Optional[Tuple[int, int, int]] = None,
         triggering_anchor: Union[TriggerStrategy, str] = "center",
         minimum_crossing_threshold: int = 1,
+        anchor_config: Optional[AnchorConfig] = None,
+        boundary_margin: float = 50.0,
+        debounce_time: int = 30,
+        minimum_distance: float = 10.0,
         metadata: Optional[Dict[str, Any]] = None
     ):
         """
@@ -54,6 +58,10 @@ class Line:
                                "top_left", "top_right", "bottom_left", "bottom_right")
             minimum_crossing_threshold: Number of frames object must be on
                                        opposite side to count as crossed
+            anchor_config: Configuration for multiple anchor points (overrides triggering_anchor)
+            boundary_margin: Distance in pixels from line endpoints to still consider valid (default: 50.0)
+            debounce_time: Frames to wait before allowing another crossing for same tracker (default: 30)
+            minimum_distance: Minimum distance in pixels the object must travel to be valid (default: 10.0)
             metadata: Additional custom data
         """
         self.start = start
@@ -61,7 +69,15 @@ class Line:
         self.line_id = line_id
         self.name = name or f"Line {line_id}"
         self.color = color or self._generate_color(line_id)
+        self.boundary_margin = max(0.0, boundary_margin)
+        self.debounce_time = max(0, debounce_time)
+        self.minimum_distance = max(0.0, minimum_distance)
         self.metadata = metadata or {}
+        
+        # Temporal consistency tracking
+        self.last_crossing_time: Dict[int, int] = {}  # tracker_id -> frame_count
+        self.tracker_positions: Dict[int, List[Tuple[float, float]]] = defaultdict(list)  # For distance tracking
+        self.frame_count = 0
         
         # Convert string anchor to TriggerStrategy if needed
         if isinstance(triggering_anchor, str):
@@ -74,14 +90,27 @@ class Line:
                     f"Valid options are: {', '.join(valid_strategies)}"
                 )
         
-        self.triggering_anchor = triggering_anchor
         self.minimum_crossing_threshold = max(1, minimum_crossing_threshold)
         
         # Crossing history for stability
         self.crossing_history_length = max(2, minimum_crossing_threshold + 1)
-        self.crossing_state_history: Dict[int, deque] = defaultdict(
-            lambda: deque(maxlen=self.crossing_history_length)
-        )
+        
+        # Handle multiple anchors vs single anchor
+        if anchor_config is not None:
+            self.anchor_config = anchor_config
+            self.use_multiple_anchors = True
+            # For multiple anchors, we need separate history for each anchor
+            self.anchor_crossing_histories: Dict[int, Dict[TriggerStrategy, deque]] = defaultdict(
+                lambda: {anchor: deque(maxlen=self.crossing_history_length) for anchor in anchor_config.anchors}
+            )
+        else:
+            self.triggering_anchor = triggering_anchor
+            self.anchor_config = None
+            self.use_multiple_anchors = False
+            # Single anchor history (existing behavior)
+            self.crossing_state_history: Dict[int, deque] = defaultdict(
+                lambda: deque(maxlen=self.crossing_history_length)
+            )
         
         # Counting
         self._in_count_per_class: Counter = Counter()
@@ -149,7 +178,7 @@ class Line:
         else:
             return 0
     
-    def _is_point_near_line_segment(self, point: Tuple[float, float], margin: float = 50.0) -> bool:
+    def _is_point_near_line_segment(self, point: Tuple[float, float], margin: Optional[float] = None) -> bool:
         """
         Check if a point is within the bounds of the line segment (with optional margin).
         
@@ -158,11 +187,13 @@ class Line:
         
         Args:
             point: The point to check (x, y)
-            margin: Additional margin beyond line endpoints (default 50 pixels)
+            margin: Additional margin beyond line endpoints (uses instance boundary_margin if None)
         
         Returns:
             True if point is near the line segment, False otherwise
         """
+        if margin is None:
+            margin = self.boundary_margin
         x, y = point
         x1, y1 = self.start
         x2, y2 = self.end
@@ -193,6 +224,8 @@ class Line:
         Returns:
             Tuple of (crossed_in, crossed_out) boolean arrays
         """
+        # Increment frame counter for temporal tracking
+        self.frame_count += 1
         n_detections = len(detections.predictions) if hasattr(detections, 'predictions') else 0
         crossed_in = np.full(n_detections, False)
         crossed_out = np.full(n_detections, False)
@@ -215,24 +248,60 @@ class Line:
             # Get tracker ID early for use in boundary checking
             tracker_id = prediction.tracker_id
             
-            # Check which side of the line the triggering anchor is on
-            point = get_anchor_position(prediction.bbox, self.triggering_anchor)
-            
-            # First check if the point is near the line segment
-            # This prevents counting objects that pass beside the line
-            if not self._is_point_near_line_segment(point):
-                # Clear history for trackers that move away from the line
-                if tracker_id in self.crossing_state_history:
-                    self.crossing_state_history[tracker_id].clear()
-                continue
-            
-            side = self._point_side_of_line(point)
-            
-            if side == 0:  # Point is exactly on the line, skip
-                continue
-            
-            # Determine position: True for left side, False for right side
-            tracker_state = side > 0
+            # Handle multiple anchors vs single anchor
+            if self.use_multiple_anchors:
+                # For multiple anchors, check each anchor and apply logic
+                anchor_sides = []
+                anchor_points = []
+                
+                for anchor_strategy in self.anchor_config.anchors:
+                    point = get_anchor_position(prediction.bbox, anchor_strategy)
+                    anchor_points.append(point)
+                    
+                    # Check if point is near line segment
+                    if not self._is_point_near_line_segment(point):
+                        anchor_sides.append(None)  # Not valid
+                        continue
+                    
+                    side = self._point_side_of_line(point)
+                    if side == 0:  # On the line
+                        anchor_sides.append(None)
+                    else:
+                        anchor_sides.append(side > 0)  # True for left, False for right
+                
+                # Apply AND/OR logic for crossing detection
+                valid_sides = [s for s in anchor_sides if s is not None]
+                if not valid_sides:
+                    continue
+                
+                if self.anchor_config.mode == "all":
+                    # All valid anchors must be on the same side
+                    if not all(s == valid_sides[0] for s in valid_sides):
+                        continue  # Anchors on different sides, no consistent crossing
+                    tracker_state = valid_sides[0]
+                else:  # mode == "any"
+                    # Use the first valid anchor's state
+                    tracker_state = valid_sides[0]
+                    
+            else:
+                # Single anchor (existing behavior)
+                point = get_anchor_position(prediction.bbox, self.triggering_anchor)
+                
+                # First check if the point is near the line segment
+                # This prevents counting objects that pass beside the line
+                if not self._is_point_near_line_segment(point):
+                    # Clear history for trackers that move away from the line
+                    if tracker_id in self.crossing_state_history:
+                        self.crossing_state_history[tracker_id].clear()
+                    continue
+                
+                side = self._point_side_of_line(point)
+                
+                if side == 0:  # Point is exactly on the line, skip
+                    continue
+                
+                # Determine position: True for left side, False for right side
+                tracker_state = side > 0
             
             # Update crossing history
             class_id = prediction.class_id if prediction.class_id is not None else -1
@@ -243,7 +312,18 @@ class Line:
             elif class_id not in self.class_id_to_name:
                 self.class_id_to_name[class_id] = str(class_id)
             
-            crossing_history = self.crossing_state_history[tracker_id]
+            # Use appropriate history tracking based on mode
+            if self.use_multiple_anchors:
+                # For multiple anchors, we simplify by using the combined result
+                # Create a simple history for the combined state
+                if not hasattr(self, 'multi_anchor_history'):
+                    self.multi_anchor_history: Dict[int, deque] = defaultdict(
+                        lambda: deque(maxlen=self.crossing_history_length)
+                    )
+                crossing_history = self.multi_anchor_history[tracker_id]
+            else:
+                crossing_history = self.crossing_state_history[tracker_id]
+            
             crossing_history.append(tracker_state)
             
             # Check if we have enough history
@@ -262,22 +342,105 @@ class Line:
             if oldest_state == newest_state:
                 continue
             
+            # Get the current position for validation
+            if self.use_multiple_anchors:
+                # Use center point for distance tracking when multiple anchors
+                current_point = get_anchor_position(prediction.bbox, TriggerStrategy.CENTER)
+            else:
+                current_point = point
+            
+            # Validate temporal consistency before counting
+            if not self._validate_crossing_timing(tracker_id):
+                continue
+                
+            # Validate minimum distance if enabled
+            if not self._validate_minimum_distance(tracker_id, current_point):
+                continue
+            
             # Crossing detected - use newest state to determine direction
             if newest_state:  # Moved from right to left (in)
                 self._in_count_per_class[class_id] += 1
                 crossed_in[i] = True
+                self.last_crossing_time[tracker_id] = self.frame_count
             else:  # Moved from left to right (out)
                 self._out_count_per_class[class_id] += 1
                 crossed_out[i] = True
+                self.last_crossing_time[tracker_id] = self.frame_count
         
         return crossed_in, crossed_out
+    
+    def _validate_crossing_timing(self, tracker_id: int) -> bool:
+        """
+        Validate that enough time has passed since the last crossing for this tracker.
+        
+        Args:
+            tracker_id: ID of the tracker to validate
+            
+        Returns:
+            True if crossing is allowed, False if still in debounce period
+        """
+        if self.debounce_time <= 0:
+            return True  # No debouncing
+            
+        if tracker_id not in self.last_crossing_time:
+            return True  # First crossing for this tracker
+            
+        frames_since_last = self.frame_count - self.last_crossing_time[tracker_id]
+        return frames_since_last >= self.debounce_time
+    
+    def _validate_minimum_distance(self, tracker_id: int, current_point: Tuple[float, float]) -> bool:
+        """
+        Validate that the tracker has moved a minimum distance since we started tracking it.
+        
+        Args:
+            tracker_id: ID of the tracker to validate
+            current_point: Current position of the tracker
+            
+        Returns:
+            True if distance requirement is met, False otherwise
+        """
+        if self.minimum_distance <= 0:
+            return True  # No distance requirement
+            
+        positions = self.tracker_positions[tracker_id]
+        positions.append(current_point)
+        
+        # Keep only last few positions to avoid memory issues
+        if len(positions) > 10:
+            positions.pop(0)
+        
+        if len(positions) < 2:
+            return True  # Need at least 2 positions to calculate distance
+        
+        # Calculate total distance traveled
+        total_distance = 0.0
+        for i in range(1, len(positions)):
+            prev_x, prev_y = positions[i-1]
+            curr_x, curr_y = positions[i]
+            distance = ((curr_x - prev_x) ** 2 + (curr_y - prev_y) ** 2) ** 0.5
+            total_distance += distance
+        
+        return total_distance >= self.minimum_distance
     
     def reset_counts(self):
         """Reset all counting statistics."""
         self._in_count_per_class.clear()
         self._out_count_per_class.clear()
-        self.crossing_state_history.clear()
+        
+        if self.use_multiple_anchors:
+            if hasattr(self, 'multi_anchor_history'):
+                self.multi_anchor_history.clear()
+            if hasattr(self, 'anchor_crossing_histories'):
+                self.anchor_crossing_histories.clear()
+        else:
+            self.crossing_state_history.clear()
+            
         self.class_id_to_name.clear()
+        
+        # Reset temporal consistency tracking
+        self.last_crossing_time.clear()
+        self.tracker_positions.clear()
+        self.frame_count = 0
 
 
 class Lines:
@@ -302,6 +465,10 @@ class Lines:
         color: Optional[Tuple[int, int, int]] = None,
         triggering_anchor: Union[TriggerStrategy, str] = "center",
         minimum_crossing_threshold: int = 1,
+        anchor_config: Optional[AnchorConfig] = None,
+        boundary_margin: float = 50.0,
+        debounce_time: int = 30,
+        minimum_distance: float = 10.0,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Line:
         """
@@ -315,6 +482,10 @@ class Lines:
             color: RGB color tuple for visualization
             triggering_anchor: Anchor point to check for crossing (default: "center")
             minimum_crossing_threshold: Frames required for crossing
+            anchor_config: Configuration for multiple anchor points (overrides triggering_anchor)
+            boundary_margin: Distance in pixels from line endpoints to still consider valid (default: 50.0)
+            debounce_time: Frames to wait before allowing another crossing for same tracker (default: 30)
+            minimum_distance: Minimum distance in pixels the object must travel to be valid (default: 10.0)
             metadata: Additional custom data
             
         Returns:
@@ -339,6 +510,10 @@ class Lines:
             color=color,
             triggering_anchor=triggering_anchor,
             minimum_crossing_threshold=minimum_crossing_threshold,
+            anchor_config=anchor_config,
+            boundary_margin=boundary_margin,
+            debounce_time=debounce_time,
+            minimum_distance=minimum_distance,
             metadata=metadata
         )
         

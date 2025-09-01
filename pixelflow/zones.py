@@ -3,7 +3,7 @@
 from shapely.geometry import Polygon, Point, box
 from typing import List, Optional, Tuple, Dict, Any, Literal, Union
 import numpy as np
-from .strategies import TriggerStrategy, check_detection_in_region
+from .strategies import TriggerStrategy, check_detection_in_region, AnchorConfig
 
 
 class Zone:
@@ -15,8 +15,9 @@ class Zone:
         zone_id: Union[int, str],
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage"], None] = "center",
+        trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage", "multi_anchor"], None] = "center",
         overlap_threshold: float = 0.5,
+        anchor_config: Optional[AnchorConfig] = None,
         metadata: Optional[Dict[str, Any]] = None
     ):
         """
@@ -29,6 +30,7 @@ class Zone:
             color: RGB color tuple for visualization (default: auto-generated)
             trigger_strategy: Strategy for determining if detection is in zone
             overlap_threshold: Threshold for PERCENTAGE strategy (0.0 to 1.0)
+            anchor_config: Configuration for MULTI_ANCHOR strategy (required when using "multi_anchor")
             metadata: Additional custom data associated with the zone
         """
         # Convert polygon to Shapely Polygon
@@ -54,6 +56,12 @@ class Zone:
                 )
         self.trigger_strategy = trigger_strategy
         self.overlap_threshold = max(0.0, min(1.0, overlap_threshold))
+        
+        # Validate and store anchor configuration
+        if trigger_strategy == TriggerStrategy.MULTI_ANCHOR:
+            if anchor_config is None:
+                raise ValueError("anchor_config is required when using MULTI_ANCHOR strategy")
+        self.anchor_config = anchor_config
         
         # Metadata for custom use cases
         self.metadata = metadata or {}
@@ -90,7 +98,8 @@ class Zone:
             bbox, 
             self.trigger_strategy, 
             self.polygon, 
-            self.overlap_threshold
+            self.overlap_threshold,
+            self.anchor_config
         )
         
         # Update tracking if object is in zone
@@ -122,8 +131,9 @@ class Zones:
         zone_id: Optional[Union[int, str]] = None,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage"], None] = "center",
+        trigger_strategy: Union[TriggerStrategy, Literal["center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right", "any_corner", "all_corners", "overlap", "contains", "percentage", "multi_anchor"], None] = "center",
         overlap_threshold: float = 0.5,
+        anchor_config: Optional[AnchorConfig] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Zone:
         """
@@ -136,6 +146,7 @@ class Zones:
             color: RGB color tuple for visualization
             trigger_strategy: Strategy for determining if detection is in zone
             overlap_threshold: Threshold for PERCENTAGE strategy
+            anchor_config: Configuration for MULTI_ANCHOR strategy
             metadata: Additional custom data
             
         Returns:
@@ -159,6 +170,7 @@ class Zones:
             color=color,
             trigger_strategy=trigger_strategy,
             overlap_threshold=overlap_threshold,
+            anchor_config=anchor_config,
             metadata=metadata
         )
         
