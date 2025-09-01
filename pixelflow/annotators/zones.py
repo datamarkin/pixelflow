@@ -60,8 +60,7 @@ def zones(
         return image
     
     # Import colors locally to avoid circular dependency
-    from .. import colors as color_module
-    colors = color_module.ColorManager()
+    from ..colors import PASTEL_PALETTE
     
     # Get adaptive parameters
     params = _get_adaptive_params(image)
@@ -76,9 +75,9 @@ def zones(
     
     # Get default colors if not specified
     if text_color is None:
-        text_color = colors.ui('text')
+        text_color = (255, 255, 255)  # White text
     if text_bg_color is None:
-        text_bg_color = colors.ui('background')
+        text_bg_color = (0, 0, 0)  # Black background
     
     # Create overlay for transparency effects
     overlay = image.copy()

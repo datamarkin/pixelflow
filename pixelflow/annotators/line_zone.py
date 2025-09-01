@@ -56,8 +56,7 @@ def line_zone(
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
     # Import colors locally to avoid circular dependency
-    from .. import colors as color_module
-    colors = color_module.ColorManager()
+    from ..colors import PASTEL_PALETTE
     
     # Get adaptive parameters
     params = _get_adaptive_params(image)
@@ -79,7 +78,7 @@ def line_zone(
     
     # Get text color
     if text_color is None:
-        text_color = colors.ui('text')
+        text_color = (255, 255, 255)  # White text
     
     # Draw the line
     start_point = tuple(map(int, line.start))
