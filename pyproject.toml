@@ -2,18 +2,22 @@
 name = "pixelflow"
 version = "0.1.0"
 description = "Reusable computer vision tools"
-requires-python = ">=3"
-license = {text = "MIT License"}
+requires-python = ">=3.9"
+license = {text = "MIT"}
 authors = [
-    {name = "Datamarkin", email = "support@datamarkin.com"}
+    {name = "Datamarkin", email = "support@datamarkin.com"},
+    {name = "Emrah Nazif", email = "emrah@datamarkin.com"}
 ]
 
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 dependencies = [
@@ -22,3 +26,7 @@ dependencies = [
     "opencv-python>=4.8.0",
     "scipy>=1.10.0"
 ]
+
+[tool.setuptools.packages.find]
+include = ["pixelflow*"]
+exclude = ["tests*", "docs*", "examples*", "scripts*"]
