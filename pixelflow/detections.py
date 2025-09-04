@@ -159,6 +159,57 @@ class Detections:
                 filtered_detections.add_detection(detection)
         return filtered_detections
 
+    def remap_class_ids(self, from_ids, to_id: int) -> 'Detections':
+        """
+        Returns a new Detections object with class IDs remapped.
+        
+        Args:
+            from_ids: Single class_id (int) or list of class_ids to remap from
+            to_id: Target class_id to remap to
+            
+        Returns:
+            Detections: New Detections object with remapped class IDs
+            
+        Example:
+            # Remap truck(7) and bus(5) to car(2)
+            results = results.remap_class_ids([7, 5], 2)
+        """
+        # Handle single from_id or list of from_ids
+        if not isinstance(from_ids, (list, tuple)):
+            from_ids = [from_ids]
+            
+        remapped_detections = Detections()
+        for detection in self.detections:
+            # Create a copy of the detection
+            new_detection = Detection(
+                inference_id=detection.inference_id,
+                bbox=detection.bbox,
+                masks=detection.masks,
+                segments=detection.segments,
+                keypoints=detection.keypoints,
+                class_id=detection.class_id,
+                class_name=detection.class_name,
+                labels=detection.labels,
+                confidence=detection.confidence,
+                tracker_id=detection.tracker_id,
+                data=detection.data,
+                zones=detection.zones,
+                zone_names=detection.zone_names,
+                line_crossings=detection.line_crossings,
+                first_seen_time=detection.first_seen_time,
+                total_time=detection.total_time
+            )
+            
+            # Remap class_id if it matches
+            if new_detection.class_id is not None and new_detection.class_id in from_ids:
+                new_detection.class_id = to_id
+                # Clear class_name since it may no longer be accurate
+                new_detection.class_name = None
+            
+            remapped_detections.add_detection(new_detection)
+        
+        return remapped_detections
+
     def simplify(self, tolerance: float = 2.0, preserve_topology: bool = True):
         """
         Simplifies the masks of all detections in the Detections object.
