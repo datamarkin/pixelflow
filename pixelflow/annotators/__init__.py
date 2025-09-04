@@ -13,7 +13,7 @@ from .anchors import anchors
 from .blur import blur
 from .box import box
 from .label import label
-from .line_zone import line_zone
+from .crossing import crossings
 from .mask import mask
 from .oval import oval
 from .pixelate import pixelate
@@ -35,6 +35,7 @@ from .grid_overlay import grid_overlay
 # Import utility functions if needed externally
 from .utils import _get_adaptive_params, ADAPTIVE_SCALE_MULTIPLIER
 
+
 # Define public API
 __all__ = [
     # Core annotators
@@ -53,5 +54,5 @@ __all__ = [
     
     # Zone annotators
     'zones',
-    'line_zone'
+    'crossings'
 ]
