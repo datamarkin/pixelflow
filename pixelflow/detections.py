@@ -377,6 +377,12 @@ def from_ultralytics(ultralytics_results) -> Detections:
         confidence = float(confidences[i])
         class_id = int(class_ids[i])
         
+        # Extract class name from result if available
+        class_name = None
+        if hasattr(result, 'names') and result.names:
+            if class_id in result.names:
+                class_name = result.names[class_id]
+        
         # Get tracker ID if available
         tracker_id = None
         if tracker_ids is not None:
@@ -432,6 +438,7 @@ def from_ultralytics(ultralytics_results) -> Detections:
             segments=segments,  # Always polygon coordinates
             keypoints=None,
             class_id=class_id,
+            class_name=class_name,
             confidence=confidence,
             tracker_id=tracker_id
         )
