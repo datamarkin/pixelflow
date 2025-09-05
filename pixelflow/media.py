@@ -5,6 +5,11 @@ import cv2
 import numpy as np
 
 
+class DisplayExit(Exception):
+    """Exception raised when user wants to exit display (e.g., presses 'q')."""
+    pass
+
+
 class MediaInfo:
     """Media metadata container."""
     
@@ -161,17 +166,14 @@ def _cleanup_writers():
 
 
 # Display functions
-def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1, width: int = None) -> bool:
-    """Display a frame in a window. Returns True if 'q' was pressed.
+def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1, width: int = None) -> None:
+    """Display a frame in a window. Exits program gracefully if 'q' is pressed.
     
     Args:
         window_name: Name of the display window
         frame: Frame to display (numpy array)
         wait_key: Milliseconds to wait for key press (default: 1)
         width: Optional width for display resize (maintains aspect ratio, huge performance boost!)
-    
-    Returns:
-        bool: True if 'q' key was pressed, False otherwise
     """
     # Resize for display if width specified (performance optimization)
     if width:
@@ -183,7 +185,10 @@ def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1, width: in
     
     cv2.imshow(window_name, display_frame)
     key = cv2.waitKey(wait_key) & 0xFF
-    return key == ord('q')
+    
+    if key == ord('q'):
+        close_display()
+        exit(0)  # Clean program exit
 
 
 def close_display():
