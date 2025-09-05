@@ -21,6 +21,12 @@
             ]
           },
           {
+            "group": "Core",
+            "pages": [
+              "docs/detections"
+            ]
+          },
+          {
             "group": "Annotators",
             "pages": [
               "docs/dev/annotators/box",
@@ -66,27 +72,6 @@
             "pages": [
               "docs/smoother/introduction",
               "docs/smoother/usage"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Web UI",
-        "groups": [
-          {
-            "group": "Basic Shapes",
-            "pages": [
-              "docs/dev/annotators/basics/box",
-              "docs/dev/annotators/basics/polygon",
-              "docs/dev/annotators/basics/mask",
-              "docs/dev/annotators/basics/label",
-              "docs/dev/annotators/basics/dot",
-              "docs/dev/annotators/basics/oval"
-            ]
-          },
-          {
-            "group": "Privacy Protection",
-            "pages": [
             ]
           }
         ]
