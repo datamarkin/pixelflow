@@ -229,6 +229,18 @@ class Crossing:
         # Process each detection
         predictions = detections.detections
         
+        # Check if any detections have tracker IDs (for debugging)
+        has_tracker_ids = any(pred.tracker_id is not None for pred in predictions)
+        if predictions and not has_tracker_ids:
+            import warnings
+            warnings.warn(
+                f"Crossing '{self.name}' (ID: {self.line_id}): No detections have tracker_id. "
+                "Crossings require tracker_id for temporal consistency. "
+                "Make sure to call tracker.update(results) before crossings.update(results).",
+                UserWarning,
+                stacklevel=3
+            )
+
         for i, prediction in enumerate(predictions):
             # Skip if no tracker_id
             if prediction.tracker_id is None:
