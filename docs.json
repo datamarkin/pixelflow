@@ -33,7 +33,6 @@
               "docs/dev/annotators/polygon",
               "docs/dev/annotators/mask",
               "docs/dev/annotators/label",
-              "docs/dev/annotators/dot",
               "docs/dev/annotators/oval",
               "docs/dev/annotators/blur",
               "docs/dev/annotators/pixelate"
@@ -43,21 +42,23 @@
             "group": "Zones",
             "pages": [
               "docs/zones/polygon_zones",
-              "docs/zones/line_zones"
+              "docs/zones/crossings"
             ]
           },
           {
             "group": "Trackers",
             "pages": [
-              "docs/trackers/Bytetracker",
-              "docs/tracker/Otheracker"
+              "docs/trackers/Bytetracker"
             ]
           },
           {
-            "group": "Buffer",
+            "group": "Tools",
             "pages": [
-              "docs/buffer/introduction",
-              "docs/buffer/usage"
+              "docs/buffer",
+              "docs/timetracker",
+              "docs/slicer",
+              "docs/smoother",
+              "docs/strategies"
             ]
           },
           {
