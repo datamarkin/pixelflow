@@ -162,15 +162,19 @@ class BufferDetectionsSmoother:
             buffer: Buffer containing temporal context with past/current/future frames
             
         Returns:
-            Smoothed Detections object for the current (middle) frame
+            Smoothed Detections object for the current (middle) frame, or raw results if buffer not ready
         """
+        # Always return the current middle frame results
+        middle_idx = buffer.buffer_size // 2
+        if middle_idx < len(buffer.results_buffer):
+            raw_results = buffer.results_buffer[middle_idx]
+        else:
+            raw_results = Detections()
+        
+        # Only apply smoothing if buffer is full, otherwise return raw results
         context = buffer.get_temporal_context()
         if context is None:
-            # Buffer not full yet, return middle results as-is
-            middle_idx = buffer.buffer_size // 2
-            if middle_idx < len(buffer.results_buffer):
-                return buffer.results_buffer[middle_idx]
-            return Detections()
+            return raw_results
         
         # Group all detections by tracker_id across all temporal frames
         tracker_detections = self._collect_temporal_detections(context)
