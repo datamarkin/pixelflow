@@ -10,6 +10,7 @@ from . import zones
 from . import crossings
 from . import slicer
 from . import buffer
+from . import smoother
 from . import timer
 from . import tracker
 
@@ -19,11 +20,12 @@ from .zones import Zones
 from .crossings import Crossings
 from .slicer import SlicedInference, auto_slice_size
 from .buffer import Buffer
+from .smoother import DetectionsSmoother, BufferDetectionsSmoother
 from .timer import TimeTracker
 
 # Define the public API
-__all__ = ["annotate", "detections", "slicer", "buffer", "timer", "media", "tracker",
+__all__ = ["annotate", "detections", "slicer", "buffer", "smoother", "timer", "media", "tracker",
            "Media", "MediaInfo", "write_frame", "show_frame", "close_display",
            "Zones", "Crossings", "TimeTracker",
-           "SlicedInference", "auto_slice_size", "Buffer",
+           "SlicedInference", "auto_slice_size", "Buffer", "DetectionsSmoother", "BufferDetectionsSmoother",
            "__version__", "__author__"]
