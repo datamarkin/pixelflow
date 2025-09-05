@@ -1,12 +1,51 @@
-# _detection_filters.py
+"""
+Detection Filtering Functions for Advanced Detection Processing.
 
-from typing import List, Union
+Provides comprehensive filtering capabilities for detection collections including
+confidence thresholding, class-based filtering, geometric constraints, zone-based
+filtering, and tracking-related filters. Designed for zero-overhead method
+injection into Detections class for seamless chaining operations.
+"""
+
+from typing import List, Union, Optional, Any
+
+__all__ = [
+    "_filter_by_confidence", "_filter_by_class_id", "_remap_class_ids",
+    "_filter_by_size", "_filter_by_dimensions", "_filter_by_aspect_ratio", 
+    "_filter_by_zones", "_filter_by_position", "_filter_by_relative_size",
+    "_filter_by_tracking_duration", "_filter_by_first_seen_time", "_filter_tracked_objects",
+    "_remove_duplicates", "_filter_overlapping", "_calculate_iou"
+]
 
 
-def _filter_by_confidence(self, threshold: float):
+def _filter_by_confidence(self, threshold: float) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    with a confidence score greater than or equal to the given threshold.
+    Filter detections by minimum confidence score threshold.
+    
+    Args:
+        threshold (float): Minimum confidence score (inclusive). Range: [0.0, 1.0].
+                          Detections with confidence >= threshold are retained.
+        
+    Returns:
+        Detections: New Detections object containing only high-confidence detections.
+    
+    Example:
+        >>> import pixelflow as pf
+        >>> from ultralytics import YOLO
+        >>> 
+        >>> # Run YOLO inference and convert to PixelFlow format
+        >>> model = YOLO("yolov8n.pt")
+        >>> outputs = model.predict("image.jpg")
+        >>> detections = pf.detections.from_ultralytics(outputs)
+        >>> 
+        >>> # Keep only high-confidence detections
+        >>> high_conf = detections.filter_by_confidence(0.8)
+        >>> print(f"High confidence: {len(high_conf)} detections")
+    
+    Notes:
+        - Detections with None confidence values are excluded
+        - Returns empty Detections object if no detections meet threshold
+        - Supports method chaining with other filter operations
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -15,13 +54,35 @@ def _filter_by_confidence(self, threshold: float):
     return filtered_detections
 
 
-def _filter_by_class_id(self, class_ids):
+def _filter_by_class_id(self, class_ids: Union[int, str, List[Union[int, str]]]) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    with class_id matching one of the provided class_ids.
+    Filter detections by class identifier(s).
     
     Args:
-        class_ids: Single class_id or list of class_ids to filter by
+        class_ids (Union[int, str, List[Union[int, str]]]): Single class ID or list of class IDs
+                                                           to include. Accepts both numeric IDs
+                                                           and string class names.
+        
+    Returns:
+        Detections: New Detections object containing only detections with matching class IDs.
+    
+    Example:
+        >>> # Filter for specific class by ID
+        >>> people = detections.filter_by_class_id(0)  # person class in COCO
+        >>> 
+        >>> # Filter for multiple classes
+        >>> vehicles = detections.filter_by_class_id([2, 3, 5, 7])  # car, motorcycle, bus, truck
+        >>> 
+        >>> # Filter by class name
+        >>> dogs = detections.filter_by_class_id("dog")
+        >>> 
+        >>> # Mixed ID types
+        >>> mixed = detections.filter_by_class_id(["person", 2, "dog"])
+    
+    Notes:
+        - Detections with None class_id values are excluded
+        - Accepts single values or lists for flexible usage
+        - Supports both numeric IDs and string class names
     """
     # Handle single class_id or list of class_ids
     if not isinstance(class_ids, (list, tuple)):
@@ -34,20 +95,37 @@ def _filter_by_class_id(self, class_ids):
     return filtered_detections
 
 
-def _remap_class_ids(self, from_ids, to_id: int):
+def _remap_class_ids(self, from_ids: Union[int, str, List[Union[int, str]]], to_id: Union[int, str]) -> 'Detections':
     """
-    Returns a new Detections object with class IDs remapped.
+    Remap class IDs to consolidate or standardize classification labels.
+    
+    Creates new Detection objects with modified class IDs while preserving all other
+    detection attributes. Useful for consolidating similar classes or standardizing
+    class schemas across different models.
     
     Args:
-        from_ids: Single class_id (int) or list of class_ids to remap from
-        to_id: Target class_id to remap to
+        from_ids (Union[int, str, List[Union[int, str]]]): Source class ID(s) to remap.
+                                                          Single ID or list of IDs.
+        to_id (Union[int, str]): Target class ID to map to.
         
     Returns:
-        Detections: New Detections object with remapped class IDs
-        
+        Detections: New Detections object with remapped class IDs and cleared class names.
+    
     Example:
-        # Remap truck(7) and bus(5) to car(2)
-        results = results.remap_class_ids([7, 5], 2)
+        >>> # Consolidate vehicle classes to generic "vehicle"
+        >>> vehicles = detections.remap_class_ids([2, 3, 5, 7], "vehicle")
+        >>> 
+        >>> # Remap multiple animal classes to "animal"
+        >>> animals = detections.remap_class_ids(["dog", "cat", "bird"], 1)
+        >>> 
+        >>> # Single class remapping
+        >>> motorcycles_as_bikes = detections.remap_class_ids(3, "bike")
+    
+    Notes:
+        - Creates deep copies of Detection objects for safe modification
+        - Clears class_name field when remapping to avoid inconsistency
+        - Preserves all other detection attributes including tracking data
+        - Non-matching detections are included unchanged
     """
     from .core import Detection
     
@@ -88,21 +166,33 @@ def _remap_class_ids(self, from_ids, to_id: int):
     return remapped_detections
 
 
-def _filter_by_size(self, min_area=None, max_area=None):
+def _filter_by_size(self, min_area: Optional[float] = None, max_area: Optional[float] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    within the specified area range.
+    Filter detections by bounding box area constraints.
     
     Args:
-        min_area: Minimum bounding box area in pixels (inclusive)
-        max_area: Maximum bounding box area in pixels (inclusive)
+        min_area (Optional[float]): Minimum bounding box area in pixels (inclusive).
+                                   If None, no minimum constraint is applied.
+        max_area (Optional[float]): Maximum bounding box area in pixels (inclusive).
+                                   If None, no maximum constraint is applied.
         
     Returns:
-        Detections: New Detections object with size-filtered detections
-        
+        Detections: New Detections object containing only detections within size range.
+    
     Example:
-        # Keep only detections with area between 1000 and 50000 pixels
-        results = results.filter_by_size(min_area=1000, max_area=50000)
+        >>> # Remove very small noise detections
+        >>> filtered = detections.filter_by_size(min_area=100)
+        >>> 
+        >>> # Remove very large detections (likely false positives)
+        >>> filtered = detections.filter_by_size(max_area=50000)
+        >>> 
+        >>> # Keep medium-sized objects only
+        >>> medium = detections.filter_by_size(min_area=1000, max_area=10000)
+    
+    Notes:
+        - Detections without bounding boxes are excluded
+        - Area calculated as (width * height) from XYXY coordinates
+        - Useful for removing noise (small) and false positives (large)
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -123,23 +213,39 @@ def _filter_by_size(self, min_area=None, max_area=None):
     return filtered_detections
 
 
-def _filter_by_dimensions(self, min_width=None, max_width=None, min_height=None, max_height=None):
+def _filter_by_dimensions(self, min_width: Optional[float] = None, max_width: Optional[float] = None, 
+                         min_height: Optional[float] = None, max_height: Optional[float] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    within the specified width and height range.
+    Filter detections by individual width and height constraints.
+    
+    Provides fine-grained control over detection dimensions, useful for filtering
+    objects based on expected physical dimensions or removing artifacts.
     
     Args:
-        min_width: Minimum bounding box width in pixels (inclusive)
-        max_width: Maximum bounding box width in pixels (inclusive)
-        min_height: Minimum bounding box height in pixels (inclusive)
-        max_height: Maximum bounding box height in pixels (inclusive)
+        min_width (Optional[float]): Minimum bounding box width in pixels (inclusive).
+        max_width (Optional[float]): Maximum bounding box width in pixels (inclusive).
+        min_height (Optional[float]): Minimum bounding box height in pixels (inclusive).
+        max_height (Optional[float]): Maximum bounding box height in pixels (inclusive).
         
     Returns:
-        Detections: New Detections object with dimension-filtered detections
-        
+        Detections: New Detections object containing only detections within dimension constraints.
+    
     Example:
-        # Keep only detections with width 50-200px and height 100-300px
-        results = results.filter_by_dimensions(min_width=50, max_width=200, min_height=100, max_height=300)
+        >>> # Filter for tall, narrow objects (people)
+        >>> people = detections.filter_by_dimensions(min_height=100, max_width=80)
+        >>> 
+        >>> # Remove extremely wide detections (likely errors)
+        >>> cleaned = detections.filter_by_dimensions(max_width=500)
+        >>> 
+        >>> # Keep medium-sized rectangular objects
+        >>> medium = detections.filter_by_dimensions(
+        ...     min_width=50, max_width=200, min_height=100, max_height=300
+        ... )
+    
+    Notes:
+        - More specific than filter_by_size for shape-based filtering
+        - Useful for filtering based on expected object proportions
+        - All constraints are inclusive (detection must satisfy ALL provided limits)
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -167,24 +273,39 @@ def _filter_by_dimensions(self, min_width=None, max_width=None, min_height=None,
     return filtered_detections
 
 
-def _filter_by_aspect_ratio(self, min_ratio=None, max_ratio=None):
+def _filter_by_aspect_ratio(self, min_ratio: Optional[float] = None, max_ratio: Optional[float] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    within the specified aspect ratio range.
+    Filter detections by bounding box aspect ratio (width/height).
+    
+    Useful for filtering objects based on their shape characteristics, such as
+    identifying square objects, wide banners, or tall structures.
     
     Args:
-        min_ratio: Minimum aspect ratio (width/height) (inclusive)
-        max_ratio: Maximum aspect ratio (width/height) (inclusive)
+        min_ratio (Optional[float]): Minimum aspect ratio (width/height) (inclusive).
+                                    Values > 1.0 favor wide objects.
+        max_ratio (Optional[float]): Maximum aspect ratio (width/height) (inclusive).
+                                    Values < 1.0 favor tall objects.
         
     Returns:
-        Detections: New Detections object with aspect ratio-filtered detections
-        
+        Detections: New Detections object containing only detections within aspect ratio range.
+    
     Example:
-        # Keep only square-ish objects (aspect ratio between 0.8 and 1.2)
-        results = results.filter_by_aspect_ratio(min_ratio=0.8, max_ratio=1.2)
-        
-        # Keep only wide objects (aspect ratio > 2.0)
-        results = results.filter_by_aspect_ratio(min_ratio=2.0)
+        >>> # Keep square-ish objects only
+        >>> squares = detections.filter_by_aspect_ratio(min_ratio=0.8, max_ratio=1.2)
+        >>> 
+        >>> # Keep only wide objects (banners, signs)
+        >>> wide_objects = detections.filter_by_aspect_ratio(min_ratio=2.0)
+        >>> 
+        >>> # Keep only tall objects (people, poles)
+        >>> tall_objects = detections.filter_by_aspect_ratio(max_ratio=0.5)
+        >>> 
+        >>> # Filter for typical car aspect ratios
+        >>> cars = detections.filter_by_aspect_ratio(min_ratio=1.5, max_ratio=2.5)
+    
+    Notes:
+        - Aspect ratio = width / height (wider objects have higher ratios)
+        - Detections with zero height are excluded to avoid division by zero
+        - Useful for shape-based object classification and noise removal
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -197,7 +318,7 @@ def _filter_by_aspect_ratio(self, min_ratio=None, max_ratio=None):
         height = y2 - y1
         
         # Avoid division by zero
-        if height == 0:
+        if height <= 0:
             continue
             
         aspect_ratio = width / height
@@ -212,24 +333,43 @@ def _filter_by_aspect_ratio(self, min_ratio=None, max_ratio=None):
     return filtered_detections
 
 
-def _filter_by_zones(self, zone_ids, exclude=False):
+def _filter_by_zones(self, zone_ids: Union[str, int, List[Union[str, int]]], exclude: bool = False) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    that are inside (or outside) the specified zones.
+    Filter detections based on zone intersection status.
+    
+    Enables spatial filtering by including or excluding detections that intersect
+    with specified zones. Requires prior zone assignment via update_zones().
     
     Args:
-        zone_ids: Single zone_id or list of zone_ids to filter by
-        exclude: If True, exclude detections in specified zones (default: include)
+        zone_ids (Union[str, int, List[Union[str, int]]]): Single zone ID or list of zone IDs
+                                                          to filter by. Supports both string
+                                                          names and numeric IDs.
+        exclude (bool): If True, exclude detections in specified zones.
+                       If False, include only detections in specified zones.
+                       Default is False.
         
     Returns:
-        Detections: New Detections object with zone-filtered detections
-        
+        Detections: New Detections object with zone-based filtering applied.
+    
     Example:
-        # Keep only detections in parking zones
-        results = results.filter_by_zones(["parking_1", "parking_2"])
-        
-        # Exclude detections in restricted zones
-        results = results.filter_by_zones([1, 2], exclude=True)
+        >>> # Setup zones and update detections
+        >>> zone_manager = pf.zones.ZoneManager()
+        >>> detections = detections.update_zones(zone_manager)
+        >>> 
+        >>> # Keep only detections in parking areas
+        >>> parking = detections.filter_by_zones(["parking_1", "parking_2"])
+        >>> 
+        >>> # Exclude detections from restricted areas
+        >>> allowed = detections.filter_by_zones(["restricted", "private"], exclude=True)
+        >>> 
+        >>> # Filter by numeric zone IDs
+        >>> zone_1_only = detections.filter_by_zones(1)
+    
+    Notes:
+        - Requires zone information to be populated via update_zones() first
+        - Detections without zone information are included only when exclude=True
+        - Supports both inclusive and exclusive zone filtering
+        - Zone IDs can be strings or integers depending on zone configuration
     """
     # Handle single zone_id or list of zone_ids
     if not isinstance(zone_ids, (list, tuple)):
@@ -251,26 +391,49 @@ def _filter_by_zones(self, zone_ids, exclude=False):
     return filtered_detections
 
 
-def _filter_by_position(self, region, margin_percent=0.1, frame_width=None, frame_height=None):
+def _filter_by_position(self, region: str, margin_percent: float = 0.1, 
+                       frame_width: Optional[int] = None, frame_height: Optional[int] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    in the specified region of the frame.
+    Filter detections by their position within the frame.
+    
+    Enables spatial filtering based on detection center position relative to frame
+    regions. Useful for focusing on specific areas of interest or excluding edge artifacts.
     
     Args:
-        region: Region to filter by ("center", "edge", "top", "bottom", "left", "right", "corners")
-        margin_percent: Margin as percentage of frame size (0.0 to 0.5)
-        frame_width: Frame width in pixels (required)
-        frame_height: Frame height in pixels (required)
+        region (str): Target region to filter by. Options: "center", "edge", "top", 
+                     "bottom", "left", "right", "corners".
+        margin_percent (float): Margin as percentage of frame size. Range: [0.0, 0.5].
+                               Default is 0.1 (10% margin).
+        frame_width (Optional[int]): Frame width in pixels. Required for filtering.
+        frame_height (Optional[int]): Frame height in pixels. Required for filtering.
         
     Returns:
-        Detections: New Detections object with position-filtered detections
-        
+        Detections: New Detections object containing only detections in specified region.
+    
+    Raises:
+        ValueError: If frame dimensions are not provided or region is invalid.
+    
     Example:
-        # Keep only detections in center 60% of frame
-        results = results.filter_by_position("center", margin_percent=0.2, frame_width=1920, frame_height=1080)
-        
-        # Keep only detections near edges
-        results = results.filter_by_position("edge", margin_percent=0.1, frame_width=1920, frame_height=1080)
+        >>> # Keep only detections in center 80% of frame
+        >>> center_detections = detections.filter_by_position(
+        ...     "center", margin_percent=0.1, frame_width=1920, frame_height=1080
+        ... )
+        >>> 
+        >>> # Find objects near frame edges (security monitoring)
+        >>> edge_objects = detections.filter_by_position(
+        ...     "edge", margin_percent=0.05, frame_width=1920, frame_height=1080
+        ... )
+        >>> 
+        >>> # Focus on objects in top region (sky, signs)
+        >>> top_objects = detections.filter_by_position(
+        ...     "top", margin_percent=0.3, frame_width=1920, frame_height=1080
+        ... )
+    
+    Notes:
+        - Uses detection center point for position determination
+        - Margin percentage is automatically clamped to [0.0, 0.5] range
+        - "corners" region requires objects to be near BOTH horizontal AND vertical edges
+        - Useful for region-of-interest analysis and edge artifact removal
     """
     if frame_width is None or frame_height is None:
         raise ValueError("frame_width and frame_height must be provided")
@@ -329,24 +492,49 @@ def _filter_by_position(self, region, margin_percent=0.1, frame_width=None, fram
     return filtered_detections
 
 
-def _filter_by_relative_size(self, min_percent=None, max_percent=None, frame_width=None, frame_height=None):
+def _filter_by_relative_size(self, min_percent: Optional[float] = None, max_percent: Optional[float] = None, 
+                            frame_width: Optional[int] = None, frame_height: Optional[int] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    within the specified size range relative to frame size.
+    Filter detections by size relative to total frame area.
+    
+    Provides scale-invariant filtering based on detection size as percentage of
+    total frame area. More robust than absolute size filtering across different
+    resolution inputs.
     
     Args:
-        min_percent: Minimum size as percentage of frame area (0.0 to 1.0)
-        max_percent: Maximum size as percentage of frame area (0.0 to 1.0)
-        frame_width: Frame width in pixels (required)
-        frame_height: Frame height in pixels (required)
+        min_percent (Optional[float]): Minimum size as percentage of frame area.
+                                      Range: [0.0, 1.0]. If None, no minimum constraint.
+        max_percent (Optional[float]): Maximum size as percentage of frame area.
+                                      Range: [0.0, 1.0]. If None, no maximum constraint.
+        frame_width (Optional[int]): Frame width in pixels. Required for calculation.
+        frame_height (Optional[int]): Frame height in pixels. Required for calculation.
         
     Returns:
-        Detections: New Detections object with relative size-filtered detections
-        
+        Detections: New Detections object containing only detections within relative size range.
+    
+    Raises:
+        ValueError: If frame dimensions are not provided.
+    
     Example:
-        # Keep only detections that are 0.1% to 20% of frame size
-        results = results.filter_by_relative_size(min_percent=0.001, max_percent=0.2, 
-                                                frame_width=1920, frame_height=1080)
+        >>> # Remove tiny noise detections (< 0.01% of frame)
+        >>> cleaned = detections.filter_by_relative_size(
+        ...     min_percent=0.0001, frame_width=1920, frame_height=1080
+        ... )
+        >>> 
+        >>> # Keep medium-sized objects (0.1% to 20% of frame)
+        >>> medium_objects = detections.filter_by_relative_size(
+        ...     min_percent=0.001, max_percent=0.2, frame_width=1920, frame_height=1080
+        ... )
+        >>> 
+        >>> # Remove objects that dominate the frame (> 50%)
+        >>> reasonable_size = detections.filter_by_relative_size(
+        ...     max_percent=0.5, frame_width=1920, frame_height=1080
+        ... )
+    
+    Notes:
+        - Scale-invariant filtering works across different image resolutions
+        - Percentage calculated as (detection_area / frame_area)
+        - Useful for removing both noise artifacts and unrealistic large detections
     """
     if frame_width is None or frame_height is None:
         raise ValueError("frame_width and frame_height must be provided")
@@ -373,24 +561,35 @@ def _filter_by_relative_size(self, min_percent=None, max_percent=None, frame_wid
     return filtered_detections
 
 
-def _filter_by_tracking_duration(self, min_seconds=None, max_seconds=None):
+def _filter_by_tracking_duration(self, min_seconds: Optional[float] = None, max_seconds: Optional[float] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    that have been tracked for the specified duration range.
+    Filter detections by their tracking duration.
     
     Args:
-        min_seconds: Minimum tracking duration in seconds (inclusive)
-        max_seconds: Maximum tracking duration in seconds (inclusive)
+        min_seconds (Optional[float]): Minimum tracking duration in seconds (inclusive).
+                                      If None, no minimum constraint is applied.
+        max_seconds (Optional[float]): Maximum tracking duration in seconds (inclusive).
+                                      If None, no maximum constraint is applied.
         
     Returns:
-        Detections: New Detections object with duration-filtered detections
-        
+        Detections: New Detections object containing only detections within duration range.
+    
     Example:
-        # Keep only objects tracked for at least 5 seconds
-        results = results.filter_by_tracking_duration(min_seconds=5.0)
-        
-        # Keep objects tracked between 2-10 seconds
-        results = results.filter_by_tracking_duration(min_seconds=2.0, max_seconds=10.0)
+        >>> # Keep only persistent objects (tracked for at least 5 seconds)
+        >>> persistent = detections.filter_by_tracking_duration(min_seconds=5.0)
+        >>> 
+        >>> # Find short-term detections (tracked 2-10 seconds)
+        >>> short_term = detections.filter_by_tracking_duration(
+        ...     min_seconds=2.0, max_seconds=10.0
+        ... )
+        >>> 
+        >>> # Remove very brief detections (< 1 second, likely noise)
+        >>> stable = detections.filter_by_tracking_duration(min_seconds=1.0)
+    
+    Notes:
+        - Requires total_time field to be populated in Detection objects
+        - Useful for filtering out transient false positives
+        - Duration measured from first detection to current frame
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -406,21 +605,36 @@ def _filter_by_tracking_duration(self, min_seconds=None, max_seconds=None):
     return filtered_detections
 
 
-def _filter_by_first_seen_time(self, start_time=None, end_time=None):
+def _filter_by_first_seen_time(self, start_time: Optional[float] = None, end_time: Optional[float] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    that were first seen within the specified time range.
+    Filter detections by when they were first observed.
     
     Args:
-        start_time: Earliest first seen time (inclusive)
-        end_time: Latest first seen time (inclusive)
+        start_time (Optional[float]): Earliest first seen time (inclusive).
+                                     Time units depend on tracking implementation
+                                     (frames, seconds, timestamps).
+        end_time (Optional[float]): Latest first seen time (inclusive).
         
     Returns:
-        Detections: New Detections object with time-filtered detections
-        
+        Detections: New Detections object containing only detections first seen within time range.
+    
     Example:
-        # Keep only objects first detected between frame 100-500
-        results = results.filter_by_first_seen_time(start_time=100, end_time=500)
+        >>> # Keep only objects first detected in early frames (0-100)
+        >>> early_objects = detections.filter_by_first_seen_time(start_time=0, end_time=100)
+        >>> 
+        >>> # Focus on objects that appeared recently (after frame 500)
+        >>> recent_objects = detections.filter_by_first_seen_time(start_time=500)
+        >>> 
+        >>> # Analyze objects from specific time window
+        >>> window_objects = detections.filter_by_first_seen_time(
+        ...     start_time=1000.5, end_time=2000.5
+        ... )
+    
+    Notes:
+        - Requires first_seen_time field to be populated in Detection objects
+        - Detections with None first_seen_time are excluded
+        - Time units depend on tracking system (frames, seconds, etc.)
+        - Useful for temporal analysis and event-based filtering
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -439,23 +653,34 @@ def _filter_by_first_seen_time(self, start_time=None, end_time=None):
     return filtered_detections
 
 
-def _filter_tracked_objects(self, require_tracker_id=True):
+def _filter_tracked_objects(self, require_tracker_id: bool = True) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    that have tracker IDs (or optionally, no tracker IDs).
+    Filter detections based on tracking status.
     
     Args:
-        require_tracker_id: If True, keep only tracked objects. If False, keep only untracked objects.
+        require_tracker_id (bool): If True, keep only objects with tracker IDs.
+                                  If False, keep only objects without tracker IDs.
+                                  Default is True.
         
     Returns:
-        Detections: New Detections object with tracking-filtered detections
-        
+        Detections: New Detections object filtered by tracking status.
+    
     Example:
-        # Keep only tracked objects
-        results = results.filter_tracked_objects(require_tracker_id=True)
-        
-        # Keep only untracked objects  
-        results = results.filter_tracked_objects(require_tracker_id=False)
+        >>> # Keep only successfully tracked objects
+        >>> tracked_only = detections.filter_tracked_objects(require_tracker_id=True)
+        >>> 
+        >>> # Get newly detected objects (not yet tracked)
+        >>> new_detections = detections.filter_tracked_objects(require_tracker_id=False)
+        >>> 
+        >>> # Analyze tracking success rate
+        >>> total = len(detections)
+        >>> tracked = len(detections.filter_tracked_objects(True))
+        >>> print(f"Tracking rate: {tracked/total:.1%}")
+    
+    Notes:
+        - Useful for analyzing tracking performance
+        - Tracked objects have non-None tracker_id values
+        - Helps separate established tracks from new detections
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -467,16 +692,32 @@ def _filter_tracked_objects(self, require_tracker_id=True):
     return filtered_detections
 
 
-def _calculate_iou(bbox1, bbox2):
+def _calculate_iou(bbox1: List[float], bbox2: List[float]) -> float:
     """
     Calculate Intersection over Union (IoU) between two bounding boxes.
     
     Args:
-        bbox1: First bounding box [x1, y1, x2, y2]
-        bbox2: Second bounding box [x1, y1, x2, y2]
+        bbox1 (List[float]): First bounding box in XYXY format [x1, y1, x2, y2].
+        bbox2 (List[float]): Second bounding box in XYXY format [x1, y1, x2, y2].
         
     Returns:
-        float: IoU value between 0.0 and 1.0
+        float: IoU value in range [0.0, 1.0]. Higher values indicate greater overlap.
+    
+    Example:
+        >>> bbox_a = [100, 100, 200, 200]  # 100x100 box
+        >>> bbox_b = [150, 150, 250, 250]  # Overlapping 100x100 box
+        >>> iou = pf.detections._calculate_iou(bbox_a, bbox_b)
+        >>> print(f"IoU: {iou:.3f}")  # IoU: 0.143
+        >>> 
+        >>> # Perfect overlap
+        >>> identical_iou = pf.detections._calculate_iou(bbox_a, bbox_a)
+        >>> print(f"Identical IoU: {identical_iou}")  # 1.0
+    
+    Notes:
+        - Returns 0.0 for non-overlapping boxes
+        - Returns 1.0 for identical boxes
+        - Used internally by duplicate removal and overlap filtering functions
+        - Handles edge cases (zero area boxes, no intersection)
     """
     # Calculate intersection coordinates
     x1_inter = max(bbox1[0], bbox2[0])
@@ -503,23 +744,49 @@ def _calculate_iou(bbox1, bbox2):
     return intersection_area / union_area
 
 
-def _remove_duplicates(self, iou_threshold=0.8, keep='first'):
+def _remove_duplicates(self, iou_threshold: float = 0.8, keep: str = 'first') -> 'Detections':
     """
-    Returns a new Detections object with duplicate/overlapping detections removed.
+    Remove duplicate or highly overlapping detections using Non-Maximum Suppression.
+    
+    Identifies groups of overlapping detections and keeps only one detection per group
+    based on the specified strategy. Essential for cleaning up multi-model outputs
+    or removing redundant detections.
     
     Args:
-        iou_threshold: IoU threshold for considering detections as duplicates (0.0 to 1.0)
-        keep: Which detection to keep when duplicates found ('first', 'last', 'highest_confidence')
+        iou_threshold (float): IoU threshold for considering detections as duplicates.
+                              Range: [0.0, 1.0]. Higher values are more restrictive.
+                              Default is 0.8.
+        keep (str): Strategy for selecting which detection to keep from each group.
+                   Options: 'first', 'last', 'highest_confidence'. Default is 'first'.
         
     Returns:
-        Detections: New Detections object with duplicates removed
-        
+        Detections: New Detections object with duplicate detections removed.
+    
+    Raises:
+        ValueError: If keep parameter is not one of the valid options.
+    
     Example:
-        # Remove highly overlapping detections, keep first occurrence
-        results = results.remove_duplicates(iou_threshold=0.8, keep='first')
+        >>> # Remove highly overlapping detections (conservative)
+        >>> cleaned = detections.remove_duplicates(iou_threshold=0.8, keep='first')
+        >>> 
+        >>> # Aggressive duplicate removal, keep best confidence
+        >>> best_only = detections.remove_duplicates(
+        ...     iou_threshold=0.5, keep='highest_confidence'
+        ... )
+        >>> 
+        >>> # Remove exact duplicates only
+        >>> exact_clean = detections.remove_duplicates(iou_threshold=0.95, keep='last')
+    
+    Notes:
+        - Groups detections by IoU overlap and keeps one per group
+        - 'highest_confidence' strategy treats None confidence as 0.0
+        - Processes detections in order, marking overlapping groups efficiently
+        - Essential post-processing step for ensemble models or multiple detectors
         
-        # Remove duplicates, keep highest confidence
-        results = results.remove_duplicates(iou_threshold=0.7, keep='highest_confidence')
+    Performance Notes:
+        - O(n²) complexity for overlap detection
+        - Efficient early termination for processed detections
+        - Memory efficient with in-place processing tracking
     """
     if keep not in ['first', 'last', 'highest_confidence']:
         raise ValueError("keep must be 'first', 'last', or 'highest_confidence'")
@@ -566,24 +833,44 @@ def _remove_duplicates(self, iou_threshold=0.8, keep='first'):
     return filtered_detections
 
 
-def _filter_overlapping(self, min_overlap=0.5, target_class_ids=None):
+def _filter_overlapping(self, min_overlap: float = 0.5, target_class_ids: Optional[List[Union[int, str]]] = None) -> 'Detections':
     """
-    Returns a new Detections object containing only detections
-    that overlap with other detections by at least the specified amount.
+    Filter detections that significantly overlap with other detections.
+    
+    Useful for finding co-occurring objects, validating detection consistency,
+    or identifying regions with multiple overlapping predictions.
     
     Args:
-        min_overlap: Minimum IoU overlap required (0.0 to 1.0)
-        target_class_ids: Optional list of class IDs to check overlap against
+        min_overlap (float): Minimum IoU overlap required to consider detections
+                           as overlapping. Range: [0.0, 1.0]. Default is 0.5.
+        target_class_ids (Optional[List[Union[int, str]]]): Optional list of class IDs
+                                                           to check overlap against.
+                                                           If None, checks overlap
+                                                           with all other detections.
         
     Returns:
-        Detections: New Detections object with overlapping detections
-        
+        Detections: New Detections object containing only detections that overlap
+                   sufficiently with other detections.
+    
     Example:
-        # Keep only detections that overlap significantly with others
-        results = results.filter_overlapping(min_overlap=0.3)
-        
-        # Keep only detections that overlap with person class (class_id=0)
-        results = results.filter_overlapping(min_overlap=0.2, target_class_ids=[0])
+        >>> # Find detections that overlap significantly with others
+        >>> overlapping = detections.filter_overlapping(min_overlap=0.3)
+        >>> 
+        >>> # Find objects that overlap with people (co-occurrence analysis)
+        >>> near_people = detections.filter_overlapping(
+        ...     min_overlap=0.2, target_class_ids=[0]  # person class
+        ... )
+        >>> 
+        >>> # Find detections overlapping with vehicles
+        >>> near_vehicles = detections.filter_overlapping(
+        ...     min_overlap=0.1, target_class_ids=["car", "truck", "bus"]
+        ... )
+    
+    Notes:
+        - Useful for spatial relationship analysis between objects
+        - Can help identify detection inconsistencies or multi-class objects
+        - Self-overlap is ignored (detection doesn't overlap with itself)
+        - Returns empty result if no detections meet overlap criteria
     """
     filtered_detections = self.__class__()
     
