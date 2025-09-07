@@ -13,7 +13,7 @@ from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog
 from pixelflow.tracker import ByteTracker
 from pixelflow.zones import Zones
-from pixelflow.lines import Lines
+from pixelflow.crossings import Crossings
 from pixelflow.detections import from_detectron2
 
 print("Setting up Detectron2 with PixelFlow features...")
@@ -45,7 +45,7 @@ tracker = ByteTracker(
 )
 
 zones = Zones()
-lines = Lines()
+crossings = Crossings()
 
 zones.add_zone(
     polygon=[(50, 200), (350, 200), (350, 480), (50, 480)],
@@ -55,7 +55,7 @@ zones.add_zone(
     trigger_strategy="center"
 )
 
-lines.add_line(
+crossings.add_line(
     start=(375, 150),
     end=(375, 480),
     line_id="divider_line",
@@ -106,7 +106,7 @@ while True:
     
     results = tracker.update(results)
     results = zones.update(results)
-    results = lines.update(results)
+    results = crossings.update(results)
     
     curr_time = time.time()
     fps = 1 / (curr_time - prev_time) if prev_time else 0
