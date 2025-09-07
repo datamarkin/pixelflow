@@ -20,7 +20,7 @@ from .zones import Zones
 from .crossings import Crossings
 from .slicer import SlicedInference, auto_slice_size
 from .buffer import Buffer
-from .smoother import DetectionsSmoother, BufferDetectionsSmoother
+from .smoother import smooth
 from .timer import TimeTracker
 
 # Define the public API
@@ -51,9 +51,7 @@ __all__ = [
     "SlicedInference",
     "auto_slice_size",
     "Buffer",
-    "smoother",
-    "DetectionsSmoother",
-    "BufferDetectionsSmoother",
+    "smooth",
     
     # Performance & tracking
     "timer",
