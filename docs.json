@@ -11,68 +11,65 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Developer Platform",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
               "index",
               "docs/quickstart"
             ]
           },
           {
-            "group": "Core",
+            "group": "Detections",
             "pages": [
-              "docs/detections"
+              "docs/detections/detections",
+              "docs/detections/converters",
+              "docs/detections/filters"
             ]
           },
           {
             "group": "Annotators",
             "pages": [
-              "docs/dev/annotators/box",
-              "docs/dev/annotators/polygon",
-              "docs/dev/annotators/mask",
-              "docs/dev/annotators/label",
-              "docs/dev/annotators/oval",
-              "docs/dev/annotators/blur",
-              "docs/dev/annotators/pixelate"
+              "docs/annotators/introduction",
+              "docs/annotators/box",
+              "docs/annotators/label",
+              "docs/annotators/mask",
+              "docs/annotators/polygon",
+              "docs/annotators/oval",
+              "docs/annotators/blur",
+              "docs/annotators/pixelate",
+              "docs/annotators/zones"
             ]
           },
           {
             "group": "Zones",
             "pages": [
+              "docs/zones/introduction",
               "docs/zones/polygon_zones",
-              "docs/zones/crossings"
+              "docs/zones/crossings",
+              "docs/zones/strategies"
             ]
           },
           {
-            "group": "Trackers",
+            "group": "Object Tracking",
             "pages": [
-              "docs/trackers/Bytetracker"
+              "docs/trackers/bytetracker"
             ]
           },
           {
-            "group": "Tools",
+            "group": "Processing Tools",
             "pages": [
               "docs/buffer",
-              "docs/timetracker",
-              "docs/slicer",
               "docs/smoother",
-              "docs/strategies"
+              "docs/slicer",
+              "docs/colors"
             ]
           },
           {
-            "group": "Slicer",
+            "group": "Analytics",
             "pages": [
-              "docs/slicer/introduction",
-              "docs/slicer/usage"
-            ]
-          },
-          {
-            "group": "Smoother",
-            "pages": [
-              "docs/smoother/introduction",
-              "docs/smoother/usage"
+              "docs/timetracker"
             ]
           }
         ]
