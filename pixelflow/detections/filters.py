@@ -10,15 +10,15 @@ injection into Detections class for seamless chaining operations.
 from typing import List, Union, Optional, Any
 
 __all__ = [
-    "_filter_by_confidence", "_filter_by_class_id", "_remap_class_ids",
-    "_filter_by_size", "_filter_by_dimensions", "_filter_by_aspect_ratio", 
-    "_filter_by_zones", "_filter_by_position", "_filter_by_relative_size",
-    "_filter_by_tracking_duration", "_filter_by_first_seen_time", "_filter_tracked_objects",
-    "_remove_duplicates", "_filter_overlapping", "_calculate_iou"
+    "filter_by_confidence", "filter_by_class_id", "remap_class_ids",
+    "filter_by_size", "filter_by_dimensions", "filter_by_aspect_ratio", 
+    "filter_by_zones", "filter_by_position", "filter_by_relative_size",
+    "filter_by_tracking_duration", "filter_by_first_seen_time", "filter_tracked_objects",
+    "remove_duplicates", "filter_overlapping", "_calculate_iou"
 ]
 
 
-def _filter_by_confidence(self, threshold: float) -> 'Detections':
+def filter_by_confidence(self, threshold: float) -> 'Detections':
     """
     Filter detections by minimum confidence score threshold.
     
@@ -54,7 +54,7 @@ def _filter_by_confidence(self, threshold: float) -> 'Detections':
     return filtered_detections
 
 
-def _filter_by_class_id(self, class_ids: Union[int, str, List[Union[int, str]]]) -> 'Detections':
+def filter_by_class_id(self, class_ids: Union[int, str, List[Union[int, str]]]) -> 'Detections':
     """
     Filter detections by class identifier(s).
     
@@ -95,7 +95,7 @@ def _filter_by_class_id(self, class_ids: Union[int, str, List[Union[int, str]]])
     return filtered_detections
 
 
-def _remap_class_ids(self, from_ids: Union[int, str, List[Union[int, str]]], to_id: Union[int, str]) -> 'Detections':
+def remap_class_ids(self, from_ids: Union[int, str, List[Union[int, str]]], to_id: Union[int, str]) -> 'Detections':
     """
     Remap class IDs to consolidate or standardize classification labels.
     
@@ -166,7 +166,7 @@ def _remap_class_ids(self, from_ids: Union[int, str, List[Union[int, str]]], to_
     return remapped_detections
 
 
-def _filter_by_size(self, min_area: Optional[float] = None, max_area: Optional[float] = None) -> 'Detections':
+def filter_by_size(self, min_area: Optional[float] = None, max_area: Optional[float] = None) -> 'Detections':
     """
     Filter detections by bounding box area constraints.
     
@@ -213,7 +213,7 @@ def _filter_by_size(self, min_area: Optional[float] = None, max_area: Optional[f
     return filtered_detections
 
 
-def _filter_by_dimensions(self, min_width: Optional[float] = None, max_width: Optional[float] = None, 
+def filter_by_dimensions(self, min_width: Optional[float] = None, max_width: Optional[float] = None, 
                          min_height: Optional[float] = None, max_height: Optional[float] = None) -> 'Detections':
     """
     Filter detections by individual width and height constraints.
@@ -273,7 +273,7 @@ def _filter_by_dimensions(self, min_width: Optional[float] = None, max_width: Op
     return filtered_detections
 
 
-def _filter_by_aspect_ratio(self, min_ratio: Optional[float] = None, max_ratio: Optional[float] = None) -> 'Detections':
+def filter_by_aspect_ratio(self, min_ratio: Optional[float] = None, max_ratio: Optional[float] = None) -> 'Detections':
     """
     Filter detections by bounding box aspect ratio (width/height).
     
@@ -333,7 +333,7 @@ def _filter_by_aspect_ratio(self, min_ratio: Optional[float] = None, max_ratio: 
     return filtered_detections
 
 
-def _filter_by_zones(self, zone_ids: Union[str, int, List[Union[str, int]]], exclude: bool = False) -> 'Detections':
+def filter_by_zones(self, zone_ids: Union[str, int, List[Union[str, int]]], exclude: bool = False) -> 'Detections':
     """
     Filter detections based on zone intersection status.
     
@@ -391,7 +391,7 @@ def _filter_by_zones(self, zone_ids: Union[str, int, List[Union[str, int]]], exc
     return filtered_detections
 
 
-def _filter_by_position(self, region: str, margin_percent: float = 0.1, 
+def filter_by_position(self, region: str, margin_percent: float = 0.1, 
                        frame_width: Optional[int] = None, frame_height: Optional[int] = None) -> 'Detections':
     """
     Filter detections by their position within the frame.
@@ -492,7 +492,7 @@ def _filter_by_position(self, region: str, margin_percent: float = 0.1,
     return filtered_detections
 
 
-def _filter_by_relative_size(self, min_percent: Optional[float] = None, max_percent: Optional[float] = None, 
+def filter_by_relative_size(self, min_percent: Optional[float] = None, max_percent: Optional[float] = None, 
                             frame_width: Optional[int] = None, frame_height: Optional[int] = None) -> 'Detections':
     """
     Filter detections by size relative to total frame area.
@@ -561,7 +561,7 @@ def _filter_by_relative_size(self, min_percent: Optional[float] = None, max_perc
     return filtered_detections
 
 
-def _filter_by_tracking_duration(self, min_seconds: Optional[float] = None, max_seconds: Optional[float] = None) -> 'Detections':
+def filter_by_tracking_duration(self, min_seconds: Optional[float] = None, max_seconds: Optional[float] = None) -> 'Detections':
     """
     Filter detections by their tracking duration.
     
@@ -605,7 +605,7 @@ def _filter_by_tracking_duration(self, min_seconds: Optional[float] = None, max_
     return filtered_detections
 
 
-def _filter_by_first_seen_time(self, start_time: Optional[float] = None, end_time: Optional[float] = None) -> 'Detections':
+def filter_by_first_seen_time(self, start_time: Optional[float] = None, end_time: Optional[float] = None) -> 'Detections':
     """
     Filter detections by when they were first observed.
     
@@ -653,7 +653,7 @@ def _filter_by_first_seen_time(self, start_time: Optional[float] = None, end_tim
     return filtered_detections
 
 
-def _filter_tracked_objects(self, require_tracker_id: bool = True) -> 'Detections':
+def filter_tracked_objects(self, require_tracker_id: bool = True) -> 'Detections':
     """
     Filter detections based on tracking status.
     
@@ -744,7 +744,7 @@ def _calculate_iou(bbox1: List[float], bbox2: List[float]) -> float:
     return intersection_area / union_area
 
 
-def _remove_duplicates(self, iou_threshold: float = 0.8, keep: str = 'first') -> 'Detections':
+def remove_duplicates(self, iou_threshold: float = 0.8, keep: str = 'first') -> 'Detections':
     """
     Remove duplicate or highly overlapping detections using Non-Maximum Suppression.
     
@@ -833,7 +833,7 @@ def _remove_duplicates(self, iou_threshold: float = 0.8, keep: str = 'first') ->
     return filtered_detections
 
 
-def _filter_overlapping(self, min_overlap: float = 0.5, target_class_ids: Optional[List[Union[int, str]]] = None) -> 'Detections':
+def filter_overlapping(self, min_overlap: float = 0.5, target_class_ids: Optional[List[Union[int, str]]] = None) -> 'Detections':
     """
     Filter detections that significantly overlap with other detections.
     

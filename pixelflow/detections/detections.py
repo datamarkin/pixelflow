@@ -385,37 +385,37 @@ class Detections:
 
 # Import filter methods and attach them to Detections class for zero overhead
 from .filters import (
-    _filter_by_confidence,
-    _filter_by_class_id,
-    _remap_class_ids,
-    _filter_by_size,
-    _filter_by_dimensions,
-    _filter_by_aspect_ratio,
-    _filter_by_zones,
-    _filter_by_position,
-    _filter_by_relative_size,
-    _filter_by_tracking_duration,
-    _filter_by_first_seen_time,
-    _filter_tracked_objects,
-    _remove_duplicates,
-    _filter_overlapping,
+    filter_by_confidence,
+    filter_by_class_id,
+    remap_class_ids,
+    filter_by_size,
+    filter_by_dimensions,
+    filter_by_aspect_ratio,
+    filter_by_zones,
+    filter_by_position,
+    filter_by_relative_size,
+    filter_by_tracking_duration,
+    filter_by_first_seen_time,
+    filter_tracked_objects,
+    remove_duplicates,
+    filter_overlapping,
     _calculate_iou
 )
 
 
 # Attach filter methods directly to Detections class - zero overhead method injection
-Detections.filter_by_confidence = _filter_by_confidence
-Detections.filter_by_class_id = _filter_by_class_id
-Detections.remap_class_ids = _remap_class_ids
-Detections.filter_by_size = _filter_by_size
-Detections.filter_by_dimensions = _filter_by_dimensions
-Detections.filter_by_aspect_ratio = _filter_by_aspect_ratio
-Detections.filter_by_zones = _filter_by_zones
-Detections.filter_by_position = _filter_by_position
-Detections.filter_by_relative_size = _filter_by_relative_size
-Detections.filter_by_tracking_duration = _filter_by_tracking_duration
-Detections.filter_by_first_seen_time = _filter_by_first_seen_time
-Detections.filter_tracked_objects = _filter_tracked_objects
-Detections.remove_duplicates = _remove_duplicates
-Detections.filter_overlapping = _filter_overlapping
+Detections.filter_by_confidence = filter_by_confidence
+Detections.filter_by_class_id = filter_by_class_id
+Detections.remap_class_ids = remap_class_ids
+Detections.filter_by_size = filter_by_size
+Detections.filter_by_dimensions = filter_by_dimensions
+Detections.filter_by_aspect_ratio = filter_by_aspect_ratio
+Detections.filter_by_zones = filter_by_zones
+Detections.filter_by_position = filter_by_position
+Detections.filter_by_relative_size = filter_by_relative_size
+Detections.filter_by_tracking_duration = filter_by_tracking_duration
+Detections.filter_by_first_seen_time = filter_by_first_seen_time
+Detections.filter_tracked_objects = filter_tracked_objects
+Detections.remove_duplicates = remove_duplicates
+Detections.filter_overlapping = filter_overlapping
 Detections._calculate_iou = lambda self, bbox1, bbox2: _calculate_iou(bbox1, bbox2)
