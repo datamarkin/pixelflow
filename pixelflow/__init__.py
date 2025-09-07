@@ -3,6 +3,7 @@ __author__ = "Datamarkin"
 
 # Import core modules
 from . import detections
+
 from . import media
 from . import annotators as annotate
 from . import colors
@@ -24,8 +25,44 @@ from .smoother import DetectionsSmoother, BufferDetectionsSmoother
 from .timer import TimeTracker
 
 # Define the public API
-__all__ = ["annotate", "detections", "slicer", "buffer", "smoother", "timer", "media", "tracker",
-           "Media", "MediaInfo", "write_frame", "show_frame", "close_display",
-           "Zones", "Crossings", "TimeTracker",
-           "SlicedInference", "auto_slice_size", "Buffer", "DetectionsSmoother", "BufferDetectionsSmoother",
-           "__version__", "__author__"]
+__all__ = [
+    # Core data structures
+    "detections",
+    
+    # Visual components
+    "annotate",
+    "colors",
+    
+    # Media handling
+    "media",
+    "Media",
+    "MediaInfo", 
+    "write_frame",
+    "show_frame",
+    "close_display",
+    
+    # Spatial analysis
+    "zones",
+    "Zones",
+    "crossings", 
+    "Crossings",
+    
+    # Processing utilities
+    "slicer",
+    "SlicedInference",
+    "auto_slice_size",
+    "buffer",
+    "Buffer",
+    "smoother",
+    "DetectionsSmoother",
+    "BufferDetectionsSmoother",
+    
+    # Performance & tracking
+    "timer",
+    "TimeTracker",
+    "tracker",
+    
+    # Metadata
+    "__version__",
+    "__author__"
+]
