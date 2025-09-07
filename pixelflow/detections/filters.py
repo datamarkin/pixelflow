@@ -127,7 +127,7 @@ def _remap_class_ids(self, from_ids: Union[int, str, List[Union[int, str]]], to_
         - Preserves all other detection attributes including tracking data
         - Non-matching detections are included unchanged
     """
-    from .core import Detection
+    from .detections import Detection
     
     # Handle single from_id or list of from_ids
     if not isinstance(from_ids, (list, tuple)):

@@ -2,7 +2,7 @@
 # Export all detection classes and functions for public API
 
 # Import core classes
-from .core import KeyPoint, Detection, Detections
+from .detections import KeyPoint, Detection, Detections
 
 # Import converter functions  
 from .converters import (

@@ -45,7 +45,7 @@ def from_datamarkin_api(api_response: Dict[str, Any]):
         >>> detections = pf.detections.from_datamarkin_api(api_response)
         >>> print(f"Found {len(detections.detections)} objects")
     """
-    from .core import Detections, Detection
+    from .detections import Detections, Detection
 
     detections_obj = Detections()
 
@@ -117,7 +117,7 @@ def from_detectron2(detectron2_results: Dict[str, Any]):
         - All tensor data is moved to CPU for processing
         - Keypoints are extracted but conversion to PixelFlow format needs implementation
     """
-    from .core import Detections, Detection
+    from .detections import Detections, Detection
     
     detections_obj = Detections()
     
@@ -248,7 +248,7 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
         - Minimizes CPU/GPU transfers by processing all boxes at once
         - Mask processing is optimized with OpenCV resize operations
     """
-    from .core import Detections, Detection
+    from .detections import Detections, Detection
     
     detections_obj = Detections()
     
@@ -429,7 +429,7 @@ def from_datamarkin_csv(group: Any, height: int, width: int):
         - Confidence values are optional and will be None if not provided
         - Polygon coordinates are converted to tuples for consistent formatting
     """
-    from .core import Detections, Detection
+    from .detections import Detections, Detection
 
     detections_obj = Detections()
 
