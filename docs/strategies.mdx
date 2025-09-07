@@ -1,0 +1,89 @@
+---
+title: Strategies
+description: Contains 3 functions for strategies
+---
+
+# Strategies
+
+Contains 3 functions for strategies.
+
+## Functions
+
+- [`validate_strategy`](#validate_strategy) - Validate that strategy string(s) are valid.
+- [`get_anchor_position`](#get_anchor_position) - Get the position of a specific anchor point on the bounding box.
+- [`check_detection_in_region`](#check_detection_in_region) - Check if a detection is within a region based on the trigger strategy.
+
+## validate_strategy
+
+Validate that strategy string(s) are valid.
+
+## Function Signature
+
+```python
+validate_strategy(
+) -> Any
+```
+
+### Returns
+
+<ResponseField name="result" type="Any">
+  The validated strategy (unchanged if valid)
+</ResponseField>
+
+### Example
+
+```python Example
+validate_strategy("center")  # Returns "center"
+validate_strategy(["center", "bottom_center"])  # Returns ["center", "bottom_center"]
+validate_strategy("invalid")  # Raises ValueError
+```
+
+## get_anchor_position
+
+Get the position of a specific anchor point on the bounding box.
+
+## Function Signature
+
+```python
+get_anchor_position(
+) -> Any
+```
+
+### Returns
+
+<ResponseField name="result" type="Any">
+  Tuple of (x, y) coordinates for the anchor point
+</ResponseField>
+
+### Example
+
+```python Example
+bbox = [10, 20, 50, 80]
+get_anchor_position(bbox, "center")
+```
+
+## check_detection_in_region
+
+Check if a detection is within a region based on the trigger strategy.
+
+## Function Signature
+
+```python
+check_detection_in_region(
+) -> Any
+```
+
+### Returns
+
+<ResponseField name="result" type="Any">
+  True if detection is in region according to strategy, False otherwise
+</ResponseField>
+
+### Example
+
+```python Example
+from shapely.geometry import box
+bbox = [10, 10, 50, 50]
+region = box(0, 0, 100, 100)
+check_detection_in_region(bbox, "center", region)
+```

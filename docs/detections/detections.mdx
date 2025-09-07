@@ -1,0 +1,154 @@
+---
+title: Detection Classes
+description: Contains 3 classes for detections
+---
+
+# Detection Classes
+
+Contains 3 classes for detections.
+
+## Classes
+
+- [`KeyPoint`](#keypoint) - Represents a single keypoint with coordinate and visibility information.
+- [`Detection`](#detection) - Unified representation of a single object detection with comprehensive metadata.
+- [`Detections`](#detections) - Container for multiple Detection objects with filtering and processing capabilities.
+
+## KeyPoint
+
+Represents a single keypoint with coordinate and visibility information.
+
+Used for pose estimation and object keypoint detection, storing both spatial coordinates and visibility state for structured keypoint data representation.
+
+### Parameters
+
+<ParamField path="x" type="int" required>
+  X coordinate in pixels.
+</ParamField>
+
+<ParamField path="y" type="int" required>
+  Y coordinate in pixels.
+</ParamField>
+
+<ParamField path="name" type="str" required>
+  Descriptive name or label for the keypoint (e.g., "nose", "left_eye").
+</ParamField>
+
+<ParamField path="visibility" type="bool" required>
+  Whether the keypoint is visible and detectable in the image.
+</ParamField>
+
+### Example
+
+```python Example
+import pixelflow as pf
+# Create a keypoint for pose estimation
+nose_point = pf.detections.KeyPoint(x=320, y=240, name="nose", visibility=True)
+print(f"Nose at ({nose_point.x}, {nose_point.y})")
+
+# Create keypoint with occlusion
+hidden_point = pf.detections.KeyPoint(x=150, y=200, name="left_elbow", visibility=False)
+```
+
+## Detection
+
+Unified representation of a single object detection with comprehensive metadata.
+
+Stores all detection information including bounding boxes, segmentation masks, keypoints, classification data, tracking information, and spatial analytics. Provides a standardized interface for detection data across different ML frameworks.
+
+### Parameters
+
+<ParamField path="inference_id" type="Optional[str]" optional>
+  Unique identifier for the inference session.
+</ParamField>
+
+<ParamField path="bbox" type="Optional[List[float]]" optional>
+  Bounding box coordinates in XYXY format [x1, y1, x2, y2].
+</ParamField>
+
+<ParamField path="masks" type="Optional[List[Any]]" optional>
+  Segmentation masks in various formats (binary, polygon).
+</ParamField>
+
+<ParamField path="segments" type="Optional[List[Any]]" optional>
+  Polygon segments for object boundaries.
+</ParamField>
+
+<ParamField path="keypoints" type="Optional[List[KeyPoint]]" optional>
+  List of KeyPoint objects for pose/structure data.
+</ParamField>
+
+<ParamField path="class_id" type="Optional[Union[int, str]]" optional>
+  Numeric or string class identifier.
+</ParamField>
+
+<ParamField path="class_name" type="Optional[str]" optional>
+  Human-readable class name.
+</ParamField>
+
+<ParamField path="labels" type="Optional[List[str]]" optional>
+  Additional classification labels.
+</ParamField>
+
+<ParamField path="confidence" type="Optional[float]" optional>
+  Detection confidence score, automatically rounded.
+</ParamField>
+
+<ParamField path="tracker_id" type="Optional[int]" optional>
+  Unique tracking identifier for multi-frame tracking.
+</ParamField>
+
+<ParamField path="data" type="Optional[Dict[str, Any]]" optional>
+  Additional custom metadata.
+</ParamField>
+
+<ParamField path="zones" type="Optional[List[str]]" optional>
+  List of zone identifiers the detection intersects.
+</ParamField>
+
+<ParamField path="zone_names" type="Optional[List[str]]" optional>
+  Human-readable names for intersected zones.
+</ParamField>
+
+<ParamField path="line_crossings" type="Optional[List[Dict]]" optional>
+  Line crossing events for this detection.
+</ParamField>
+
+<ParamField path="first_seen_time" type="Optional[float]" optional>
+  Timestamp when detection first appeared.
+</ParamField>
+
+<ParamField path="total_time" type="float" required>
+  Total duration since first detection in seconds. Default is 0.0.
+</ParamField>
+
+### Example
+
+```python Example
+import pixelflow as pf
+# Create basic detection with bounding box
+detection = pf.detections.Detection(
+```
+
+## Detections
+
+Container for multiple Detection objects with filtering and processing capabilities.
+
+Provides a unified interface for managing collections of detections with support for iteration, indexing, filtering, zone management, and serialization. Includes dynamically attached filter methods for comprehensive detection processing.
+
+### Example
+
+```python Example
+import pixelflow as pf
+# Create empty detections container
+detections = pf.detections.Detections()
+
+# Add detections
+detection1 = pf.detections.Detection(bbox=[100, 50, 200, 150], class_name="person")
+detection2 = pf.detections.Detection(bbox=[300, 100, 400, 200], class_name="car")
+detections.add_detection(detection1)
+detections.add_detection(detection2)
+
+# Use container features
+print(f"Found {len(detections)} objects")
+for detection in detections:
+```

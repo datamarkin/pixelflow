@@ -1,0 +1,43 @@
+---
+title: mask
+description: Overlays masks on a video frame, supporting both binary masks and polygon formats.
+---
+
+## Overview
+
+Overlays masks on a video frame, supporting both binary masks and polygon formats.
+
+## Function Signature
+
+```python
+mask(
+    frame: np.ndarray,
+    detections: Detections,
+    opacity: float = 0.5,
+    colors: list, optional = None
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="frame" type="np.ndarray" required>
+  The video frame (BGR format).
+</ParamField>
+
+<ParamField path="detections" type="Detections" required>
+  Detections object containing masks.
+</ParamField>
+
+<ParamField path="opacity" type="float" optional default="0.5">
+  Opacity level for blending masks with the frame (0.0 to 1.0).
+</ParamField>
+
+<ParamField path="colors" type="list, optional" optional default="None">
+  List of BGR color tuples to override default colors. Colors are mapped to unique class_ids in order of appearance. If None, uses default ColorManager colors.
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  The frame with masks overlaid.
+</ResponseField>

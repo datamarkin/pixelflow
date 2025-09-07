@@ -1,0 +1,64 @@
+---
+title: oval
+description: Draws elliptical footprints at the bottom of detected objects.
+---
+
+## Overview
+
+Draws elliptical footprints at the bottom of detected objects.
+
+Creates ground-plane footprint visualization by drawing partial ellipses at the bottom center of each bounding box. Useful for showing object presence on the ground plane or creating shadow-like effects.
+
+## Function Signature
+
+```python
+oval(
+    image: np.ndarray,
+    detections: Detections,
+    thickness: int = None,
+    start_angle: int = default,
+    end_angle: int = 235,
+    colors: list, optional = None
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required>
+  Input image to draw footprints on
+</ParamField>
+
+<ParamField path="detections" type="Detections" required>
+  Detections object containing bounding boxes
+</ParamField>
+
+<ParamField path="thickness" type="int" optional default="None">
+  Thickness of the ellipse lines. Default is 2.
+</ParamField>
+
+<ParamField path="start_angle" type="int" optional default="default">
+  Starting angle of the ellipse in degrees. Default is -45 (bottom-left).
+</ParamField>
+
+<ParamField path="end_angle" type="int" optional default="235">
+  Ending angle of the ellipse in degrees. Default is 235 (bottom-right, creating bottom arc).
+</ParamField>
+
+<ParamField path="colors" type="list, optional" optional default="None">
+  List of BGR color tuples to override default colors. Colors are mapped to unique class_ids in order of appearance. If None, uses default ColorManager colors.
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Image with elliptical footprints drawn at object bases
+</ResponseField>
+
+## Notes
+
+<Note>
+  - Ellipse width matches the bounding box width
+  - Ellipse height is 25% of the width for natural proportions
+  - Center point is at bottom-center of bounding box
+  - Useful for ground plane visualization and spatial awareness
+</Note>

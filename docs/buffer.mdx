@@ -1,0 +1,14 @@
+---
+title: Buffer
+description: A rolling window buffer for frames and detection results.
+---
+
+## Overview
+
+A rolling window buffer for frames and detection results.
+
+The buffer collects a specified number of frames and their results, always returning the middle frame once the buffer is full. This provides temporal context (past and future frames) for advanced processing like smoothing, interpolation, or motion analysis. Attributes: buffer_size: Number of frames to buffer (should be odd for clean middle) frame_buffer: List storing the buffered frames results_buffer: List storing the buffered results is_full: Whether the buffer has reached capacity
+
+## Class Overview
+
+The `Buffer` class provides structured data management for buffer operations.

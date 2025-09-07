@@ -1,0 +1,645 @@
+---
+title: Filters
+description: Contains 14 functions for filters
+---
+
+# Filters
+
+Contains 14 functions for filters.
+
+## Functions
+
+- [`filter_by_confidence`](#filter_by_confidence) - Filter detections by minimum confidence score threshold.
+- [`filter_by_class_id`](#filter_by_class_id) - Filter detections by class identifier(s).
+- [`remap_class_ids`](#remap_class_ids) - Remap class IDs to consolidate or standardize classification labels.
+- [`filter_by_size`](#filter_by_size) - Filter detections by bounding box area constraints.
+- [`filter_by_dimensions`](#filter_by_dimensions) - Filter detections by individual width and height constraints.
+- [`filter_by_aspect_ratio`](#filter_by_aspect_ratio) - Filter detections by bounding box aspect ratio (width/height).
+- [`filter_by_zones`](#filter_by_zones) - Filter detections based on zone intersection status.
+- [`filter_by_position`](#filter_by_position) - Filter detections by their position within the frame.
+- [`filter_by_relative_size`](#filter_by_relative_size) - Filter detections by size relative to total frame area.
+- [`filter_by_tracking_duration`](#filter_by_tracking_duration) - Filter detections by their tracking duration.
+- [`filter_by_first_seen_time`](#filter_by_first_seen_time) - Filter detections by when they were first observed.
+- [`filter_tracked_objects`](#filter_tracked_objects) - Filter detections based on tracking status.
+- [`remove_duplicates`](#remove_duplicates) - Remove duplicate or highly overlapping detections using Non-Maximum Suppression.
+- [`filter_overlapping`](#filter_overlapping) - Filter detections that significantly overlap with other detections.
+
+## filter_by_confidence
+
+Filter detections by minimum confidence score threshold.
+
+## Function Signature
+
+```python
+filter_by_confidence(
+    threshold: float
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="threshold" type="float" required>
+  Minimum confidence score (inclusive). Range: [0.0, 1.0]. Detections with confidence >= threshold are retained.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only high-confidence detections.
+</ResponseField>
+
+### Example
+
+```python Example
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Run YOLO inference and convert to PixelFlow format
+model = YOLO("yolov8n.pt")
+outputs = model.predict("image.jpg")
+detections = pf.detections.from_ultralytics(outputs)
+
+# Keep only high-confidence detections
+high_conf = detections.filter_by_confidence(0.8)
+print(f"High confidence: {len(high_conf)} detections")
+
+```
+
+## filter_by_class_id
+
+Filter detections by class identifier(s).
+
+## Function Signature
+
+```python
+filter_by_class_id(
+    class_ids: Union[int, str, List[Union[int, str]]]
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="class_ids" type="Union[int, str, List[Union[int, str]]]" required>
+  Single class ID or list of class IDs to include. Accepts both numeric IDs and string class names.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections with matching class IDs.
+</ResponseField>
+
+### Example
+
+```python Example
+# Filter for specific class by ID
+people = detections.filter_by_class_id(0)  # person class in COCO
+
+# Filter for multiple classes
+vehicles = detections.filter_by_class_id([2, 3, 5, 7])  # car, motorcycle, bus, truck
+
+# Filter by class name
+dogs = detections.filter_by_class_id("dog")
+
+# Mixed ID types
+mixed = detections.filter_by_class_id(["person", 2, "dog"])
+
+```
+
+## remap_class_ids
+
+Remap class IDs to consolidate or standardize classification labels.
+
+Creates new Detection objects with modified class IDs while preserving all other detection attributes. Useful for consolidating similar classes or standardizing class schemas across different models.
+
+## Function Signature
+
+```python
+remap_class_ids(
+    from_ids: Union[int, str, List[Union[int, str]]],
+    to_id: Union[int, str]
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="from_ids" type="Union[int, str, List[Union[int, str]]]" required>
+  Source class ID(s) to remap. Single ID or list of IDs.
+</ParamField>
+
+<ParamField path="to_id" type="Union[int, str]" required>
+  Target class ID to map to.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object with remapped class IDs and cleared class names.
+</ResponseField>
+
+### Example
+
+```python Example
+# Consolidate vehicle classes to generic "vehicle"
+vehicles = detections.remap_class_ids([2, 3, 5, 7], "vehicle")
+
+# Remap multiple animal classes to "animal"
+animals = detections.remap_class_ids(["dog", "cat", "bird"], 1)
+
+# Single class remapping
+motorcycles_as_bikes = detections.remap_class_ids(3, "bike")
+
+```
+
+## filter_by_size
+
+Filter detections by bounding box area constraints.
+
+## Function Signature
+
+```python
+filter_by_size(
+    min_area: Optional[float] = None,
+    max_area: Optional[float] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="min_area" type="Optional[float]" optional default="None">
+  Minimum bounding box area in pixels (inclusive). If None, no minimum constraint is applied.
+</ParamField>
+
+<ParamField path="max_area" type="Optional[float]" optional default="None">
+  Maximum bounding box area in pixels (inclusive). If None, no maximum constraint is applied.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections within size range.
+</ResponseField>
+
+### Example
+
+```python Example
+# Remove very small noise detections
+filtered = detections.filter_by_size(min_area=100)
+
+# Remove very large detections (likely false positives)
+filtered = detections.filter_by_size(max_area=50000)
+
+# Keep medium-sized objects only
+medium = detections.filter_by_size(min_area=1000, max_area=10000)
+
+```
+
+## filter_by_dimensions
+
+Filter detections by individual width and height constraints.
+
+Provides fine-grained control over detection dimensions, useful for filtering objects based on expected physical dimensions or removing artifacts.
+
+## Function Signature
+
+```python
+filter_by_dimensions(
+    min_width: Optional[float] = None,
+    max_width: Optional[float] = None,
+    min_height: Optional[float] = None,
+    max_height: Optional[float] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="min_width" type="Optional[float]" optional default="None">
+  Minimum bounding box width in pixels (inclusive).
+</ParamField>
+
+<ParamField path="max_width" type="Optional[float]" optional default="None">
+  Maximum bounding box width in pixels (inclusive).
+</ParamField>
+
+<ParamField path="min_height" type="Optional[float]" optional default="None">
+  Minimum bounding box height in pixels (inclusive).
+</ParamField>
+
+<ParamField path="max_height" type="Optional[float]" optional default="None">
+  Maximum bounding box height in pixels (inclusive).
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections within dimension constraints.
+</ResponseField>
+
+### Example
+
+```python Example
+# Filter for tall, narrow objects (people)
+people = detections.filter_by_dimensions(min_height=100, max_width=80)
+
+# Remove extremely wide detections (likely errors)
+cleaned = detections.filter_by_dimensions(max_width=500)
+
+# Keep medium-sized rectangular objects
+medium = detections.filter_by_dimensions(
+```
+
+## filter_by_aspect_ratio
+
+Filter detections by bounding box aspect ratio (width/height).
+
+Useful for filtering objects based on their shape characteristics, such as identifying square objects, wide banners, or tall structures.
+
+## Function Signature
+
+```python
+filter_by_aspect_ratio(
+    min_ratio: Optional[float] = None,
+    max_ratio: Optional[float] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="min_ratio" type="Optional[float]" optional default="None">
+  Minimum aspect ratio (width/height) (inclusive). Values > 1.0 favor wide objects.
+</ParamField>
+
+<ParamField path="max_ratio" type="Optional[float]" optional default="None">
+  Maximum aspect ratio (width/height) (inclusive). Values < 1.0 favor tall objects.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections within aspect ratio range.
+</ResponseField>
+
+### Example
+
+```python Example
+# Keep square-ish objects only
+squares = detections.filter_by_aspect_ratio(min_ratio=0.8, max_ratio=1.2)
+
+# Keep only wide objects (banners, signs)
+wide_objects = detections.filter_by_aspect_ratio(min_ratio=2.0)
+
+# Keep only tall objects (people, poles)
+tall_objects = detections.filter_by_aspect_ratio(max_ratio=0.5)
+
+# Filter for typical car aspect ratios
+cars = detections.filter_by_aspect_ratio(min_ratio=1.5, max_ratio=2.5)
+
+```
+
+## filter_by_zones
+
+Filter detections based on zone intersection status.
+
+Enables spatial filtering by including or excluding detections that intersect with specified zones. Requires prior zone assignment via update_zones().
+
+## Function Signature
+
+```python
+filter_by_zones(
+    zone_ids: Union[str, int, List[Union[str, int]]],
+    exclude: bool = False
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="zone_ids" type="Union[str, int, List[Union[str, int]]]" required>
+  Single zone ID or list of zone IDs to filter by. Supports both string names and numeric IDs.
+</ParamField>
+
+<ParamField path="exclude" type="bool" optional default="False">
+  If True, exclude detections in specified zones. If False, include only detections in specified zones. Default is False.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object with zone-based filtering applied.
+</ResponseField>
+
+### Example
+
+```python Example
+# Setup zones and update detections
+zone_manager = pf.zones.ZoneManager()
+detections = detections.update_zones(zone_manager)
+
+# Keep only detections in parking areas
+parking = detections.filter_by_zones(["parking_1", "parking_2"])
+
+# Exclude detections from restricted areas
+allowed = detections.filter_by_zones(["restricted", "private"], exclude=True)
+
+# Filter by numeric zone IDs
+zone_1_only = detections.filter_by_zones(1)
+
+```
+
+## filter_by_position
+
+Filter detections by their position within the frame.
+
+Enables spatial filtering based on detection center position relative to frame regions. Useful for focusing on specific areas of interest or excluding edge artifacts.
+
+## Function Signature
+
+```python
+filter_by_position(
+    region: str,
+    margin_percent: float = 0.1,
+    frame_width: Optional[int] = None,
+    frame_height: Optional[int] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="region" type="str" required>
+  Target region to filter by. Options: "center", "edge", "top", "bottom", "left", "right", "corners".
+</ParamField>
+
+<ParamField path="margin_percent" type="float" optional default="0.1">
+  Margin as percentage of frame size. Range: [0.0, 0.5]. Default is 0.1 (10% margin).
+</ParamField>
+
+<ParamField path="frame_width" type="Optional[int]" optional default="None">
+  Frame width in pixels. Required for filtering.
+</ParamField>
+
+<ParamField path="frame_height" type="Optional[int]" optional default="None">
+  Frame height in pixels. Required for filtering.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections in specified region.
+</ResponseField>
+
+### Example
+
+```python Example
+# Keep only detections in center 80% of frame
+center_detections = detections.filter_by_position(
+```
+
+## filter_by_relative_size
+
+Filter detections by size relative to total frame area.
+
+Provides scale-invariant filtering based on detection size as percentage of total frame area. More robust than absolute size filtering across different resolution inputs.
+
+## Function Signature
+
+```python
+filter_by_relative_size(
+    min_percent: Optional[float] = None,
+    max_percent: Optional[float] = None,
+    frame_width: Optional[int] = None,
+    frame_height: Optional[int] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="min_percent" type="Optional[float]" optional default="None">
+  Minimum size as percentage of frame area. Range: [0.0, 1.0]. If None, no minimum constraint.
+</ParamField>
+
+<ParamField path="max_percent" type="Optional[float]" optional default="None">
+  Maximum size as percentage of frame area. Range: [0.0, 1.0]. If None, no maximum constraint.
+</ParamField>
+
+<ParamField path="frame_width" type="Optional[int]" optional default="None">
+  Frame width in pixels. Required for calculation.
+</ParamField>
+
+<ParamField path="frame_height" type="Optional[int]" optional default="None">
+  Frame height in pixels. Required for calculation.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections within relative size range.
+</ResponseField>
+
+### Example
+
+```python Example
+# Remove tiny noise detections (< 0.01% of frame)
+cleaned = detections.filter_by_relative_size(
+```
+
+## filter_by_tracking_duration
+
+Filter detections by their tracking duration.
+
+## Function Signature
+
+```python
+filter_by_tracking_duration(
+    min_seconds: Optional[float] = None,
+    max_seconds: Optional[float] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="min_seconds" type="Optional[float]" optional default="None">
+  Minimum tracking duration in seconds (inclusive). If None, no minimum constraint is applied.
+</ParamField>
+
+<ParamField path="max_seconds" type="Optional[float]" optional default="None">
+  Maximum tracking duration in seconds (inclusive). If None, no maximum constraint is applied.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections within duration range.
+</ResponseField>
+
+### Example
+
+```python Example
+# Keep only persistent objects (tracked for at least 5 seconds)
+persistent = detections.filter_by_tracking_duration(min_seconds=5.0)
+
+# Find short-term detections (tracked 2-10 seconds)
+short_term = detections.filter_by_tracking_duration(
+```
+
+## filter_by_first_seen_time
+
+Filter detections by when they were first observed.
+
+## Function Signature
+
+```python
+filter_by_first_seen_time(
+    start_time: Optional[float] = None,
+    end_time: Optional[float] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="start_time" type="Optional[float]" optional default="None">
+  Earliest first seen time (inclusive). Time units depend on tracking implementation (frames, seconds, timestamps).
+</ParamField>
+
+<ParamField path="end_time" type="Optional[float]" optional default="None">
+  Latest first seen time (inclusive).
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections first seen within time range.
+</ResponseField>
+
+### Example
+
+```python Example
+# Keep only objects first detected in early frames (0-100)
+early_objects = detections.filter_by_first_seen_time(start_time=0, end_time=100)
+
+# Focus on objects that appeared recently (after frame 500)
+recent_objects = detections.filter_by_first_seen_time(start_time=500)
+
+# Analyze objects from specific time window
+window_objects = detections.filter_by_first_seen_time(
+```
+
+## filter_tracked_objects
+
+Filter detections based on tracking status.
+
+## Function Signature
+
+```python
+filter_tracked_objects(
+    require_tracker_id: bool = True
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="require_tracker_id" type="bool" optional default="True">
+  If True, keep only objects with tracker IDs. If False, keep only objects without tracker IDs. Default is True.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object filtered by tracking status.
+</ResponseField>
+
+### Example
+
+```python Example
+# Keep only successfully tracked objects
+tracked_only = detections.filter_tracked_objects(require_tracker_id=True)
+
+# Get newly detected objects (not yet tracked)
+new_detections = detections.filter_tracked_objects(require_tracker_id=False)
+
+# Analyze tracking success rate
+total = len(detections)
+tracked = len(detections.filter_tracked_objects(True))
+print(f"Tracking rate: {tracked/total:.1%}")
+
+```
+
+## remove_duplicates
+
+Remove duplicate or highly overlapping detections using Non-Maximum Suppression.
+
+Identifies groups of overlapping detections and keeps only one detection per group based on the specified strategy. Essential for cleaning up multi-model outputs or removing redundant detections.
+
+## Function Signature
+
+```python
+remove_duplicates(
+    iou_threshold: float = 0.8,
+    keep: str = 'first'
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="iou_threshold" type="float" optional default="0.8">
+  IoU threshold for considering detections as duplicates. Range: [0.0, 1.0]. Higher values are more restrictive. Default is 0.8.
+</ParamField>
+
+<ParamField path="keep" type="str" optional default="'first'">
+  Strategy for selecting which detection to keep from each group. Options: 'first', 'last', 'highest_confidence'. Default is 'first'.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object with duplicate detections removed.
+</ResponseField>
+
+### Example
+
+```python Example
+# Remove highly overlapping detections (conservative)
+cleaned = detections.remove_duplicates(iou_threshold=0.8, keep='first')
+
+# Aggressive duplicate removal, keep best confidence
+best_only = detections.remove_duplicates(
+```
+
+## filter_overlapping
+
+Filter detections that significantly overlap with other detections.
+
+Useful for finding co-occurring objects, validating detection consistency, or identifying regions with multiple overlapping predictions.
+
+## Function Signature
+
+```python
+filter_overlapping(
+    min_overlap: float = 0.5,
+    target_class_ids: Optional[List[Union[int, str]]] = None
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="min_overlap" type="float" optional default="0.5">
+  Minimum IoU overlap required to consider detections as overlapping. Range: [0.0, 1.0]. Default is 0.5.
+</ParamField>
+
+<ParamField path="target_class_ids" type="Optional[List[Union[int, str]]]" optional default="None">
+  Optional list of class IDs to check overlap against. If None, checks overlap with all other detections.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  New Detections object containing only detections that overlap sufficiently with other detections.
+</ResponseField>
+
+### Example
+
+```python Example
+# Find detections that overlap significantly with others
+overlapping = detections.filter_overlapping(min_overlap=0.3)
+
+# Find objects that overlap with people (co-occurrence analysis)
+near_people = detections.filter_overlapping(
+```

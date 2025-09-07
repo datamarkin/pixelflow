@@ -1,0 +1,23 @@
+---
+title: smooth
+description: Smooth detection results using buffer's temporal context.
+---
+
+## Overview
+
+Smooth detection results using buffer's temporal context.
+
+Uses past, current, and future frames for superior smoothing quality with temporal weighting and interpolation for missing detections.
+
+## Function Signature
+
+```python
+smooth(
+) -> Any
+```
+
+## Returns
+
+<ResponseField name="result" type="Any">
+  Smoothed Detections object for the current (middle) frame, or raw results if buffer not ready
+</ResponseField>

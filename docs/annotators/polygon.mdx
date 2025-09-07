@@ -1,0 +1,43 @@
+---
+title: polygon
+description: Draw polygon outlines on detected objects.
+---
+
+## Overview
+
+Draw polygon outlines on detected objects.
+
+## Function Signature
+
+```python
+polygon(
+    image: np.ndarray,
+    detections: Detections,
+    thickness: int = None,
+    colors: list, optional = None
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required>
+  Input image to draw polygons on
+</ParamField>
+
+<ParamField path="detections" type="Detections" required>
+  Detections object containing segments
+</ParamField>
+
+<ParamField path="thickness" type="int" optional default="None">
+  Line thickness for polygon outlines. Default is 2.
+</ParamField>
+
+<ParamField path="colors" type="list, optional" optional default="None">
+  List of BGR color tuples to override default colors. Colors are mapped to unique class_ids in order of appearance. If None, uses default ColorManager colors.
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Image with polygon outlines drawn
+</ResponseField>

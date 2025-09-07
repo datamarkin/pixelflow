@@ -1,0 +1,39 @@
+---
+title: Slicer
+description: Contains 1 classes and 1 functions
+---
+
+# Slicer
+
+Contains 1 classes and 1 functions.
+
+## Classes
+
+- [`SlicedInference`](#slicedinference) - Performs sliced inference on large images for improved small object detection.
+
+## Functions
+
+- [`auto_slice_size`](#auto_slice_size) - Automatically calculate optimal slice size based on image dimensions.
+
+## SlicedInference
+
+Performs sliced inference on large images for improved small object detection.
+
+The main challenge in sliced inference is accurately merging predictions from overlapping slices. This implementation handles edge cases like: - Objects on slice boundaries - Nested objects (small inside large) - Partial detections at slice edges
+
+## auto_slice_size
+
+Automatically calculate optimal slice size based on image dimensions.
+
+## Function Signature
+
+```python
+auto_slice_size(
+) -> Any
+```
+
+### Returns
+
+<ResponseField name="result" type="Any">
+  Tuple of (slice_height, slice_width)
+</ResponseField>

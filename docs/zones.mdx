@@ -1,0 +1,25 @@
+---
+title: Zones
+description: Contains 2 classes for zones
+---
+
+# Zones
+
+Contains 2 classes for zones.
+
+## Classes
+
+- [`Zone`](#zone) - Represents a single detection zone with polygon boundary and configurable trigger strategies.
+- [`Zones`](#zones) - Manages multiple detection zones and automatically updates results with zone information.
+
+## Zone
+
+Represents a single detection zone with polygon boundary and configurable trigger strategies.
+
+A Zone defines a spatial region for filtering object detections based on their bounding box relationship to the zone polygon. Supports multiple trigger strategies including center point, overlap percentage, and intersection detection.
+
+## Zones
+
+Manages multiple detection zones and automatically updates results with zone information.
+
+The Zones manager handles a collection of Zone objects and provides batch processing of detections against all zones. Updates detection objects with zone membership information and maintains zone statistics.

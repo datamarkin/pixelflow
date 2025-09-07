@@ -1,0 +1,208 @@
+---
+title: Converters
+description: Contains 6 functions for converters
+---
+
+# Converters
+
+Contains 6 functions for converters.
+
+## Functions
+
+- [`from_datamarkin_api`](#from_datamarkin_api) - Convert Datamarkin API response to a unified Detections object.
+- [`from_detectron2`](#from_detectron2) - Convert Detectron2 inference results to a unified Detections object.
+- [`from_ultralytics`](#from_ultralytics) - Convert Ultralytics YOLO results to a unified Detections object.
+- [`from_transformers`](#from_transformers) - 
+- [`from_sam`](#from_sam) - 
+- [`from_datamarkin_csv`](#from_datamarkin_csv) - Convert CSV data from Datamarkin format to a unified Detections object.
+
+## from_datamarkin_api
+
+Convert Datamarkin API response to a unified Detections object.
+
+## Function Signature
+
+```python
+from_datamarkin_api(
+    api_response: Dict[str, Any]
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="api_response" type="Dict[str, Any]" required>
+  The API response containing predictions with objects containing bbox, mask, keypoints, class, and bbox_score fields.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  Unified Detections object containing all detected objects with standardized bbox, mask, keypoints, and confidence data.
+</ResponseField>
+
+### Example
+
+```python Example
+import pixelflow as pf
+# Datamarkin API response from object detection service
+api_response = {
+```
+
+## from_detectron2
+
+Convert Detectron2 inference results to a unified Detections object.
+
+Extracts bounding boxes, confidence scores, class IDs, segmentation masks, and keypoints from Detectron2's instances format and standardizes them into PixelFlow's Detection objects.
+
+## Function Signature
+
+```python
+from_detectron2(
+    detectron2_results: Dict[str, Any]
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="detectron2_results" type="Dict[str, Any]" required>
+  Detectron2 inference results containing 'instances' with prediction data including pred_boxes, scores, pred_classes, pred_masks, and pred_keypoints.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  Unified Detections object with all detected instances converted to standardized format with XYXY bounding boxes and binary masks.
+</ResponseField>
+
+### Example
+
+```python Example
+import cv2
+import pixelflow as pf
+from detectron2 import model_zoo
+from detectron2.engine import DefaultPredictor
+from detectron2.config import get_cfg
+
+# Setup Detectron2 model
+cfg = get_cfg()
+cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+predictor = DefaultPredictor(cfg)
+
+# Run inference and convert
+image = cv2.imread("path/to/image.jpg")
+outputs = predictor(image)  # Raw Detectron2 output
+detections = pf.detections.from_detectron2(outputs)  # Convert to PixelFlow format
+
+# Access standardized detection data
+for detection in detections.detections:
+```
+
+## from_ultralytics
+
+Convert Ultralytics YOLO results to a unified Detections object.
+
+Supports both detection and segmentation models, handling bounding boxes, confidence scores, class IDs, segmentation masks, and tracker IDs. Automatically processes letterbox padding removal and mask resizing to original image dimensions.
+
+## Function Signature
+
+```python
+from_ultralytics(
+    ultralytics_results: Union[Any, List[Any]]
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="ultralytics_results" type="Union[Any, List[Any]]" required>
+  YOLO results from Ultralytics library, either single result object or list of results.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  Unified Detections object containing all detected objects with standardized XYXY bounding boxes, binary masks, polygon segments, and tracker IDs if available.
+</ResponseField>
+
+### Example
+
+```python Example
+import cv2
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Load YOLO model and run inference
+model = YOLO("yolov8n.pt")
+image = cv2.imread("path/to/image.jpg")
+outputs = model.predict(image)  # Raw YOLO output
+detections = pf.detections.from_ultralytics(outputs)  # Convert to PixelFlow format
+
+# Access detection data
+for detection in detections.detections:
+```
+
+## from_transformers
+
+## Function Signature
+
+```python
+from_transformers(
+) -> Any
+```
+
+## from_sam
+
+## Function Signature
+
+```python
+from_sam(
+) -> Any
+```
+
+## from_datamarkin_csv
+
+Convert CSV data from Datamarkin format to a unified Detections object.
+
+Processes normalized coordinates from CSV format and converts them to pixel coordinates using the provided image dimensions. Handles both bounding box and segmentation polygon data.
+
+## Function Signature
+
+```python
+from_datamarkin_csv(
+    group: Any,
+    height: int,
+    width: int
+) -> Detections
+```
+
+### Parameters
+
+<ParamField path="group" type="Any" required>
+  Pandas DataFrame group containing CSV rows with columns: 'xmin', 'ymin', 'xmax', 'ymax', 'segmentation', 'class', and optional 'confidence'.
+</ParamField>
+
+<ParamField path="height" type="int" required>
+  Image height in pixels to denormalize coordinates.
+</ParamField>
+
+<ParamField path="width" type="int" required>
+  Image width in pixels to denormalize coordinates.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Detections">
+  Unified Detections object with pixel coordinates converted from normalized values, including bounding boxes and polygon masks.
+</ResponseField>
+
+### Example
+
+```python Example
+import pandas as pd
+import pixelflow as pf
+
+# Load CSV data with normalized coordinates
+df = pd.read_csv("annotations.csv")
+# Group by image if processing multiple images
+for image_name, group in df.groupby('image'):
+```

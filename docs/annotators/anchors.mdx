@@ -1,0 +1,79 @@
+---
+title: anchors
+description: Draw anchor points on detected objects based on trigger strategies.
+---
+
+## Overview
+
+Draw anchor points on detected objects based on trigger strategies.
+
+Visualizes the anchor points used by the trigger strategy system to determine if detections are within zones or crossing lines. Each anchor point is drawn as a small filled circle at the calculated position on the bounding box.
+
+## Function Signature
+
+```python
+anchors(
+    image: np.ndarray,
+    detections: Detections,
+    radius: Optional[int] = None,
+    thickness: Optional[int] = None,
+    colors: Optional[List[tuple]] = None
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required>
+  Input image to draw anchor points on (BGR format)
+</ParamField>
+
+<ParamField path="detections" type="Detections" required>
+  Detections object containing bounding boxes. Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates. strategy: Strategy for determining which anchor points to draw. Options: - None: Draw all main anchor points (center, corners, edge centers) - Single string (e.g., "center", "bottom_center") - List of strings for multiple anchor points Default: None (draws all main anchor points)
+</ParamField>
+
+<ParamField path="radius" type="Optional[int]" optional default="None">
+  Radius of anchor point circles in pixels. If None, automatically determined based on image size.
+</ParamField>
+
+<ParamField path="thickness" type="Optional[int]" optional default="None">
+  Thickness of circle outline. Use -1 for filled circles. If None, circles are filled by default.
+</ParamField>
+
+<ParamField path="colors" type="Optional[List[tuple]]" optional default="None">
+  List of BGR color tuples to override default colors. Colors are mapped to unique class_ids in order of appearance. If None, uses default ColorManager colors.
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Image with anchor points drawn. The input image is modified in-place.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```python Example
+import cv2
+import pixelflow as pf
+
+# Load image and get detections
+image = cv2.imread("path/to/image.jpg")
+detections = pf.results.from_ultralytics(model(image))
+
+# Draw all main anchor points (default)
+annotated = pf.annotators.anchors(image, detections)
+
+# Draw bottom center points (useful for ground-based tracking)
+annotated = pf.annotators.anchors(image, detections, strategy="bottom_center")
+
+# Draw all four corners
+corners = ["top_left", "top_right", "bottom_left", "bottom_right"]
+annotated = pf.annotators.anchors(image, detections, strategy=corners)
+
+
+# Custom styling
+annotated = pf.annotators.anchors(
+```
+
+</CodeGroup>

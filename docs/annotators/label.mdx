@@ -1,0 +1,68 @@
+---
+title: label
+description: Fast, simplified label annotator with template support and multi-line text.
+---
+
+## Overview
+
+Fast, simplified label annotator with template support and multi-line text.
+
+## Function Signature
+
+```python
+label(
+    image: np.ndarray,
+    detections: Detections,
+    texts: Union[str, List[str]], optional = None,
+    position: str = 'top_left',
+    font_scale: float, optional = None,
+    padding: int = 6,
+    line_spacing: int = 2,
+    bg_color: tuple or str, optional = None,
+    text_color: tuple = default
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required>
+  Input image to annotate
+</ParamField>
+
+<ParamField path="detections" type="Detections" required>
+  Detections object containing bounding boxes
+</ParamField>
+
+<ParamField path="texts" type="Union[str, List[str]], optional" optional default="None">
+  Text template or list of labels. - None: Auto-generates from class_name and confidence - str: Template with placeholders like "{class_name}: {confidence:.1%}" - List[str]: Custom labels for each detection
+</ParamField>
+
+<ParamField path="position" type="str" optional default="'top_left'">
+  Label position relative to bbox. Options: 'top_left', 'top_center', 'top_right', 'center_left', 'center', 'center_right', 'bottom_left', 'bottom_center', 'bottom_right'
+</ParamField>
+
+<ParamField path="font_scale" type="float, optional" optional default="None">
+  Font scale. If None, uses adaptive scaling
+</ParamField>
+
+<ParamField path="padding" type="int" optional default="6">
+  Padding around text inside background rectangle
+</ParamField>
+
+<ParamField path="line_spacing" type="int" optional default="2">
+  Space between lines for multi-line text
+</ParamField>
+
+<ParamField path="bg_color" type="tuple or str, optional" optional default="None">
+  Background color. If None, uses auto color from class_id
+</ParamField>
+
+<ParamField path="text_color" type="tuple" optional default="default">
+  Text color (BGR format)
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Annotated image with labels
+</ResponseField>

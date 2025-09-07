@@ -1,0 +1,25 @@
+---
+title: Crossings
+description: Contains 2 classes for crossings
+---
+
+# Crossings
+
+Contains 2 classes for crossings.
+
+## Classes
+
+- [`Crossing`](#crossing) - Counts objects crossing a defined line with directional tracking.
+- [`Crossings`](#crossings) - Manages multiple Crossing instances for complex crossing detection scenarios.
+
+## Crossing
+
+Counts objects crossing a defined line with directional tracking.
+
+This class tracks objects crossing a line from one side to another, maintaining separate counts for "in" and "out" directions. It requires tracker IDs to prevent double-counting. Attributes: in_count: Total number of objects that crossed from right to left out_count: Total number of objects that crossed from left to right in_count_per_class: Per-class counts for right-to-left crossings out_count_per_class: Per-class counts for left-to-right crossings
+
+## Crossings
+
+Manages multiple Crossing instances for complex crossing detection scenarios.
+
+This class provides centralized management of multiple crossings, allowing for easy processing of detections against all crossings at once.

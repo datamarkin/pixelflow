@@ -1,0 +1,30 @@
+---
+title: crossings
+description: Annotate multiple crossing lines on an image.
+---
+
+## Overview
+
+Annotate multiple crossing lines on an image.
+
+This is a convenience function that draws all crossings managed by a Crossings object.
+
+## Function Signature
+
+```python
+crossings(
+    image: np.ndarray
+) -> np.ndarray
+```
+
+## Parameters
+
+<ParamField path="image" type="np.ndarray" required>
+  Input image to annotate crossings_manager: Crossings manager object containing multiple crossings
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="np.ndarray">
+  Annotated image with all lines drawn
+</ResponseField>
