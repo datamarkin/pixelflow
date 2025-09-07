@@ -7,13 +7,24 @@ import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
-from ..strategies import TriggerStrategy, get_anchor_position
+from ..strategies import (
+    get_anchor_position, 
+    STRATEGY_CENTER,
+    STRATEGY_BOTTOM_CENTER,
+    STRATEGY_TOP_LEFT,
+    STRATEGY_TOP_RIGHT,
+    STRATEGY_BOTTOM_LEFT,
+    STRATEGY_BOTTOM_RIGHT,
+    STRATEGY_TOP_CENTER,
+    STRATEGY_LEFT_CENTER,
+    STRATEGY_RIGHT_CENTER
+)
 
 
 def anchors(
     image: np.ndarray, 
     detections: 'Detections',
-    strategy: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]] = None,
+    strategy: Union[str, List[str]] = None,
     radius: Optional[int] = None,
     thickness: Optional[int] = None,
     colors: Optional[List[tuple]] = None
@@ -32,8 +43,7 @@ def anchors(
         strategy: Strategy for determining which anchor points to draw. Options:
                  - None: Draw all main anchor points (center, corners, edge centers)
                  - Single string (e.g., "center", "bottom_center")
-                 - Single TriggerStrategy enum
-                 - List of strings or TriggerStrategy enums for multiple anchor points
+                 - List of strings for multiple anchor points
                  Default: None (draws all main anchor points)
         radius (Optional[int]): Radius of anchor point circles in pixels.
                                If None, automatically determined based on image size.
@@ -49,7 +59,6 @@ def anchors(
     Examples:
         >>> import cv2
         >>> import pixelflow as pf
-        >>> from pixelflow.strategies import TriggerStrategy
         >>> 
         >>> # Load image and get detections
         >>> image = cv2.imread("path/to/image.jpg")
@@ -65,10 +74,6 @@ def anchors(
         >>> corners = ["top_left", "top_right", "bottom_left", "bottom_right"]
         >>> annotated = pf.annotators.anchors(image, detections, strategy=corners)
         >>> 
-        >>> # Use AnchorConfig for complex multi-anchor setups
-        >>> from pixelflow.strategies import AnchorConfig
-        >>> config = AnchorConfig(["center", "bottom_center"], mode="any")
-        >>> annotated = pf.annotators.anchors(image, detections, strategy=config)
         >>> 
         >>> # Custom styling
         >>> annotated = pf.annotators.anchors(
@@ -94,29 +99,22 @@ def anchors(
     if strategy is None:
         # Default: draw all main anchor points
         strategies_to_draw = [
-            TriggerStrategy.CENTER,
-            TriggerStrategy.BOTTOM_CENTER,
-            TriggerStrategy.TOP_LEFT,
-            TriggerStrategy.TOP_RIGHT,
-            TriggerStrategy.BOTTOM_LEFT,
-            TriggerStrategy.BOTTOM_RIGHT,
-            TriggerStrategy.TOP_CENTER,
-            TriggerStrategy.LEFT_CENTER,
-            TriggerStrategy.RIGHT_CENTER
+            STRATEGY_CENTER,
+            STRATEGY_BOTTOM_CENTER,
+            STRATEGY_TOP_LEFT,
+            STRATEGY_TOP_RIGHT,
+            STRATEGY_BOTTOM_LEFT,
+            STRATEGY_BOTTOM_RIGHT,
+            STRATEGY_TOP_CENTER,
+            STRATEGY_LEFT_CENTER,
+            STRATEGY_RIGHT_CENTER
         ]
     elif isinstance(strategy, (list, tuple)):
-        # Convert list of strategies
-        for s in strategy:
-            if isinstance(s, str):
-                strategies_to_draw.append(TriggerStrategy(s))
-            else:
-                strategies_to_draw.append(s)
+        # Use list of strategies directly
+        strategies_to_draw = strategy
     else:
         # Single strategy
-        if isinstance(strategy, str):
-            strategies_to_draw = [TriggerStrategy(strategy)]
-        else:
-            strategies_to_draw = [strategy]
+        strategies_to_draw = [strategy]
     
     # Draw anchor points for each detection
     for result in detections:

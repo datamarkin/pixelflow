@@ -9,7 +9,7 @@ trigger strategies and statistical tracking for computer vision applications.
 from shapely.geometry import Polygon, Point, box
 from typing import List, Optional, Tuple, Dict, Any, Literal, Union
 import numpy as np
-from .strategies import TriggerStrategy, check_detection_in_region
+from .strategies import validate_strategy, check_detection_in_region
 
 
 class Zone:
@@ -27,7 +27,7 @@ class Zone:
         zone_id: Union[int, str],
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        trigger_strategy: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]] = "center",
+        trigger_strategy: Union[str, List[str]] = "center",
         overlap_threshold: float = 0.5,
         mode: Literal["any", "all"] = "all",
         metadata: Optional[Dict[str, Any]] = None
@@ -48,7 +48,7 @@ class Zone:
                    if empty.
             color (Optional[Tuple[int, int, int]]): RGB color tuple (0-255) for 
                   visualization. Auto-generated based on zone_id if None.
-            trigger_strategy (Union[str, List[str], TriggerStrategy, List[TriggerStrategy]]): 
+            trigger_strategy (Union[str, List[str]]): 
                              Strategy for detection matching. Options: "center", "overlap", 
                              "percentage". Default is "center".
             overlap_threshold (float): Threshold for PERCENTAGE strategy. 
@@ -95,16 +95,7 @@ class Zone:
         # Trigger configuration
         if trigger_strategy is None:
             trigger_strategy = "center"
-        if isinstance(trigger_strategy, str):
-            try:
-                trigger_strategy = TriggerStrategy(trigger_strategy)
-            except ValueError:
-                valid_strategies = [s.value for s in TriggerStrategy]
-                raise ValueError(
-                    f"Invalid trigger_strategy '{trigger_strategy}'. "
-                    f"Valid options are: {', '.join(valid_strategies)}"
-                )
-        self.trigger_strategy = trigger_strategy
+        self.trigger_strategy = validate_strategy(trigger_strategy)
         self.overlap_threshold = max(0.0, min(1.0, overlap_threshold))
         self.mode = mode
         
@@ -226,7 +217,7 @@ class Zones:
         zone_id: Optional[Union[int, str]] = None,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        trigger_strategy: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]] = "center",
+        trigger_strategy: Union[str, List[str]] = "center",
         overlap_threshold: float = 0.5,
         mode: Literal["any", "all"] = "all",
         metadata: Optional[Dict[str, Any]] = None
@@ -245,7 +236,7 @@ class Zones:
             name (str): Human-readable zone name. Defaults to "Zone {zone_id}".
             color (Optional[Tuple[int, int, int]]): RGB color tuple for visualization.
                   Auto-generated if None.
-            trigger_strategy (Union[str, List[str], TriggerStrategy, List[TriggerStrategy]]): 
+            trigger_strategy (Union[str, List[str]]): 
                              Detection matching strategy. Default is "center".
             overlap_threshold (float): Threshold for percentage-based strategies.
                                      Range: [0.0, 1.0]. Default is 0.5.
@@ -340,7 +331,7 @@ class Zones:
         """
         return self._zone_dict.get(zone_id)
     
-    def update(self, results):
+    def update(self, results, strategy: Union[str, List[str]] = None):
         """
         Update detection results with zone membership information.
         
@@ -351,6 +342,8 @@ class Zones:
         Args:
             results: Detections object containing detection list with bbox attributes.
                    Each detection should have a .bbox attribute in [x1, y1, x2, y2] format.
+            strategy: Optional override strategy for all zones. If None, each zone uses its own strategy.
+                     Can be a single string or list of strings. Will be validated.
                    
         Returns:
             Detections: The same Detections object with updated zone information
@@ -368,8 +361,12 @@ class Zones:
             >>> outputs = model.predict(image)
             >>> results = pf.results.from_ultralytics(outputs)
             >>> 
-            >>> # Update results with zone information
+            >>> # Update results with zone information using zone's own strategies
             >>> updated_results = zones.update(results)
+            >>> 
+            >>> # Override strategy for all zones (for flexible multi-class usage)
+            >>> person_results = zones.update(person_detections, strategy="bottom_center")
+            >>> car_results = zones.update(car_detections, strategy="center")
             >>> 
             >>> # Access zone information
             >>> for detection in results.detections:
@@ -384,6 +381,10 @@ class Zones:
             - Updates zone statistics including current_count and total_entered
             - Skips detections without bbox attribute
         """
+        # Validate override strategy if provided
+        if strategy is not None:
+            strategy = validate_strategy(strategy)
+        
         # Reset current counts for all zones
         for zone in self.zones:
             zone.current_count = 0
@@ -398,7 +399,25 @@ class Zones:
             zone_names = []
             
             for zone in self.zones:
-                if zone.check_detection(detection.bbox, detection.tracker_id):
+                # Use override strategy or zone's own strategy
+                detection_strategy = strategy if strategy is not None else zone.trigger_strategy
+                
+                # Check if detection is in zone using the strategy
+                in_zone = check_detection_in_region(
+                    detection.bbox, 
+                    detection_strategy, 
+                    zone.polygon, 
+                    zone.overlap_threshold,
+                    zone.mode
+                )
+                
+                if in_zone:
+                    # Update tracking if object is in zone
+                    if detection.tracker_id is not None:
+                        if detection.tracker_id not in zone._tracked_ids:
+                            zone._tracked_ids.add(detection.tracker_id)
+                            zone.total_entered += 1
+                    
                     zones_in.append(zone.zone_id)
                     zone_names.append(zone.name)
                     zone.current_count += 1
@@ -465,7 +484,7 @@ class Zones:
                 'name': zone.name,
                 'current_count': zone.current_count,
                 'total_entered': zone.total_entered,
-                'trigger_strategy': zone.trigger_strategy.value,
+                'trigger_strategy': zone.trigger_strategy,
                 'metadata': zone.metadata
             }
         return stats

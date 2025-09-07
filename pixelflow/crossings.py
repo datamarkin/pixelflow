@@ -11,7 +11,7 @@ from collections import Counter, defaultdict, deque
 from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 import numpy as np
 
-from .strategies import TriggerStrategy, get_anchor_position
+from .strategies import validate_strategy, get_anchor_position, STRATEGY_CENTER
 
 
 class Crossing:
@@ -36,7 +36,7 @@ class Crossing:
         line_id: Union[int, str] = 0,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        triggering_anchor: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]] = "center",
+        triggering_anchor: Union[str, List[str]] = "center",
         minimum_crossing_threshold: int = 1,
         mode: Literal["any", "all"] = "all",
         boundary_margin: float = 50.0,
@@ -79,16 +79,8 @@ class Crossing:
         self.tracker_positions: Dict[int, List[Tuple[float, float]]] = defaultdict(list)  # For distance tracking
         self.frame_count = 0
         
-        # Convert string anchor to TriggerStrategy if needed
-        if isinstance(triggering_anchor, str):
-            try:
-                triggering_anchor = TriggerStrategy(triggering_anchor)
-            except ValueError:
-                valid_strategies = [s.value for s in TriggerStrategy]
-                raise ValueError(
-                    f"Invalid triggering_anchor '{triggering_anchor}'. "
-                    f"Valid options are: {', '.join(valid_strategies)}"
-                )
+        # Validate triggering_anchor
+        triggering_anchor = validate_strategy(triggering_anchor)
         
         self.minimum_crossing_threshold = max(1, minimum_crossing_threshold)
         
@@ -207,16 +199,21 @@ class Crossing:
         margin_ratio = margin / (line_length_sq ** 0.5)
         return -margin_ratio <= t <= 1.0 + margin_ratio
     
-    def trigger(self, detections) -> Tuple[np.ndarray, np.ndarray]:
+    def trigger(self, detections, strategy: Union[str, List[str]] = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         Check for line crossings and update counts.
         
         Args:
             detections: Detection results with tracker_id and bbox
+            strategy: Optional override strategy. If None, uses crossing's own triggering_anchor.
             
         Returns:
             Tuple of (crossed_in, crossed_out) boolean arrays
         """
+        # Validate override strategy if provided
+        if strategy is not None:
+            strategy = validate_strategy(strategy)
+        
         # Increment frame counter for temporal tracking
         self.frame_count += 1
         n_detections = len(detections.detections)
@@ -256,8 +253,10 @@ class Crossing:
             # TODO: Implement full multi-anchor logic for simplified system
             # For now, always use single anchor behavior
             if True:
+                # Use override strategy or crossing's own strategy
+                detection_strategy = strategy if strategy is not None else self.triggering_anchor
                 # Single anchor (existing behavior)
-                point = get_anchor_position(prediction.bbox, self.triggering_anchor)
+                point = get_anchor_position(prediction.bbox, detection_strategy)
                 
                 # First check if the point is near the line segment
                 # This prevents counting objects that pass beside the line
@@ -317,7 +316,7 @@ class Crossing:
             # Get the current position for validation
             if self.use_multiple_anchors:
                 # Use center point for distance tracking when multiple anchors
-                current_point = get_anchor_position(prediction.bbox, TriggerStrategy.CENTER)
+                current_point = get_anchor_position(prediction.bbox, STRATEGY_CENTER)
             else:
                 current_point = point
             
@@ -435,14 +434,14 @@ class Crossings:
         line_id: Optional[Union[int, str]] = None,
         name: str = "",
         color: Optional[Tuple[int, int, int]] = None,
-        triggering_anchor: Union[str, List[str], TriggerStrategy, List[TriggerStrategy]] = "center",
+        triggering_anchor: Union[str, List[str]] = "center",
         minimum_crossing_threshold: int = 1,
         mode: Literal["any", "all"] = "all",
         boundary_margin: float = 50.0,
         debounce_time: int = 30,
         minimum_distance: float = 10.0,
         metadata: Optional[Dict[str, Any]] = None
-    ) -> Line:
+    ) -> Crossing:
         """
         Add a new crossing.
         
@@ -505,7 +504,7 @@ class Crossings:
         """Get a crossing by its ID."""
         return self._crossing_dict.get(line_id)
     
-    def update(self, results):
+    def update(self, results, strategy: Union[str, List[str]] = None):
         """
         Process detections against all crossings and update results with crossing information.
         
@@ -515,12 +514,26 @@ class Crossings:
         
         Args:
             results: Results object containing predictions
+            strategy: Optional override strategy for all crossings. If None, each crossing uses its own strategy.
+                     Can be a single string or list of strings. Will be validated.
             
         Returns:
             Updated Results object (modified in-place)
+            
+        Examples:
+            >>> # Use crossing's own strategies
+            >>> results = crossings.update(results)
+            >>> 
+            >>> # Override strategy for all crossings (flexible multi-class usage)
+            >>> person_results = crossings.update(person_detections, strategy="bottom_center")
+            >>> car_results = crossings.update(car_detections, strategy="center")
         """        
+        # Validate override strategy if provided
+        if strategy is not None:
+            strategy = validate_strategy(strategy)
+        
         for crossing in self.crossings:
-            crossed_in, crossed_out = crossing.trigger(results)
+            crossed_in, crossed_out = crossing.trigger(results, strategy)
             
             # Update detections with crossing info
             for i, detection in enumerate(results.detections):
