@@ -7,8 +7,8 @@ from . import detections
 from . import media
 from . import annotators as annotate
 from . import colors
-from . import zones
-from . import crossings
+# from . import zones
+# from . import crossings
 from . import slicer
 from . import smoother
 from . import timer
