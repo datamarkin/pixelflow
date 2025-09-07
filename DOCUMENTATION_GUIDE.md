@@ -43,12 +43,6 @@ Transform technical docstrings into problem-solution narratives:
 ### Why This Matters
 Security cameras capture valuable business intelligence, but they also record personal information that requires protection. Traditional approaches either blur everything (losing insights) or nothing (violating privacy). Smart blurring maintains the analytical value while protecting individuals.
 
-### Real-World Applications
-- **Retail Analytics**: Track shopping patterns while protecting customer faces
-- **Healthcare**: Analyze patient flow while maintaining HIPAA compliance  
-- **Corporate Security**: Monitor access patterns without identifying individuals
-- **Public Spaces**: Understand crowd dynamics while respecting privacy rights
-
 ### Quick Start
 ```python
 import pixelflow as pf
@@ -79,16 +73,28 @@ privacy_protected = pf.annotate.blur(image, detections)
 "The `from_ultralytics()` converter transforms YOLOv8 outputs into PixelFlow Detection objects."
 
 **✅ Problem First:**
-"Your AI model just detected 47 objects in a busy street scene. Now what? Convert those raw predictions into actionable insights with automatic coordinate standardization, confidence filtering, and class mapping."
+"Detection models output raw predictions that need standardization across different frameworks. Convert varied model outputs into a unified format with automatic coordinate normalization, confidence filtering, and class mapping."
 
-### B. Visual Evidence
+### B. Factual vs. Marketing Language
+
+**❌ Marketing Language:**
+- "Your AI model just detected 47 objects in a busy street scene. Now what?"
+- "Battle-tested in production systems processing millions of frames"
+- "Reduce accidents by 23% through early warning systems"
+
+**✅ Factual Language:**
+- "Detection models output raw coordinates that require visual representation"
+- "Designed for production environments with consistent performance"
+- "Enable automated incident detection for traffic monitoring systems"
+
+### C. Visual Evidence
 
 Every annotator should include:
 - **Before image**: Raw detection output
 - **After image**: PixelFlow enhancement
 - **Use case context**: Why this transformation matters
 
-### C. Decision Guidance
+### D. Decision Guidance
 
 Help users choose the right tool:
 
@@ -244,9 +250,9 @@ Your documentation succeeds when:
 ```markdown
 <Card title="Real-Time Blur" icon="eye-slash">
 **Best for**: Privacy protection in live video feeds
-**Performance**: 30fps @ 1080p
-**Memory**: ~50MB additional
-**Setup time**: < 2 minutes
+**Use case**: Compliance with privacy regulations
+**Integration**: Compatible with standard video pipelines
+**Setup time**: Minimal configuration required
 </Card>
 ```
 
@@ -266,8 +272,28 @@ Your documentation succeeds when:
 ### Performance Context
 ```markdown
 <Note>
-**Real-time performance**: This function processes 1080p video at 30fps on standard hardware. For 4K streams, consider reducing resolution or using GPU acceleration.
+**Performance Considerations**: Optimized for real-time video processing. Performance varies by hardware, image resolution, and number of detections. Test with your specific setup for accurate benchmarks.
 </Note>
 ```
 
-Remember: Every piece of documentation should answer "So what?" Your technical accuracy is impressive, but your human impact is what makes PixelFlow indispensable.
+## Documentation Standards
+
+### Title Naming Convention
+- **Match file or tool name**: Title must equal the file name or tool name being documented
+- **Direct mapping**: For `pixelflow/detections/filters.py` use "Filters" or "Detection Filters"
+- **Function-specific docs**: Use the function name as the title
+- **Avoid abstract titles**: No marketing language or conceptual abstractions in titles
+
+### Required Elements
+- **Clear problem statement**: What challenge does this solve?
+- **Practical applications**: Where is this commonly used?
+- **Working code examples**: Tested, realistic implementations
+- **Technical accuracy**: Only include verified performance data
+
+### Prohibited Elements
+- **Unsupported metrics**: No percentages, performance claims, or scale numbers without data
+- **Marketing language**: Avoid rhetorical questions, superlatives, and promotional tone
+- **Unverifiable claims**: No "battle-tested", "millions of users", or similar statements
+- **Hypothetical scenarios**: Focus on real applications, not invented use cases
+
+Remember: Every piece of documentation should answer "So what?" while maintaining technical credibility and factual accuracy. Your goal is to inform and enable, not to sell or exaggerate.
