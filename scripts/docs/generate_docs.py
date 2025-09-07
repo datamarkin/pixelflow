@@ -8,8 +8,8 @@ Ultra-simple system that mirrors your exact code structure:
 - No configuration needed
 
 Usage:
-    python docs_helpers/generate_docs.py
-    python docs_helpers/generate_docs.py --module annotators  # specific module only
+    python scripts/docs/generate_docs.py
+    python scripts/docs/generate_docs.py --module annotators  # specific module only
 """
 
 import argparse
@@ -201,7 +201,7 @@ def main():
     
     # Find project root
     script_dir = Path(__file__).parent
-    project_root = script_dir.parent
+    project_root = script_dir.parent.parent  # scripts/docs -> scripts -> project_root
     
     # Validate pixelflow directory exists
     pixelflow_dir = project_root / 'pixelflow'
