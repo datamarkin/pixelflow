@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
-from ..colors import get_color_for_prediction
+from ..colors import _get_color_for_prediction
 
 
 def oval(image: np.ndarray, detections: 'Detections', thickness=None, start_angle: int = -45, end_angle: int = 235, colors=None):
@@ -58,7 +58,7 @@ def oval(image: np.ndarray, detections: 'Detections', thickness=None, start_angl
         x1, y1, x2, y2 = map(int, box)
         
         # Get color for this detection
-        color = get_color_for_prediction(result, colors)
+        color = _get_color_for_prediction(result, colors)
         
         # Calculate ellipse parameters
         center = (int((x1 + x2) / 2), y2)  # Bottom center of bbox

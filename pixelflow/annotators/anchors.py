@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
-from ..colors import get_color_for_prediction
+from ..colors import _get_color_for_prediction
 from ..strategies import TriggerStrategy, get_anchor_position
 
 
@@ -121,7 +121,7 @@ def anchors(
     # Draw anchor points for each detection
     for result in detections:
         bbox = result.bbox
-        color = get_color_for_prediction(result, colors)
+        color = _get_color_for_prediction(result, colors)
         
         # Draw each anchor point
         for anchor_strategy in strategies_to_draw:

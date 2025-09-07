@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from ..colors import get_color_for_prediction
+from ..colors import _get_color_for_prediction
 from .utils import _get_adaptive_params
 
 
@@ -160,7 +160,7 @@ Track: {tracker_id}\"\"\"
 
         # Get background color
         if bg_color is None:
-            bg_color_final = get_color_for_prediction(detection)
+            bg_color_final = _get_color_for_prediction(detection)
         else:
             bg_color_final = bg_color
 

@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
-from ..colors import get_color_for_prediction
+from ..colors import _get_color_for_prediction
 
 
 def polygon(image: np.ndarray, detections: 'Detections', thickness=None, colors=None) -> np.ndarray:
@@ -44,7 +44,7 @@ def polygon(image: np.ndarray, detections: 'Detections', thickness=None, colors=
         # Convert the points to a NumPy array and reshape for OpenCV
         polygon = np.array(result.segments, dtype=np.int32).reshape((-1, 1, 2))
         # Draw the polygon on the canvas
-        color = get_color_for_prediction(result, colors)
+        color = _get_color_for_prediction(result, colors)
         cv2.polylines(image, [polygon], isClosed=True, color=color, thickness=thickness)
 
     return image

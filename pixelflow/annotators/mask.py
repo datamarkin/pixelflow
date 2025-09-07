@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from ..colors import get_color_for_prediction
+from ..colors import _get_color_for_prediction
 
 
 def mask(frame: np.ndarray,
@@ -43,7 +43,7 @@ def mask(frame: np.ndarray,
         if result.masks is None:
             continue
             
-        color = get_color_for_prediction(result, colors)
+        color = _get_color_for_prediction(result, colors)
         
         for mask_data in result.masks:
             binary_mask = None

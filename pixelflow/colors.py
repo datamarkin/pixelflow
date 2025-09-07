@@ -81,7 +81,7 @@ PALETTES = {
 }
 
 
-def get_color_for_prediction(prediction, colors_override=None, palette='default'):
+def _get_color_for_prediction(prediction, colors_override=None, palette='default'):
     """
     Ultra-fast color assignment for predictions.
 

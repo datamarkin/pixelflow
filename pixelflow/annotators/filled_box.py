@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
-from ..colors import get_color_for_prediction
+from ..colors import _get_color_for_prediction
 
 
 def filled_box(
@@ -77,7 +77,7 @@ def filled_box(
         x1, y1, x2, y2 = map(int, bbox)
         
         # Get color for this prediction
-        color = get_color_for_prediction(result, colors)
+        color = _get_color_for_prediction(result, colors)
         
         # Create overlay for this box
         overlay = image.copy()

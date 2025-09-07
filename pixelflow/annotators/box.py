@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
-from ..colors import get_color_for_prediction
+from ..colors import _get_color_for_prediction
 
 
 def box(
@@ -62,7 +62,7 @@ def box(
         bbox = result.bbox
         x1, y1, x2, y2 = map(int, bbox)
 
-        color = get_color_for_prediction(result, colors)
+        color = _get_color_for_prediction(result, colors)
 
         cv2.rectangle(image, (x1, y1), (x2, y2), color=color, thickness=thickness)
 
