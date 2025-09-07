@@ -10,7 +10,6 @@ from . import colors
 from . import zones
 from . import crossings
 from . import slicer
-from . import buffer
 from . import smoother
 from . import timer
 from . import tracker
@@ -51,7 +50,6 @@ __all__ = [
     "slicer",
     "SlicedInference",
     "auto_slice_size",
-    "buffer",
     "Buffer",
     "smoother",
     "DetectionsSmoother",
