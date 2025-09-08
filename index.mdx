@@ -1,97 +1,133 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "PixelFlow"
+description: "Extreme simplicity. Extreme performance. Complete reusability. Open source computer vision that just works."
 ---
 
-## Setting up
+# Computer Vision Without the Complexity
 
-Get your documentation site up and running in minutes.
+PixelFlow transforms how you work with computer vision. One library, any framework, maximum performance. Built for developers who need CV to work reliably across different models and environments.
+
+<CardGroup cols={3}>
+  <Card title="Extreme Simplicity" icon="bolt">
+    One function does one thing perfectly. No complex abstractions or steep learning curves.
+  </Card>
+  <Card title="Extreme Performance" icon="rocket">
+    OpenCV-optimized drawing primitives built for production-speed processing.
+  </Card>
+  <Card title="Complete Reusability" icon="arrows-rotate">
+    Write once, use with YOLO, Detectron2, MediaPipe, or any CV framework.
+  </Card>
+</CardGroup>
+
+## The Simplest Computer Vision API
+
+Here's how simple it is:
+
+<CodeGroup>
+```python YOLO + PixelFlow
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Any YOLO model works
+model = YOLO('yolov8n.pt')
+results = model('image.jpg')
+
+# Convert to PixelFlow format
+detections = pf.from_ultralytics(results[0])
+
+# Professional annotations in one line
+annotated = pf.annotate.box(image, detections)
+```
+
+```python Detectron2 + PixelFlow
+import pixelflow as pf
+from detectron2 import model_zoo
+from detectron2.engine import DefaultPredictor
+
+# Any Detectron2 model works
+cfg = get_cfg()
+cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+predictor = DefaultPredictor(cfg)
+
+# Same PixelFlow workflow
+outputs = predictor(image)
+detections = pf.from_detectron2(outputs)
+annotated = pf.annotate.box(image, detections)
+```
+
+```python MediaPipe + PixelFlow
+import pixelflow as pf
+import mediapipe as mp
+
+# Any MediaPipe solution
+mp_pose = mp.solutions.pose.Pose()
+results = mp_pose.process(image)
+
+# Unified PixelFlow interface
+detections = pf.from_mediapipe(results, image.shape)
+annotated = pf.annotate.keypoint(image, detections)
+```
+</CodeGroup>
 
 <Card
-  title="Start here"
+  title="Get Started Now"
   icon="rocket"
-  href="/quickstart"
+  href="/docs/quickstart"
   horizontal
 >
-  Follow our three step quickstart guide.
+  Complete installation and first application in under 5 minutes
 </Card>
 
-## Make it yours
+## What You Can Build
 
-Design a docs site that looks great and empowers your users.
+PixelFlow works across industries - from retail analytics to manufacturing quality control, security monitoring to healthcare imaging. The unified interface means your code works regardless of the underlying model.
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Object Detection & Tracking" icon="crosshairs">
+    Multi-object tracking with ByteTracker, zone-based filtering, and crossing detection for comprehensive scene analysis.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Visual Annotations" icon="paintbrush">
+    Professional-grade annotations including boxes, masks, keypoints, blur effects, and custom overlays.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Spatial Analytics" icon="map">
+    Zone management, line crossing detection, and spatial filtering for location-based insights.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Performance Tools" icon="chart-line">
+    Built-in timing, FPS counters, and memory-efficient video processing for production deployments.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Framework Compatibility
 
-Everything you need to create world-class documentation.
+<Note>
+PixelFlow provides unified converters for all major computer vision frameworks, eliminating vendor lock-in and enabling framework mixing within the same project.
+</Note>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+**Supported Frameworks:**
+- **YOLO/Ultralytics** - Real-time object detection
+- **Detectron2** - Research-grade instance segmentation  
+- **MediaPipe** - Hand/pose/face detection
+- **MMDetection** - Advanced detection models
+- **HuggingFace Transformers** - Vision transformers
+- **Custom Models** - Build your own converters
 
-## Need inspiration?
+## Quick Navigation
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Detections" icon="target" href="/docs/detections/detections">
+    Convert any model output to PixelFlow's unified format
+  </Card>
+  <Card title="Annotations" icon="pen" href="/docs/annotators/introduction">
+    Professional visual overlays and effects
+  </Card>
+  <Card title="Tracking" icon="route" href="/docs/tracker/bytetrack">
+    Multi-object tracking across video frames
+  </Card>
+  <Card title="Zones" icon="draw-polygon" href="/docs/zones">
+    Spatial filtering and region management
+  </Card>
+</CardGroup>
+
+<Tip>
+**New to computer vision?** Start with the [Quickstart Guide](/docs/quickstart) for a complete walkthrough from installation to your first working application.
+</Tip>
