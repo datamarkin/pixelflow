@@ -139,8 +139,6 @@ class MDXGenerator:
         
         # Determine title and description
         title = file_stem.replace('_', ' ').title()
-        if file_stem == 'detections':
-            title = 'Detection Classes'
         
         # Count items
         functions = [item for item in items if item['type'] == 'function']
@@ -169,14 +167,14 @@ class MDXGenerator:
         
         # Module overview
         lines.extend([
-            f'# {title}',
+            # f'# {title}',
             ''
         ])
         
         # Add module description if available and different from title
         if module_doc:
             if module_doc.get('summary'):
-                lines.append(module_doc['summary'])
+                # lines.append(module_doc['summary'])
                 lines.append('')
             
             if module_doc.get('description'):
