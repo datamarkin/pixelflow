@@ -1,11 +1,11 @@
 ---
 title: Crossings
-description: Annotate multiple crossing lines on an image.
+description: Draw multiple crossing lines with count annotations on an image.
 ---
 
 ## Overview
 
-This is a convenience function that draws all crossings managed by a Crossings object.
+This convenience function iterates through all crossing lines managed by a Crossings object and draws each one with its individual styling and count information using the crossing() function.
 
 ## Function Signature
 
@@ -18,11 +18,61 @@ crossings(
 ## Parameters
 
 <ParamField path="image" type="np.ndarray" required>
-  Input image to annotate crossings_manager: Crossings manager object containing multiple crossings
+  Input BGR image to annotate. Must be a 3-channel NumPy array with shape (height, width, 3). crossings_manager: Crossings manager object containing multiple crossing lines. Must have a 'crossings' attribute that is iterable, containing Crossing objects.
 </ParamField>
 
 ## Returns
 
 <ResponseField name="result" type="np.ndarray">
-  Annotated image with all lines drawn
+  The input image with all crossing lines and count annotations drawn. Same shape and dtype as input image. Image is modified in-place.
 </ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```python Example
+import cv2
+import pixelflow as pf
+
+# Load image and create crossing manager
+image = cv2.imread("intersection.jpg")
+crossings_manager = pf.Crossings()
+
+# Add multiple crossing lines
+crossings_manager.add_crossing(
+```
+
+```python Example
+crossings_manager.add_crossing(
+```
+
+```python Example
+
+# Draw all crossings at once
+annotated = pf.annotate.crossings(image, crossings_manager)
+
+# Alternative workflow with tracking integration
+tracker = pf.tracker.ByteTracker()
+for frame in frames:
+```
+
+</CodeGroup>
+
+## Error Handling
+
+<Warning>
+  This function may raise the following exceptions:
+  - **AttributeError**: If crossings_manager lacks 'crossings' attribute or if individual crossing objects lack required attributes.
+  - **AssertionError**: If image is not a NumPy array (raised by underlying crossing() calls).
+</Warning>
+
+## Notes
+
+<Note>
+  - Each crossing line is drawn with its individual color, name, and styling
+  - The function processes crossings in the order they appear in the manager
+  - All crossing lines share the same adaptive sizing parameters based on image resolution
+  - The input image is modified in-place for efficiency
+  - This is equivalent to calling crossing() individually for each line
+</Note>

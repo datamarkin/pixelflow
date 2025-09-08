@@ -21,7 +21,7 @@ box(
 ## Parameters
 
 <ParamField path="image" type="np.ndarray" required>
-  Input image to draw boxes on (BGR format)
+  Input image to draw boxes on (BGR format). Modified in-place with drawn bounding boxes.
 </ParamField>
 
 <ParamField path="detections" type="Detections" required>
@@ -49,21 +49,44 @@ box(
 ```python Example
 import cv2
 import pixelflow as pf
+from ultralytics import YOLO
 
 # Load image and get model predictions
 image = cv2.imread("path/to/image.jpg")
+model = YOLO("yolo11n.pt")
 outputs = model.predict(image)  # Raw model outputs
 detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
 
-# Draw boxes with default colors
-annotated = pf.annotate.box(image, detections)
+# Draw boxes with default colors and adaptive thickness
+annotated = pf.annotators.box(image, detections)
 
 # Override with custom colors for specific classes
 custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
-annotated = pf.annotate.box(image, detections, colors=custom_colors)
+annotated = pf.annotators.box(image, detections, colors=custom_colors)
 
-# Use custom thickness for smaller images
-annotated = pf.annotate.box(image, detections, thickness=1)
+# Use custom thickness for fine control
+annotated = pf.annotators.box(image, detections, thickness=3)
+
+# Combine with other annotators for comprehensive visualization
+annotated = pf.annotators.box(image, detections, thickness=2)
+
 ```
 
 </CodeGroup>
+
+## Error Handling
+
+<Warning>
+  This function may raise the following exceptions:
+  - **AttributeError**: If detection objects lack required 'bbox' attribute.
+  - **ValueError**: If bounding box coordinates are invalid or out of bounds.
+</Warning>
+
+## Notes
+
+<Note>
+  - Input image is modified in-place for memory efficiency
+  - Thickness automatically adapts to image dimensions when not specified
+  - Coordinates are automatically converted to integers for drawing
+  - Color selection uses ColorManager for consistent visualization across detections
+</Note>

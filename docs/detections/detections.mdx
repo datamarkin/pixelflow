@@ -1,34 +1,32 @@
 ---
-title: Detection Classes
+title: Detections
 description: Core Detection Data Structures for Computer Vision Processing.
 ---
 
-# Detection Classes
 
-Core Detection Data Structures for Computer Vision Processing.
 
 Provides unified data structures for representing detection results from various computer vision frameworks, including bounding boxes, masks, keypoints, and tracking information. Designed for efficient processing and seamless integration across different ML frameworks and visualization tools.
 
 ## Classes
 
-- [`KeyPoint`](#keypoint) - Represents a single keypoint with coordinate and visibility information.
-- [`Detection`](#detection) - Unified representation of a single object detection with comprehensive metadata.
-- [`Detections`](#detections) - Container for multiple Detection objects with filtering and processing capabilities.
+- [`KeyPoint`](#keypoint) - Represents a single keypoint with coordinate and visibility information for pose estimation.
+- [`Detection`](#detection) - Unified representation of a single object detection with comprehensive metadata and tracking.
+- [`Detections`](#detections) - Container for multiple Detection objects with comprehensive filtering and processing capabilities.
 
 ## KeyPoint
 
-Represents a single keypoint with coordinate and visibility information.
+Represents a single keypoint with coordinate and visibility information for pose estimation.
 
-Used for pose estimation and object keypoint detection, storing both spatial coordinates and visibility state for structured keypoint data representation.
+Stores spatial coordinates and visibility state for structured keypoint data representation in pose estimation and object keypoint detection tasks. Provides a standardized format for keypoint data across different ML frameworks and coordinate systems.
 
 ### Parameters
 
 <ParamField path="x" type="int" required>
-  X coordinate in pixels.
+  X coordinate in pixels from image left edge.
 </ParamField>
 
 <ParamField path="y" type="int" required>
-  Y coordinate in pixels.
+  Y coordinate in pixels from image top edge.
 </ParamField>
 
 <ParamField path="name" type="str" required>
@@ -43,36 +41,42 @@ Used for pose estimation and object keypoint detection, storing both spatial coo
 
 ```python Example
 import pixelflow as pf
+
 # Create a keypoint for pose estimation
 nose_point = pf.detections.KeyPoint(x=320, y=240, name="nose", visibility=True)
 print(f"Nose at ({nose_point.x}, {nose_point.y})")
 
 # Create keypoint with occlusion
 hidden_point = pf.detections.KeyPoint(x=150, y=200, name="left_elbow", visibility=False)
+
+# Use in detection workflow
+keypoints = [nose_point, hidden_point]
+detection = pf.detections.Detection(keypoints=keypoints, class_name="person")
+
 ```
 
 ## Detection
 
-Unified representation of a single object detection with comprehensive metadata.
+Unified representation of a single object detection with comprehensive metadata and tracking.
 
-Stores all detection information including bounding boxes, segmentation masks, keypoints, classification data, tracking information, and spatial analytics. Provides a standardized interface for detection data across different ML frameworks.
+Stores complete detection information including bounding boxes, segmentation masks, keypoints, classification data, tracking information, and spatial analytics. Provides a standardized interface for detection data across different ML frameworks with automatic validation and type conversion for consistent data handling.
 
 ### Parameters
 
 <ParamField path="inference_id" type="Optional[str]" optional>
-  Unique identifier for the inference session.
+  Unique identifier for the inference session or batch.
 </ParamField>
 
 <ParamField path="bbox" type="Optional[List[float]]" optional>
-  Bounding box coordinates in XYXY format [x1, y1, x2, y2].
+  Bounding box coordinates in XYXY format [x1, y1, x2, y2]. Automatically validated and normalized.
 </ParamField>
 
 <ParamField path="masks" type="Optional[List[Any]]" optional>
-  Segmentation masks in various formats (binary, polygon).
+  Segmentation masks in various formats (binary arrays, polygons).
 </ParamField>
 
 <ParamField path="segments" type="Optional[List[Any]]" optional>
-  Polygon segments for object boundaries.
+  Polygon segments for precise object boundaries.
 </ParamField>
 
 <ParamField path="keypoints" type="Optional[List[KeyPoint]]" optional>
@@ -80,43 +84,43 @@ Stores all detection information including bounding boxes, segmentation masks, k
 </ParamField>
 
 <ParamField path="class_id" type="Optional[Union[int, str]]" optional>
-  Numeric or string class identifier.
+  Numeric or string class identifier from model.
 </ParamField>
 
 <ParamField path="class_name" type="Optional[str]" optional>
-  Human-readable class name.
+  Human-readable class name (e.g., "person", "vehicle").
 </ParamField>
 
 <ParamField path="labels" type="Optional[List[str]]" optional>
-  Additional classification labels.
+  Additional classification labels or attributes.
 </ParamField>
 
 <ParamField path="confidence" type="Optional[float]" optional>
-  Detection confidence score, automatically rounded.
+  Detection confidence score [0.0-1.0], automatically rounded to 4 decimal places for consistency.
 </ParamField>
 
 <ParamField path="tracker_id" type="Optional[int]" optional>
-  Unique tracking identifier for multi-frame tracking.
+  Unique tracking identifier for multi-frame object tracking.
 </ParamField>
 
 <ParamField path="data" type="Optional[Dict[str, Any]]" optional>
-  Additional custom metadata.
+  Additional custom metadata and framework-specific data.
 </ParamField>
 
 <ParamField path="zones" type="Optional[List[str]]" optional>
-  List of zone identifiers the detection intersects.
+  List of zone identifiers the detection intersects. Defaults to empty list if None.
 </ParamField>
 
 <ParamField path="zone_names" type="Optional[List[str]]" optional>
-  Human-readable names for intersected zones.
+  Human-readable names for intersected zones. Defaults to empty list if None.
 </ParamField>
 
 <ParamField path="line_crossings" type="Optional[List[Dict]]" optional>
-  Line crossing events for this detection.
+  Line crossing events for this detection. Defaults to empty list if None.
 </ParamField>
 
 <ParamField path="first_seen_time" type="Optional[float]" optional>
-  Timestamp when detection first appeared.
+  Timestamp when detection first appeared (Unix time).
 </ParamField>
 
 <ParamField path="total_time" type="float" required>
@@ -127,30 +131,46 @@ Stores all detection information including bounding boxes, segmentation masks, k
 
 ```python Example
 import pixelflow as pf
+from ultralytics import YOLO
+import cv2
+
+# Basic detection from ML framework
+image = cv2.imread("image.jpg")
+model = YOLO("yolo11n.pt")
+outputs = model.predict(image)
+results = pf.detections.from_ultralytics(outputs)
+
 # Create basic detection with bounding box
 detection = pf.detections.Detection(
 ```
 
 ## Detections
 
-Container for multiple Detection objects with filtering and processing capabilities.
+Container for multiple Detection objects with comprehensive filtering and processing capabilities.
 
-Provides a unified interface for managing collections of detections with support for iteration, indexing, filtering, zone management, and serialization. Includes dynamically attached filter methods for comprehensive detection processing.
+Provides a unified interface for managing collections of detections with support for iteration, indexing, filtering, zone management, serialization, and bulk operations. Implements standard Python container protocols and includes dynamically attached filter methods for zero-overhead detection processing and analysis workflows.
 
 ### Example
 
 ```python Example
 import pixelflow as pf
-# Create empty detections container
-detections = pf.detections.Detections()
+from ultralytics import YOLO
+import cv2
 
-# Add detections
+# Create detections from ML framework
+image = cv2.imread("image.jpg")
+model = YOLO("yolo11n.pt")
+outputs = model.predict(image)
+detections = pf.detections.from_ultralytics(outputs)
+
+# Manual creation and management
+detections = pf.detections.Detections()
 detection1 = pf.detections.Detection(bbox=[100, 50, 200, 150], class_name="person")
 detection2 = pf.detections.Detection(bbox=[300, 100, 400, 200], class_name="car")
 detections.add_detection(detection1)
 detections.add_detection(detection2)
 
-# Use container features
+# Container operations
 print(f"Found {len(detections)} objects")
 for detection in detections:
 ```

@@ -1,7 +1,11 @@
 ---
 title: Label
-description: Fast, simplified label annotator with template support and multi-line text.
+description: Draw text labels on detected objects with positioning, templates, and multi-line support.
 ---
+
+## Overview
+
+This function provides flexible labeling capabilities with automatic color assignment, adaptive font scaling, and template-based text generation. It supports multi-line labels and various positioning options relative to bounding boxes.
 
 ## Function Signature
 
@@ -9,12 +13,12 @@ description: Fast, simplified label annotator with template support and multi-li
 label(
     image: np.ndarray,
     detections: Detections,
-    texts: Union[str, List[str]], optional = None,
+    texts: Optional[Union[str, List[str]]] = None,
     position: str = 'top_left',
-    font_scale: float, optional = None,
+    font_scale: Optional[float] = None,
     padding: int = 6,
     line_spacing: int = 2,
-    bg_color: tuple or str, optional = None,
+    bg_color: Optional[Union[tuple, str]] = None,
     text_color: tuple = default
 ) -> np.ndarray
 ```
@@ -22,43 +26,109 @@ label(
 ## Parameters
 
 <ParamField path="image" type="np.ndarray" required>
-  Input image to annotate
+  Input image to annotate. Must be a valid OpenCV image array in BGR format with shape (H, W, 3) or (H, W).
 </ParamField>
 
 <ParamField path="detections" type="Detections" required>
-  Detections object containing bounding boxes
+  PixelFlow detections object containing bounding box coordinates and optional attributes (class_name, confidence, class_id, tracker_id).
 </ParamField>
 
-<ParamField path="texts" type="Union[str, List[str]], optional" optional default="None">
-  Text template or list of labels. - None: Auto-generates from class_name and confidence - str: Template with placeholders like "{class_name}: {confidence:.1%}" - List[str]: Custom labels for each detection
+<ParamField path="texts" type="Optional[Union[str, List[str]]]" optional default="None">
+  Label text specification. - None: Auto-generates labels from detection attributes (class_name: confidence) - str: Template string with placeholders ({class_name}, {confidence}, {class_id}, {tracker_id}, {bbox}) - List[str]: Custom labels for each detection (length should match detections)
 </ParamField>
 
 <ParamField path="position" type="str" optional default="'top_left'">
-  Label position relative to bbox. Options: 'top_left', 'top_center', 'top_right', 'center_left', 'center', 'center_right', 'bottom_left', 'bottom_center', 'bottom_right'
+  Label position relative to bounding box. Options: 'top_left', 'top_center', 'top_right', 'center_left', 'center', 'center_right', 'bottom_left', 'bottom_center', 'bottom_right'. Default is 'top_left'.
 </ParamField>
 
-<ParamField path="font_scale" type="float, optional" optional default="None">
-  Font scale. If None, uses adaptive scaling
+<ParamField path="font_scale" type="Optional[float]" optional default="None">
+  OpenCV font scale factor. If None, uses adaptive scaling based on image dimensions. Range: [0.1, 5.0].
 </ParamField>
 
 <ParamField path="padding" type="int" optional default="6">
-  Padding around text inside background rectangle
+  Padding in pixels around text inside background rectangle. Range: [0, 50]. Default is 6.
 </ParamField>
 
 <ParamField path="line_spacing" type="int" optional default="2">
-  Space between lines for multi-line text
+  Additional spacing in pixels between lines for multi-line text. Range: [0, 20]. Default is 2.
 </ParamField>
 
-<ParamField path="bg_color" type="tuple or str, optional" optional default="None">
-  Background color. If None, uses auto color from class_id
+<ParamField path="bg_color" type="Optional[Union[tuple, str]]" optional default="None">
+  Background rectangle color in BGR format. If None, uses automatic color based on class_id. Can be tuple (B, G, R) or color string.
 </ParamField>
 
 <ParamField path="text_color" type="tuple" optional default="default">
-  Text color (BGR format)
+  Text color in BGR format. Default is white (255, 255, 255).
 </ParamField>
 
 ## Returns
 
 <ResponseField name="result" type="np.ndarray">
-  Annotated image with labels
+  Input image with labels drawn directly on it (in-place modification). Returns the same image array that was passed as input.
 </ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```python Example
+import cv2
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Load image and run detection
+image = cv2.imread("people.jpg")
+model = YOLO("yolo11n.pt")
+outputs = model.predict(image)
+detections = pf.results.from_ultralytics(outputs)
+
+# Basic auto-generated labels
+labeled_image = pf.annotators.label(image, detections)
+
+# Custom template with confidence percentage
+template = "{class_name}: {confidence:.1%}"
+labeled_image = pf.annotators.label(image, detections, template, position='top_center')
+
+# Multi-line labels with tracking info
+multi_template = """{class_name}
+```
+
+```python Example
+labeled_image = pf.annotators.label(image, detections, multi_template,
+```
+
+```python Example
+
+# Custom label list with specific positioning
+custom_labels = ["Primary Target", "Secondary", "Background"]
+labeled_image = pf.annotators.label(image, detections[:3], custom_labels,
+```
+
+</CodeGroup>
+
+## Error Handling
+
+<Warning>
+  This function may raise the following exceptions:
+  - **AssertionError**: If image is not a NumPy array.
+  - **AttributeError**: If detections object lacks required bbox attribute.
+  - **KeyError**: If template string contains invalid placeholders.
+  - **ValueError**: If template formatting fails or colors are invalid.
+</Warning>
+
+## Notes
+
+<Note>
+  - Labels are drawn directly on the input image (in-place modification)
+  - Empty detections list returns the original image unchanged
+  - Font scale automatically adapts to image size when not specified
+  - Background colors are automatically assigned based on class_id for visual consistency
+  - Multi-line text is supported by including newline characters in templates
+  - Template placeholders are safely handled with fallback values for missing attributes
+  - Label positioning automatically adjusts to keep labels within image boundaries
+  - Text baseline and height calculations ensure consistent multi-line spacing
+  - Optimized for real-time annotation with minimal memory allocation
+  - Adaptive parameter calculation cached per image size
+  - Direct OpenCV drawing operations for maximum performance
+  - Template formatting is cached per detection to avoid repeated processing
+</Note>

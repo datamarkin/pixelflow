@@ -5,7 +5,7 @@ description: Draw anchor points on detected objects based on trigger strategies.
 
 ## Overview
 
-Visualizes the anchor points used by the trigger strategy system to determine if detections are within zones or crossing lines. Each anchor point is drawn as a small filled circle at the calculated position on the bounding box.
+Visualizes the anchor points used by the trigger strategy system to determine if detections are within zones or crossing lines. Each anchor point is drawn as a small filled circle at the calculated position on the bounding box. Supports drawing individual anchor points or multiple points simultaneously.
 
 ## Function Signature
 
@@ -13,6 +13,7 @@ Visualizes the anchor points used by the trigger strategy system to determine if
 anchors(
     image: np.ndarray,
     detections: Detections,
+    strategy: Union[str, List[str]], optional = None,
     radius: Optional[int] = None,
     thickness: Optional[int] = None,
     colors: Optional[List[tuple]] = None
@@ -22,23 +23,27 @@ anchors(
 ## Parameters
 
 <ParamField path="image" type="np.ndarray" required>
-  Input image to draw anchor points on (BGR format)
+  Input image to draw anchor points on in BGR format. Image is modified in-place.
 </ParamField>
 
 <ParamField path="detections" type="Detections" required>
-  Detections object containing bounding boxes. Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates. strategy: Strategy for determining which anchor points to draw. Options: - None: Draw all main anchor points (center, corners, edge centers) - Single string (e.g., "center", "bottom_center") - List of strings for multiple anchor points Default: None (draws all main anchor points)
+  Detection results containing bounding boxes. Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
+</ParamField>
+
+<ParamField path="strategy" type="Union[str, List[str]], optional" optional default="None">
+  Strategy for determining anchor points to draw. Single string: "center", "bottom_center", "top_left", etc. List of strings: Multiple anchor points. None draws all 9 main anchor points (center, corners, edge centers).
 </ParamField>
 
 <ParamField path="radius" type="Optional[int]" optional default="None">
-  Radius of anchor point circles in pixels. If None, automatically determined based on image size.
+  Radius of anchor point circles in pixels. If None, automatically scaled based on image size (minimum 2 pixels).
 </ParamField>
 
 <ParamField path="thickness" type="Optional[int]" optional default="None">
-  Thickness of circle outline. Use -1 for filled circles. If None, circles are filled by default.
+  Thickness of circle outline in pixels. Use -1 for filled circles. If None, defaults to -1 (filled).
 </ParamField>
 
 <ParamField path="colors" type="Optional[List[tuple]]" optional default="None">
-  List of BGR color tuples to override default colors. Colors are mapped to unique class_ids in order of appearance. If None, uses default ColorManager colors.
+  List of BGR color tuples for custom colors. Colors mapped to unique class_ids in order of appearance. If None, uses default ColorManager colors.
 </ParamField>
 
 ## Returns
@@ -54,10 +59,13 @@ anchors(
 ```python Example
 import cv2
 import pixelflow as pf
+from ultralytics import YOLO
 
 # Load image and get detections
 image = cv2.imread("path/to/image.jpg")
-detections = pf.results.from_ultralytics(model(image))
+model = YOLO("yolo11n.pt")
+outputs = model.predict(image)
+detections = pf.results.from_ultralytics(outputs)
 
 # Draw all main anchor points (default)
 annotated = pf.annotators.anchors(image, detections)
@@ -65,13 +73,30 @@ annotated = pf.annotators.anchors(image, detections)
 # Draw bottom center points (useful for ground-based tracking)
 annotated = pf.annotators.anchors(image, detections, strategy="bottom_center")
 
-# Draw all four corners
+# Draw multiple specific anchor points
 corners = ["top_left", "top_right", "bottom_left", "bottom_right"]
 annotated = pf.annotators.anchors(image, detections, strategy=corners)
 
-
-# Custom styling
+# Custom styling with larger green circles
 annotated = pf.annotators.anchors(
 ```
 
 </CodeGroup>
+
+## Error Handling
+
+<Warning>
+  This function may raise the following exceptions:
+  - **AttributeError**: If detections don't have required 'bbox' attribute.
+  - **ValueError**: If invalid strategy string is provided.
+</Warning>
+
+## Notes
+
+<Note>
+  - Anchor points are calculated using the get_anchor_position function from strategies module
+  - Invalid anchor strategies are skipped gracefully to prevent errors
+  - Radius is automatically scaled with image size if not specified
+  - All 9 anchor points include: center, 4 corners, and 4 edge centers
+  - Colors are applied consistently across detections with the same class_id
+</Note>
