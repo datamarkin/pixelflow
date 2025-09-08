@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, List, Union, Optional
 
 if TYPE_CHECKING:
     from ..detections import Detections
@@ -12,52 +12,102 @@ from .utils import _get_adaptive_params
 def label(
     image: np.ndarray,
     detections: 'Detections',
-    texts: Union[str, List[str]] = None,
+    texts: Optional[Union[str, List[str]]] = None,
     position: str = 'top_left',
-    font_scale: float = None,
+    font_scale: Optional[float] = None,
     padding: int = 6,
     line_spacing: int = 2,
-    bg_color: Union[tuple, str] = None,
+    bg_color: Optional[Union[tuple, str]] = None,
     text_color: tuple = (255, 255, 255)
 ) -> np.ndarray:
     """
-    Fast, simplified label annotator with template support and multi-line text.
-
+    Draw text labels on detected objects with positioning, templates, and multi-line support.
+    
+    This function provides flexible labeling capabilities with automatic color assignment,
+    adaptive font scaling, and template-based text generation. It supports multi-line labels
+    and various positioning options relative to bounding boxes.
+    
     Args:
-        image (np.ndarray): Input image to annotate
-        detections (Detections): Detections object containing bounding boxes
-        texts (Union[str, List[str]], optional): Text template or list of labels.
-            - None: Auto-generates from class_name and confidence
-            - str: Template with placeholders like "{class_name}: {confidence:.1%}"
-            - List[str]: Custom labels for each detection
-        position (str): Label position relative to bbox. Options:
-                       'top_left', 'top_center', 'top_right',
-                       'center_left', 'center', 'center_right',
-                       'bottom_left', 'bottom_center', 'bottom_right'
-        font_scale (float, optional): Font scale. If None, uses adaptive scaling
-        padding (int): Padding around text inside background rectangle
-        line_spacing (int): Space between lines for multi-line text
-        bg_color (tuple or str, optional): Background color. If None, uses auto color from class_id
-        text_color (tuple): Text color (BGR format)
-
-    Returns:
-        np.ndarray: Annotated image with labels
-
-    Examples:
-        # Auto-generated labels
-        label(image, detections)
-
-        # Template with placeholders
-        label(image, detections, "{class_name}: {confidence:.1%}")
+        image (np.ndarray): Input image to annotate. Must be a valid OpenCV image array
+                           in BGR format with shape (H, W, 3) or (H, W).
+        detections (Detections): PixelFlow detections object containing bounding box
+                               coordinates and optional attributes (class_name, confidence,
+                               class_id, tracker_id).
+        texts (Optional[Union[str, List[str]]]): Label text specification.
+            - None: Auto-generates labels from detection attributes (class_name: confidence)
+            - str: Template string with placeholders ({class_name}, {confidence}, 
+                   {class_id}, {tracker_id}, {bbox})
+            - List[str]: Custom labels for each detection (length should match detections)
+        position (str): Label position relative to bounding box. Options:
+                       'top_left', 'top_center', 'top_right', 'center_left', 'center',
+                       'center_right', 'bottom_left', 'bottom_center', 'bottom_right'.
+                       Default is 'top_left'.
+        font_scale (Optional[float]): OpenCV font scale factor. If None, uses adaptive
+                                    scaling based on image dimensions. Range: [0.1, 5.0].
+        padding (int): Padding in pixels around text inside background rectangle.
+                      Range: [0, 50]. Default is 6.
+        line_spacing (int): Additional spacing in pixels between lines for multi-line text.
+                           Range: [0, 20]. Default is 2.
+        bg_color (Optional[Union[tuple, str]]): Background rectangle color in BGR format.
+                                              If None, uses automatic color based on class_id.
+                                              Can be tuple (B, G, R) or color string.
+        text_color (tuple): Text color in BGR format. Default is white (255, 255, 255).
         
-        # Multi-line template
-        template = \"\"\"{class_name}
-Confidence: {confidence:.2f}
-Track: {tracker_id}\"\"\"
-        label(image, detections, template)
-
-        # Custom list of labels
-        label(image, detections, ["Person", "Car"], position='top_center')
+    Returns:
+        np.ndarray: Input image with labels drawn directly on it (in-place modification).
+                   Returns the same image array that was passed as input.
+    
+    Raises:
+        AssertionError: If image is not a NumPy array.
+        AttributeError: If detections object lacks required bbox attribute.
+        KeyError: If template string contains invalid placeholders.
+        ValueError: If template formatting fails or colors are invalid.
+        
+    Example:
+        >>> import cv2
+        >>> import pixelflow as pf
+        >>> from ultralytics import YOLO
+        >>> 
+        >>> # Load image and run detection
+        >>> image = cv2.imread("people.jpg")
+        >>> model = YOLO("yolo11n.pt")
+        >>> outputs = model.predict(image)
+        >>> detections = pf.results.from_ultralytics(outputs)
+        >>> 
+        >>> # Basic auto-generated labels
+        >>> labeled_image = pf.annotators.label(image, detections)
+        >>> 
+        >>> # Custom template with confidence percentage
+        >>> template = "{class_name}: {confidence:.1%}"
+        >>> labeled_image = pf.annotators.label(image, detections, template, position='top_center')
+        >>> 
+        >>> # Multi-line labels with tracking info
+        >>> multi_template = \"\"\"{class_name}
+        ... ID: {tracker_id}
+        ... Conf: {confidence:.2f}\"\"\"
+        >>> labeled_image = pf.annotators.label(image, detections, multi_template, 
+        ...                                    position='bottom_right', padding=8)
+        >>> 
+        >>> # Custom label list with specific positioning
+        >>> custom_labels = ["Primary Target", "Secondary", "Background"]
+        >>> labeled_image = pf.annotators.label(image, detections[:3], custom_labels,
+        ...                                    position='center', bg_color=(0, 100, 200))
+    
+    Notes:
+        - Labels are drawn directly on the input image (in-place modification)
+        - Empty detections list returns the original image unchanged
+        - Font scale automatically adapts to image size when not specified
+        - Background colors are automatically assigned based on class_id for visual consistency
+        - Multi-line text is supported by including newline characters in templates
+        - Template placeholders are safely handled with fallback values for missing attributes
+        - Label positioning automatically adjusts to keep labels within image boundaries
+        - Text baseline and height calculations ensure consistent multi-line spacing
+        
+    Performance Notes:
+        - Optimized for real-time annotation with minimal memory allocation
+        - Adaptive parameter calculation cached per image size
+        - Direct OpenCV drawing operations for maximum performance
+        - Template formatting is cached per detection to avoid repeated processing
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
 

@@ -1,57 +1,119 @@
+from typing import Optional, Tuple
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 
 
 def crossing(
-    image,
+    image: np.ndarray,
     crossing_line,
-    thickness=None,
-    color=None,
-    text_thickness=None,
-    text_color=None,
-    text_scale=None,
-    text_offset=None,
-    text_padding=None,
-    custom_in_text=None,
-    custom_out_text=None,
-    display_in_count=True,
-    display_out_count=True,
-    display_text_box=True,
-    text_centered=True,
-):
+    thickness: Optional[int] = None,
+    color: Optional[Tuple[int, int, int]] = None,
+    text_thickness: Optional[int] = None,
+    text_color: Optional[Tuple[int, int, int]] = None,
+    text_scale: Optional[float] = None,
+    text_offset: Optional[int] = None,
+    text_padding: Optional[int] = None,
+    custom_in_text: Optional[str] = None,
+    custom_out_text: Optional[str] = None,
+    display_in_count: bool = True,
+    display_out_count: bool = True,
+    display_text_box: bool = True,
+    text_centered: bool = True,
+) -> np.ndarray:
     """
-    Annotate a crossing line on an image with crossing counts.
+    Draw a crossing line with directional count annotations on an image.
     
-    This function draws a line and displays the in/out crossing counts
-    with customizable styling.
+    This function visualizes a crossing line by drawing the line itself, endpoint markers,
+    and count text labels showing in/out crossing statistics with customizable styling.
+    The annotation adapts automatically to image resolution for optimal visibility.
     
     Args:
-        image (np.ndarray): Input image to annotate
-        crossing_line: Crossing object from pixelflow.crossings
-        thickness (int): Line thickness. Default 2.
-        color (tuple, optional): Line color RGB. If None, uses line's color.
-        text_thickness (int): Text thickness. Default 2.
-        text_color (tuple, optional): Text color RGB. If None, uses UI text color.
-        text_scale (float): Text scale factor. Default 0.5.
-        text_offset (int): Distance of text from line center. Default 20.
-        text_padding (int): Padding around text. Default 10.
-        custom_in_text (str, optional): Custom label for "in" count.
-        custom_out_text (str, optional): Custom label for "out" count.
-        display_in_count (bool): Whether to show in count. Default True.
-        display_out_count (bool): Whether to show out count. Default True.
-        display_text_box (bool): Whether to show text background. Default True.
-        text_centered (bool): Whether to center text on line. Default True.
-    
-    Returns:
-        np.ndarray: Annotated image
-    
-    Examples:
-        # Simple usage
-        annotated = crossing(image, crossing_line)
+        image (np.ndarray): Input BGR image to annotate. Must be a 3-channel NumPy array
+                           with shape (height, width, 3).
+        crossing_line: Crossing object from pixelflow.crossings containing line geometry,
+                      counts, and color. Must have attributes: start, end, color,
+                      in_count, out_count.
+        thickness (Optional[int]): Line thickness in pixels. If None, uses adaptive
+                                  sizing based on image resolution. Range: [1, ∞].
+        color (Optional[Tuple[int, int, int]]): Line color as BGR tuple (0-255 each).
+                                              If None, uses crossing_line.color.
+        text_thickness (Optional[int]): Text stroke thickness in pixels. If None,
+                                       uses adaptive sizing. Range: [1, ∞].
+        text_color (Optional[Tuple[int, int, int]]): Text color as BGR tuple (0-255 each).
+                                                   Default is white (255, 255, 255).
+        text_scale (Optional[float]): Text scale factor. If None, uses adaptive sizing.
+                                     Range: (0, ∞). Default ~0.5.
+        text_offset (Optional[int]): Distance between text labels in pixels. If None,
+                                    uses adaptive sizing. Range: [1, ∞]. Default ~20.
+        text_padding (Optional[int]): Padding around text background in pixels.
+                                     If None, uses adaptive sizing. Range: [0, ∞].
+        custom_in_text (Optional[str]): Custom label for inward crossing count.
+                                       Default is "in".
+        custom_out_text (Optional[str]): Custom label for outward crossing count.
+                                        Default is "out".
+        display_in_count (bool): Whether to display the inward crossing count.
+                                Default is True.
+        display_out_count (bool): Whether to display the outward crossing count.
+                                 Default is True.
+        display_text_box (bool): Whether to draw colored background behind text.
+                                Default is True.
+        text_centered (bool): Whether to center text on the line. If False,
+                             positions text near the end point. Default is True.
         
-        # Custom styling
-        annotated = crossing(image, crossing_line, thickness=3, text_color=(0, 255, 0))
+    Returns:
+        np.ndarray: The input image with crossing line and count annotations drawn.
+                   Same shape and dtype as input image. Image is modified in-place.
+    
+    Raises:
+        AssertionError: If image is not a NumPy array.
+        AttributeError: If crossing_line lacks required attributes (start, end,
+                       color, in_count, out_count).
+        
+    Example:
+        >>> import cv2
+        >>> import pixelflow as pf
+        >>> 
+        >>> # Load image and set up tracking system
+        >>> image = cv2.imread("traffic.jpg")
+        >>> crossings_manager = pf.Crossings()
+        >>> crossing_line = crossings_manager.add_crossing(
+        ...     start=(100, 300), end=(500, 300), name="Street Line"
+        ... )
+        >>> 
+        >>> # Basic crossing annotation
+        >>> annotated = pf.annotate.crossing(image, crossing_line)
+        >>> 
+        >>> # Custom styling with thick line and green text
+        >>> annotated = pf.annotate.crossing(
+        ...     image, crossing_line,
+        ...     thickness=5, text_color=(0, 255, 0)
+        ... )
+        >>> 
+        >>> # Custom labels without text backgrounds
+        >>> annotated = pf.annotate.crossing(
+        ...     image, crossing_line,
+        ...     custom_in_text="Entered", custom_out_text="Exited",
+        ...     display_text_box=False
+        ... )
+        >>> 
+        >>> # Show only outward count with right-aligned text
+        >>> annotated = pf.annotate.crossing(
+        ...     image, crossing_line,
+        ...     display_in_count=False, text_centered=False
+        ... )
+    
+    Notes:
+        - All None parameters are automatically replaced with adaptive values based
+          on image resolution using _get_adaptive_params()
+        - The line is drawn with anti-aliasing (cv2.LINE_AA) for smooth appearance
+        - Endpoint markers are drawn as filled circles to clearly indicate line direction
+        - Text backgrounds use the same color as the crossing line for visual consistency
+        - When both counts are displayed, they are vertically offset from the line center
+        - The function modifies the input image in-place and returns it for convenience
+        
+    See Also:
+        crossings : Convenience function for annotating multiple crossing lines
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
@@ -140,24 +202,70 @@ def crossing(
     return image
 
 
-def crossings(image, crossings_manager):
+def crossings(image: np.ndarray, crossings_manager) -> np.ndarray:
     """
-    Annotate multiple crossing lines on an image.
+    Draw multiple crossing lines with count annotations on an image.
     
-    This is a convenience function that draws all crossings managed by a Crossings object.
+    This convenience function iterates through all crossing lines managed by a
+    Crossings object and draws each one with its individual styling and count
+    information using the crossing() function.
     
     Args:
-        image (np.ndarray): Input image to annotate
-        crossings_manager: Crossings manager object containing multiple crossings
-    
+        image (np.ndarray): Input BGR image to annotate. Must be a 3-channel NumPy array
+                           with shape (height, width, 3).
+        crossings_manager: Crossings manager object containing multiple crossing lines.
+                          Must have a 'crossings' attribute that is iterable,
+                          containing Crossing objects.
+        
     Returns:
-        np.ndarray: Annotated image with all lines drawn
+        np.ndarray: The input image with all crossing lines and count annotations drawn.
+                   Same shape and dtype as input image. Image is modified in-place.
     
+    Raises:
+        AttributeError: If crossings_manager lacks 'crossings' attribute or if
+                       individual crossing objects lack required attributes.
+        AssertionError: If image is not a NumPy array (raised by underlying
+                       crossing() calls).
+        
     Example:
-        crossings_obj = Crossings()
-        crossings_obj.add_crossing(start=(0, 500), end=(1920, 500))
-        crossings_obj.add_crossing(start=(960, 0), end=(960, 1080))
-        annotated = crossings(image, crossings_obj)
+        >>> import cv2
+        >>> import pixelflow as pf
+        >>> 
+        >>> # Load image and create crossing manager
+        >>> image = cv2.imread("intersection.jpg")
+        >>> crossings_manager = pf.Crossings()
+        >>> 
+        >>> # Add multiple crossing lines
+        >>> crossings_manager.add_crossing(
+        ...     start=(0, 500), end=(1920, 500),
+        ...     name="Horizontal Line", color=(255, 0, 0)
+        ... )
+        >>> crossings_manager.add_crossing(
+        ...     start=(960, 0), end=(960, 1080),
+        ...     name="Vertical Line", color=(0, 255, 0)
+        ... )
+        >>> 
+        >>> # Draw all crossings at once
+        >>> annotated = pf.annotate.crossings(image, crossings_manager)
+        >>> 
+        >>> # Alternative workflow with tracking integration
+        >>> tracker = pf.tracker.ByteTracker()
+        >>> for frame in frames:
+        ...     outputs = yolo_model.predict(frame)
+        ...     results = pf.detections.from_ultralytics(outputs)
+        ...     results = tracker.update(results)
+        ...     results = crossings_manager.update(results)  # Update counts
+        ...     annotated = pf.annotate.crossings(frame, crossings_manager)
+    
+    Notes:
+        - Each crossing line is drawn with its individual color, name, and styling
+        - The function processes crossings in the order they appear in the manager
+        - All crossing lines share the same adaptive sizing parameters based on image resolution
+        - The input image is modified in-place for efficiency
+        - This is equivalent to calling crossing() individually for each line
+        
+    See Also:
+        crossing : Function for annotating a single crossing line
     """
     for crossing_line in crossings_manager.crossings:
         image = crossing(image, crossing_line)

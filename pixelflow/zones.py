@@ -31,7 +31,7 @@ class Zone:
         overlap_threshold: float = 0.5,
         mode: Literal["any", "all"] = "all",
         metadata: Optional[Dict[str, Any]] = None
-    ):
+    ) -> None:
         """
         Initialize a Zone with polygon boundary and trigger configuration.
         
@@ -40,48 +40,68 @@ class Zone:
         
         Args:
             polygon (Union[List[Tuple[float, float]], np.ndarray]): Zone boundary as 
-                    list of (x, y) coordinate tuples or numpy array. Points should 
-                    form a closed polygon.
+                    list of (x, y) coordinate tuples or numpy array in pixel coordinates. 
+                    Points should form a closed polygon.
             zone_id (Union[int, str]): Unique identifier for the zone. Used for 
-                    tracking and referencing.
+                    tracking and referencing in zone operations.
             name (str): Human-readable name for the zone. Defaults to "Zone {zone_id}" 
-                   if empty.
+                   if empty string provided.
             color (Optional[Tuple[int, int, int]]): RGB color tuple (0-255) for 
                   visualization. Auto-generated based on zone_id if None.
-            trigger_strategy (Union[str, List[str]]): 
-                             Strategy for detection matching. Options: "center", "overlap", 
-                             "percentage". Default is "center".
-            overlap_threshold (float): Threshold for PERCENTAGE strategy. 
+            trigger_strategy (Union[str, List[str]]): Strategy for detection matching. 
+                             Options: "center", "overlap", "percentage", "bottom_center", 
+                             "top_center", "left_center", "right_center". 
+                             Default is "center".
+            overlap_threshold (float): Threshold for percentage-based strategies. 
                                      Range: [0.0, 1.0]. Default is 0.5 (50% overlap).
             mode (Literal["any", "all"]): Logic mode for multiple strategies.
                  "all" uses AND logic, "any" uses OR logic. Default is "all".
             metadata (Optional[Dict[str, Any]]): Additional custom data for the zone.
+                     Can store application-specific information.
                      
         Raises:
             ValueError: If trigger_strategy is invalid or polygon cannot be created.
+            TypeError: If polygon coordinates are not numeric types.
             
         Example:
+            >>> import cv2
             >>> import pixelflow as pf
             >>> 
-            >>> # Create a rectangular zone
+            >>> # Basic rectangular zone
             >>> zone = pf.Zone(
             ...     polygon=[(100, 100), (200, 100), (200, 200), (100, 200)],
             ...     zone_id="entrance",
             ...     name="Main Entrance"
             ... )
             >>> 
-            >>> # Create zone with custom trigger strategy
+            >>> # Zone with percentage-based triggering
             >>> zone = pf.Zone(
             ...     polygon=[(0, 0), (50, 0), (50, 50), (0, 50)],
             ...     zone_id=1,
             ...     trigger_strategy="percentage",
             ...     overlap_threshold=0.3
             ... )
+            >>> 
+            >>> # Zone with multiple strategies (OR logic)
+            >>> zone = pf.Zone(
+            ...     polygon=[(300, 300), (400, 300), (400, 400), (300, 400)],
+            ...     zone_id="parking",
+            ...     trigger_strategy=["center", "bottom_center"],
+            ...     mode="any"
+            ... )
+            >>> 
+            >>> # Zone with custom metadata
+            >>> zone = pf.Zone(
+            ...     polygon=[(500, 500), (600, 500), (600, 600), (500, 600)],
+            ...     zone_id="restricted",
+            ...     metadata={"priority": "high", "alert_threshold": 2}
+            ... )
             
         Notes:
             - Overlap threshold is automatically clamped to [0.0, 1.0] range
             - Color is generated using golden ratio for consistent distribution
             - Zone tracks unique object IDs to prevent double-counting
+            - Polygon is converted to Shapely Polygon for geometric operations
         """
         # Convert polygon to Shapely Polygon
         if isinstance(polygon, np.ndarray):
@@ -107,8 +127,19 @@ class Zone:
         self.total_entered = 0
         self._tracked_ids = set()
     
-    def _generate_color(self, zone_id) -> Tuple[int, int, int]:
-        """Generate a consistent color based on zone_id."""
+    def _generate_color(self, zone_id: Union[int, str]) -> Tuple[int, int, int]:
+        """
+        Generate a consistent color based on zone_id.
+        
+        Uses the golden ratio method to distribute colors evenly across the color
+        spectrum for visual distinction between zones.
+        
+        Args:
+            zone_id (Union[int, str]): Zone identifier to generate color from.
+            
+        Returns:
+            Tuple[int, int, int]: RGB color tuple with values in range [0, 255].
+        """
         # Use golden ratio for better color distribution
         golden_ratio = 0.618033988749895
         hue = (hash(str(zone_id)) * golden_ratio) % 1.0
@@ -135,25 +166,45 @@ class Zone:
         Returns:
             bool: True if detection satisfies zone trigger conditions, False otherwise.
             
+        Raises:
+            ValueError: If bbox format is invalid or contains non-numeric values.
+            AttributeError: If zone polygon is not properly initialized.
+            
         Example:
+            >>> import cv2
             >>> import pixelflow as pf
+            >>> from ultralytics import YOLO
             >>> 
+            >>> # Setup zone and model
             >>> zone = pf.Zone(
             ...     polygon=[(0, 0), (100, 0), (100, 100), (0, 100)],
             ...     zone_id="test"
             ... )
+            >>> model = YOLO("yolo11n.pt")
             >>> 
-            >>> # Check if bounding box is in zone
+            >>> # Basic detection checking
             >>> bbox = [40, 40, 60, 60]  # Center at (50, 50)
             >>> is_in_zone = zone.check_detection(bbox)
+            >>> print(f"Detection in zone: {is_in_zone}")  # True
             >>> 
             >>> # Check with tracker ID for counting
             >>> is_in_zone = zone.check_detection(bbox, tracker_id=123)
+            >>> print(f"Total entered: {zone.total_entered}")  # 1
+            >>> 
+            >>> # Multiple checks with same tracker ID (no double-counting)
+            >>> zone.check_detection([45, 45, 65, 65], tracker_id=123)
+            >>> print(f"Total entered: {zone.total_entered}")  # Still 1
+            >>> 
+            >>> # Edge case: bbox outside zone
+            >>> outside_bbox = [200, 200, 220, 220]
+            >>> is_outside = zone.check_detection(outside_bbox)
+            >>> print(f"Outside detection: {is_outside}")  # False
             
         Notes:
             - Uses centralized strategy logic from check_detection_in_region
             - Automatically prevents double-counting of tracked objects
             - Statistics are updated only when object enters zone for first time
+            - Bounding box coordinates are validated for numeric types
         """
         # Use centralized strategy logic
         in_zone = check_detection_in_region(
@@ -172,7 +223,7 @@ class Zone:
         
         return in_zone
     
-    def reset_counts(self):
+    def reset_counts(self) -> None:
         """
         Reset all zone statistics to zero.
         
@@ -180,9 +231,22 @@ class Zone:
         Useful for resetting statistics between analysis sessions.
         
         Example:
+            >>> import pixelflow as pf
+            >>> 
+            >>> zone = pf.Zone(
+            ...     polygon=[(0, 0), (100, 0), (100, 100), (0, 100)],
+            ...     zone_id="test"
+            ... )
+            >>> 
+            >>> # After some detections
+            >>> zone.check_detection([40, 40, 60, 60], tracker_id=1)
+            >>> zone.check_detection([50, 50, 70, 70], tracker_id=2)
+            >>> print(f"Before reset: {zone.total_entered}")  # 2
+            >>> 
+            >>> # Reset all statistics
             >>> zone.reset_counts()
-            >>> print(zone.current_count)  # 0
-            >>> print(zone.total_entered)  # 0
+            >>> print(f"After reset: {zone.current_count}")  # 0
+            >>> print(f"After reset: {zone.total_entered}")  # 0
         """
         self.current_count = 0
         self.total_entered = 0
@@ -198,15 +262,23 @@ class Zones:
     information and maintains zone statistics.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initialize an empty zone manager.
         
-        Creates containers for zone storage and fast lookup by ID.
+        Creates containers for zone storage and fast lookup by ID. The manager
+        maintains both a list for ordered access and a dictionary for fast lookups.
         
         Example:
             >>> import pixelflow as pf
+            >>> 
+            >>> # Create empty zone manager
             >>> zones = pf.Zones()
+            >>> print(len(zones.zones))  # 0
+            >>> 
+            >>> # Manager is ready for zone additions
+            >>> zones.add_zone([(0, 0), (100, 0), (100, 100), (0, 100)])
+            >>> print(len(zones.zones))  # 1
         """
         self.zones: List[Zone] = []
         self._zone_dict: Dict[Union[int, str], Zone] = {}
@@ -230,33 +302,36 @@ class Zones:
         
         Args:
             polygon (Union[List[Tuple[float, float]], np.ndarray]): Zone boundary 
-                    coordinates as list of (x, y) tuples or numpy array.
+                    coordinates as list of (x, y) tuples or numpy array in pixel coordinates.
             zone_id (Optional[Union[int, str]]): Unique zone identifier. 
                     Auto-generated as sequential integer if None.
-            name (str): Human-readable zone name. Defaults to "Zone {zone_id}".
-            color (Optional[Tuple[int, int, int]]): RGB color tuple for visualization.
+            name (str): Human-readable zone name. Defaults to "Zone {zone_id}" if empty.
+            color (Optional[Tuple[int, int, int]]): RGB color tuple (0-255) for visualization.
                   Auto-generated if None.
-            trigger_strategy (Union[str, List[str]]): 
-                             Detection matching strategy. Default is "center".
+            trigger_strategy (Union[str, List[str]]): Detection matching strategy. 
+                             Options: "center", "overlap", "percentage", etc. Default is "center".
             overlap_threshold (float): Threshold for percentage-based strategies.
-                                     Range: [0.0, 1.0]. Default is 0.5.
+                                     Range: [0.0, 1.0]. Default is 0.5 (50% overlap).
             mode (Literal["any", "all"]): Logic mode for multiple strategies.
                  "all" for AND logic, "any" for OR logic. Default is "all".
-            metadata (Optional[Dict[str, Any]]): Additional zone metadata.
+            metadata (Optional[Dict[str, Any]]): Additional zone metadata dictionary.
             
         Returns:
             Zone: The created and registered Zone object.
             
         Raises:
-            ValueError: If zone_id already exists in the manager.
+            ValueError: If zone_id already exists in the manager or trigger_strategy is invalid.
+            TypeError: If polygon coordinates are not numeric types.
             
         Example:
+            >>> import cv2
             >>> import pixelflow as pf
             >>> 
             >>> zones = pf.Zones()
             >>> 
             >>> # Add zone with auto-generated ID
             >>> zone1 = zones.add_zone([(0, 0), (100, 0), (100, 100), (0, 100)])
+            >>> print(f"Zone ID: {zone1.zone_id}")  # 0
             >>> 
             >>> # Add zone with custom configuration
             >>> zone2 = zones.add_zone(
@@ -266,11 +341,27 @@ class Zones:
             ...     trigger_strategy="percentage",
             ...     overlap_threshold=0.3
             ... )
+            >>> 
+            >>> # Add zone with multiple strategies
+            >>> zone3 = zones.add_zone(
+            ...     polygon=[(400, 400), (500, 400), (500, 500), (400, 500)],
+            ...     zone_id="security",
+            ...     trigger_strategy=["center", "bottom_center"],
+            ...     mode="any"
+            ... )
+            >>> 
+            >>> # Add zone with metadata
+            >>> zone4 = zones.add_zone(
+            ...     polygon=[(600, 600), (700, 600), (700, 700), (600, 700)],
+            ...     zone_id="vip",
+            ...     metadata={"priority": "high", "max_capacity": 10}
+            ... )
             
         Notes:
             - Zone IDs must be unique within the manager
             - Auto-generated IDs start at 0 and increment to avoid conflicts
             - All Zone constructor parameters are supported
+            - Zones are stored in both list and dictionary for different access patterns
         """
         # Auto-generate zone_id if not provided
         if zone_id is None:
@@ -300,15 +391,30 @@ class Zones:
         
         return zone
     
-    def remove_zone(self, zone_id: Union[int, str]):
+    def remove_zone(self, zone_id: Union[int, str]) -> None:
         """
         Remove a zone from the manager by its ID.
         
+        Removes the zone from both the list and dictionary storage. If the zone
+        does not exist, the operation is silently ignored.
+        
         Args:
-            zone_id (Union[int, str]): ID of the zone to remove.
+            zone_id (Union[int, str]): ID of the zone to remove. Must match exactly
+                                     the zone_id used when creating the zone.
                                      
         Example:
+            >>> import pixelflow as pf
+            >>> 
+            >>> zones = pf.Zones()
+            >>> zones.add_zone([(0, 0), (100, 100)], zone_id="entrance")
+            >>> print(len(zones.zones))  # 1
+            >>> 
+            >>> # Remove zone by ID
             >>> zones.remove_zone("entrance")
+            >>> print(len(zones.zones))  # 0
+            >>> 
+            >>> # Removing non-existent zone is safe
+            >>> zones.remove_zone("non_existent")  # No error
         """
         if zone_id in self._zone_dict:
             zone = self._zone_dict.pop(zone_id)
@@ -318,20 +424,33 @@ class Zones:
         """
         Retrieve a zone object by its ID.
         
+        Provides fast O(1) lookup of zones by their unique identifier.
+        
         Args:
-            zone_id (Union[int, str]): ID of the zone to retrieve.
+            zone_id (Union[int, str]): ID of the zone to retrieve. Must match exactly
+                                     the zone_id used when creating the zone.
             
         Returns:
-            Optional[Zone]: Zone object if found, None otherwise.
+            Optional[Zone]: Zone object if found, None if zone_id doesn't exist.
             
         Example:
+            >>> import pixelflow as pf
+            >>> 
+            >>> zones = pf.Zones()
+            >>> zones.add_zone([(0, 0), (100, 100)], zone_id="entrance", name="Main Entrance")
+            >>> 
+            >>> # Retrieve existing zone
             >>> zone = zones.get_zone("entrance")
             >>> if zone:
-            ...     print(zone.name)
+            ...     print(f"Found zone: {zone.name}")  # Found zone: Main Entrance
+            >>> 
+            >>> # Handle non-existent zone
+            >>> missing_zone = zones.get_zone("non_existent")
+            >>> print(missing_zone)  # None
         """
         return self._zone_dict.get(zone_id)
     
-    def update(self, results, strategy: Union[str, List[str]] = None):
+    def update(self, results, strategy: Optional[Union[str, List[str]]] = None):
         """
         Update detection results with zone membership information.
         
@@ -342,37 +461,50 @@ class Zones:
         Args:
             results: Detections object containing detection list with bbox attributes.
                    Each detection should have a .bbox attribute in [x1, y1, x2, y2] format.
-            strategy: Optional override strategy for all zones. If None, each zone uses its own strategy.
-                     Can be a single string or list of strings. Will be validated.
+            strategy (Optional[Union[str, List[str]]]): Override strategy for all zones. 
+                     If None, each zone uses its own strategy. Can be single string or 
+                     list of strings. Will be validated against available strategies.
                    
         Returns:
             Detections: The same Detections object with updated zone information
                        (modified in-place for performance).
                        
+        Raises:
+            ValueError: If override strategy is invalid or results format is incorrect.
+            AttributeError: If results object doesn't have expected attributes.
+                       
         Example:
             >>> import cv2
             >>> import pixelflow as pf
+            >>> from ultralytics import YOLO
             >>> 
-            >>> # Setup zones and get detection results
+            >>> # Setup zones and model
             >>> zones = pf.Zones()
-            >>> zones.add_zone([(100, 100), (200, 100), (200, 200), (100, 200)])
+            >>> zones.add_zone([(100, 100), (200, 100), (200, 200), (100, 200)], zone_id="entrance")
+            >>> zones.add_zone([(300, 300), (400, 300), (400, 400), (300, 400)], zone_id="exit")
+            >>> model = YOLO("yolo11n.pt")
             >>> 
+            >>> # Process detections with zones
             >>> image = cv2.imread("image.jpg")
             >>> outputs = model.predict(image)
             >>> results = pf.results.from_ultralytics(outputs)
             >>> 
-            >>> # Update results with zone information using zone's own strategies
+            >>> # Update with zone-specific strategies
             >>> updated_results = zones.update(results)
             >>> 
-            >>> # Override strategy for all zones (for flexible multi-class usage)
+            >>> # Override strategy for specific detection types
             >>> person_results = zones.update(person_detections, strategy="bottom_center")
             >>> car_results = zones.update(car_detections, strategy="center")
             >>> 
+            >>> # Multiple strategies with OR logic
+            >>> flexible_results = zones.update(results, strategy=["center", "overlap"])
+            >>> 
             >>> # Access zone information
             >>> for detection in results.detections:
-            ...     if detection.zones:
+            ...     if hasattr(detection, 'zones') and detection.zones:
             ...         print(f"Detection in zones: {detection.zones}")
             ...         print(f"Zone names: {detection.zone_names}")
+            ...         print(f"Zone counts: {zones.get_zone_counts()}")
                         
         Notes:
             - Updates detection.zones with list of matching zone IDs
@@ -380,6 +512,8 @@ class Zones:
             - Resets current_count for all zones before processing
             - Updates zone statistics including current_count and total_entered
             - Skips detections without bbox attribute
+            - Strategy override applies to all zones uniformly
+            - Maintains tracking statistics for unique object counting
         """
         # Validate override strategy if provided
         if strategy is not None:
@@ -440,14 +574,32 @@ class Zones:
                                       detection count in that zone.
                                       
         Example:
-            >>> zones = pf.Zones()
-            >>> zones.add_zone([(0, 0), (100, 100)], zone_id="zone1")
-            >>> zones.add_zone([(200, 200), (300, 300)], zone_id="zone2")
+            >>> import cv2
+            >>> import pixelflow as pf
+            >>> from ultralytics import YOLO
             >>> 
-            >>> # After processing detections
+            >>> zones = pf.Zones()
+            >>> zones.add_zone([(0, 0), (100, 0), (100, 100), (0, 100)], zone_id="zone1")
+            >>> zones.add_zone([(200, 200), (300, 200), (300, 300), (200, 300)], zone_id="zone2")
+            >>> model = YOLO("yolo11n.pt")
+            >>> 
+            >>> # Process frame and get counts
+            >>> image = cv2.imread("frame.jpg")
+            >>> outputs = model.predict(image)
+            >>> results = pf.results.from_ultralytics(outputs)
             >>> zones.update(results)
+            >>> 
             >>> counts = zones.get_zone_counts()
             >>> print(counts)  # {'zone1': 3, 'zone2': 1}
+            >>> 
+            >>> # Monitor changes over time
+            >>> for frame_path in frame_paths:
+            ...     image = cv2.imread(frame_path)
+            ...     outputs = model.predict(image)
+            ...     results = pf.results.from_ultralytics(outputs)
+            ...     zones.update(results)
+            ...     current_counts = zones.get_zone_counts()
+            ...     print(f"Frame counts: {current_counts}")
         """
         return {zone.zone_id: zone.current_count for zone in self.zones}
     
@@ -465,18 +617,43 @@ class Zones:
                                                   - name: Zone name
                                                   - current_count: Current detections
                                                   - total_entered: Cumulative unique entries
-                                                  - trigger_strategy: Strategy used
+                                                  - trigger_strategy: Strategy configuration
                                                   - metadata: Custom zone data
                                                   
         Example:
-            >>> zones = pf.Zones()
-            >>> zones.add_zone([(0, 0), (100, 100)], zone_id="entrance", name="Main Entrance")
+            >>> import cv2
+            >>> import pixelflow as pf
+            >>> from ultralytics import YOLO
             >>> 
-            >>> # After processing detections
-            >>> zones.update(results)
+            >>> zones = pf.Zones()
+            >>> zones.add_zone(
+            ...     polygon=[(0, 0), (100, 0), (100, 100), (0, 100)], 
+            ...     zone_id="entrance", 
+            ...     name="Main Entrance",
+            ...     metadata={"priority": "high"}
+            ... )
+            >>> model = YOLO("yolo11n.pt")
+            >>> 
+            >>> # Process detections over multiple frames
+            >>> for frame_path in frame_paths:
+            ...     image = cv2.imread(frame_path)
+            ...     outputs = model.predict(image)
+            ...     results = pf.results.from_ultralytics(outputs)
+            ...     zones.update(results)
+            >>> 
+            >>> # Get comprehensive statistics
             >>> stats = zones.get_zone_stats()
-            >>> print(stats["entrance"]["current_count"])  # Current detections
-            >>> print(stats["entrance"]["total_entered"])   # Total unique entries
+            >>> entrance_stats = stats["entrance"]
+            >>> print(f"Name: {entrance_stats['name']}")  # Main Entrance
+            >>> print(f"Current: {entrance_stats['current_count']}")  # Current detections
+            >>> print(f"Total: {entrance_stats['total_entered']}")   # Total unique entries
+            >>> print(f"Strategy: {entrance_stats['trigger_strategy']}")  # center
+            >>> print(f"Metadata: {entrance_stats['metadata']}")  # {'priority': 'high'}
+            >>> 
+            >>> # Export statistics for analysis
+            >>> import json
+            >>> with open("zone_analytics.json", "w") as f:
+            ...     json.dump(stats, f, indent=2)
         """
         stats = {}
         for zone in self.zones:
@@ -495,11 +672,11 @@ class Zones:
         
         Creates a new Detections object containing only detections that match
         the zone filtering criteria. Useful for focusing analysis on specific
-        spatial regions.
+        spatial regions or excluding restricted areas.
         
         Args:
             results: Detections object to filter. Should have been processed by
-                    update() method to have zone information.
+                    update() method to have zone information attached.
             zone_ids (List[Union[int, str]]): List of zone IDs to filter by.
                      Must match existing zone IDs in the manager.
             exclude (bool): If True, exclude detections in specified zones.
@@ -510,30 +687,49 @@ class Zones:
             Detections: New filtered Detections object containing subset of
                        original detections based on zone criteria.
                        
+        Raises:
+            AttributeError: If results object doesn't have expected structure.
+            ValueError: If zone_ids contains invalid zone identifiers.
+                       
         Example:
             >>> import cv2
             >>> import pixelflow as pf
+            >>> from ultralytics import YOLO
             >>> 
             >>> zones = pf.Zones()
-            >>> zones.add_zone([(0, 0), (100, 100), (200, 100), (200, 200)], zone_id="entrance")
-            >>> zones.add_zone([(300, 300), (400, 300), (400, 400), (300, 400)], zone_id="exit")
+            >>> zones.add_zone([(0, 0), (200, 0), (200, 200), (0, 200)], zone_id="entrance")
+            >>> zones.add_zone([(300, 300), (500, 300), (500, 500), (300, 500)], zone_id="exit")
+            >>> zones.add_zone([(600, 600), (800, 600), (800, 800), (600, 800)], zone_id="restricted")
+            >>> model = YOLO("yolo11n.pt")
             >>> 
+            >>> # Process detections
             >>> image = cv2.imread("image.jpg")
             >>> outputs = model.predict(image)
             >>> results = pf.results.from_ultralytics(outputs)
             >>> results = zones.update(results)
             >>> 
-            >>> # Get only detections in entrance zone
+            >>> # Get only entrance detections
             >>> entrance_detections = zones.filter_by_zones(results, ["entrance"])
+            >>> print(f"Entrance detections: {len(entrance_detections.detections)}")
             >>> 
-            >>> # Get detections NOT in exit zone
-            >>> non_exit_detections = zones.filter_by_zones(results, ["exit"], exclude=True)
+            >>> # Get detections NOT in restricted areas
+            >>> allowed_detections = zones.filter_by_zones(results, ["restricted"], exclude=True)
+            >>> print(f"Allowed detections: {len(allowed_detections.detections)}")
+            >>> 
+            >>> # Filter by multiple zones (include mode)
+            >>> entry_exit_detections = zones.filter_by_zones(results, ["entrance", "exit"])
+            >>> 
+            >>> # Complex filtering: exclude multiple zones
+            >>> public_detections = zones.filter_by_zones(
+            ...     results, ["restricted", "private"], exclude=True
+            ... )
             
         Notes:
             - Results must be processed with update() first to have zone information
             - Detections without zone information are included when exclude=True
             - Returns empty Detections object if no detections match criteria
             - Original Detections object is not modified
+            - Filtering preserves all detection attributes and metadata
         """
         from pixelflow.detections import Detections, Detection
         
@@ -553,27 +749,63 @@ class Zones:
         
         return filtered
     
-    def clear_zones(self):
+    def clear_zones(self) -> None:
         """
         Remove all zones from the manager.
         
-        Clears both the zone list and lookup dictionary.
+        Clears both the zone list and lookup dictionary, effectively resetting
+        the manager to its initial empty state.
         
         Example:
+            >>> import pixelflow as pf
+            >>> 
+            >>> zones = pf.Zones()
+            >>> zones.add_zone([(0, 0), (100, 100)], zone_id="zone1")
+            >>> zones.add_zone([(200, 200), (300, 300)], zone_id="zone2")
+            >>> print(len(zones.zones))  # 2
+            >>> 
+            >>> # Clear all zones
             >>> zones.clear_zones()
-            >>> len(zones.zones)  # 0
+            >>> print(len(zones.zones))  # 0
+            >>> print(len(zones._zone_dict))  # 0
+            >>> 
+            >>> # Manager is ready for new zones
+            >>> zones.add_zone([(400, 400), (500, 500)])  # Works normally
         """
         self.zones.clear()
         self._zone_dict.clear()
     
-    def reset_all_counts(self):
+    def reset_all_counts(self) -> None:
         """
         Reset statistics for all managed zones.
         
-        Calls reset_counts() on each zone to clear current and total counts.
+        Calls reset_counts() on each zone to clear current and total counts
+        as well as tracked object IDs. Useful for starting fresh analysis sessions.
         
         Example:
+            >>> import cv2
+            >>> import pixelflow as pf
+            >>> from ultralytics import YOLO
+            >>> 
+            >>> zones = pf.Zones()
+            >>> zones.add_zone([(0, 0), (100, 100)], zone_id="zone1")
+            >>> zones.add_zone([(200, 200), (300, 300)], zone_id="zone2")
+            >>> model = YOLO("yolo11n.pt")
+            >>> 
+            >>> # Process some frames
+            >>> for frame_path in frame_paths[:10]:
+            ...     image = cv2.imread(frame_path)
+            ...     outputs = model.predict(image)
+            ...     results = pf.results.from_ultralytics(outputs)
+            ...     zones.update(results)
+            >>> 
+            >>> print(zones.get_zone_stats())  # Shows accumulated counts
+            >>> 
+            >>> # Reset for new analysis session
             >>> zones.reset_all_counts()
+            >>> stats_after_reset = zones.get_zone_stats()
+            >>> for zone_id, stats in stats_after_reset.items():
+            ...     print(f"{zone_id}: current={stats['current_count']}, total={stats['total_entered']}")  # All zeros
         """
         for zone in self.zones:
             zone.reset_counts()

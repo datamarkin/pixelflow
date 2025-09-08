@@ -35,34 +35,43 @@ def anchors(
     Visualizes the anchor points used by the trigger strategy system to determine
     if detections are within zones or crossing lines. Each anchor point is drawn
     as a small filled circle at the calculated position on the bounding box.
+    Supports drawing individual anchor points or multiple points simultaneously.
     
     Args:
-        image (np.ndarray): Input image to draw anchor points on (BGR format)
-        detections (Detections): Detections object containing bounding boxes.
+        image (np.ndarray): Input image to draw anchor points on in BGR format.
+                           Image is modified in-place.
+        detections (Detections): Detection results containing bounding boxes.
                                 Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
-        strategy: Strategy for determining which anchor points to draw. Options:
-                 - None: Draw all main anchor points (center, corners, edge centers)
-                 - Single string (e.g., "center", "bottom_center")
-                 - List of strings for multiple anchor points
-                 Default: None (draws all main anchor points)
+        strategy (Union[str, List[str]], optional): Strategy for determining anchor points to draw.
+                                                   Single string: "center", "bottom_center", "top_left", etc.
+                                                   List of strings: Multiple anchor points.
+                                                   None draws all 9 main anchor points (center, corners, edge centers).
         radius (Optional[int]): Radius of anchor point circles in pixels.
-                               If None, automatically determined based on image size.
-        thickness (Optional[int]): Thickness of circle outline. Use -1 for filled circles.
-                                  If None, circles are filled by default.
-        colors (Optional[List[tuple]]): List of BGR color tuples to override default colors.
-                                       Colors are mapped to unique class_ids in order of appearance.
+                               If None, automatically scaled based on image size (minimum 2 pixels).
+        thickness (Optional[int]): Thickness of circle outline in pixels.
+                                  Use -1 for filled circles.
+                                  If None, defaults to -1 (filled).
+        colors (Optional[List[tuple]]): List of BGR color tuples for custom colors.
+                                       Colors mapped to unique class_ids in order of appearance.
                                        If None, uses default ColorManager colors.
     
     Returns:
         np.ndarray: Image with anchor points drawn. The input image is modified in-place.
         
+    Raises:
+        AttributeError: If detections don't have required 'bbox' attribute.
+        ValueError: If invalid strategy string is provided.
+        
     Examples:
         >>> import cv2
         >>> import pixelflow as pf
+        >>> from ultralytics import YOLO
         >>> 
         >>> # Load image and get detections
         >>> image = cv2.imread("path/to/image.jpg")
-        >>> detections = pf.results.from_ultralytics(model(image))
+        >>> model = YOLO("yolo11n.pt")
+        >>> outputs = model.predict(image)
+        >>> detections = pf.results.from_ultralytics(outputs)
         >>> 
         >>> # Draw all main anchor points (default)
         >>> annotated = pf.annotators.anchors(image, detections)
@@ -70,19 +79,29 @@ def anchors(
         >>> # Draw bottom center points (useful for ground-based tracking)
         >>> annotated = pf.annotators.anchors(image, detections, strategy="bottom_center")
         >>> 
-        >>> # Draw all four corners
+        >>> # Draw multiple specific anchor points
         >>> corners = ["top_left", "top_right", "bottom_left", "bottom_right"]
         >>> annotated = pf.annotators.anchors(image, detections, strategy=corners)
         >>> 
-        >>> 
-        >>> # Custom styling
+        >>> # Custom styling with larger green circles
         >>> annotated = pf.annotators.anchors(
         ...     image, detections, 
         ...     strategy="center", 
         ...     radius=8, 
         ...     thickness=2,
-        ...     colors=[(0, 255, 0)]  # Green circles
+        ...     colors=[(0, 255, 0)]
         ... )
+    
+    Notes:
+        - Anchor points are calculated using the get_anchor_position function from strategies module
+        - Invalid anchor strategies are skipped gracefully to prevent errors
+        - Radius is automatically scaled with image size if not specified
+        - All 9 anchor points include: center, 4 corners, and 4 edge centers
+        - Colors are applied consistently across detections with the same class_id
+        
+    See Also:
+        get_anchor_position : Calculate anchor coordinates for bounding boxes
+        box : Draw bounding boxes around detections
     """
     # Get adaptive parameters if not specified
     if radius is None:

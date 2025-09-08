@@ -1,58 +1,120 @@
+from typing import Optional, Tuple, Union
 import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 
 
 def zones(
-    image,
+    image: np.ndarray,
     zone_manager,
-    opacity=0.3,
-    border_thickness=None,
-    show_counts=True,
-    show_names=True,
-    font_scale=None,
-    font_thickness=None,
-    text_color=None,
-    text_bg_color=None,
-    text_bg_opacity=0.7,
-    count_position='center',
-    draw_filled=True,
-    draw_border=True
-):
+    opacity: float = 0.3,
+    border_thickness: Optional[int] = None,
+    show_counts: bool = True,
+    show_names: bool = True,
+    font_scale: Optional[float] = None,
+    font_thickness: Optional[int] = None,
+    text_color: Optional[Tuple[int, int, int]] = None,
+    text_bg_color: Optional[Tuple[int, int, int]] = None,
+    text_bg_opacity: float = 0.7,
+    count_position: str = 'center',
+    draw_filled: bool = True,
+    draw_border: bool = True
+) -> np.ndarray:
     """
-    Annotate zones on an image with superior visualization capabilities.
+    Draw polygon zones on images with customizable styling and intelligent labeling.
     
-    This function draws polygon zones with customizable appearance, automatic
-    counting, and labeling.
+    Renders defined zones as filled polygons with optional borders, displaying zone names, 
+    detection counts, and total entry statistics. Automatically adapts text size and 
+    thickness based on image resolution for optimal visibility across different image sizes.
     
     Args:
-        image (np.ndarray): Input image to annotate
-        zone_manager: ZoneManager instance containing zones to draw
-        opacity (float): Fill opacity for zones (0.0-1.0). Default 0.3.
-        border_thickness (int): Thickness of zone borders. Default 2.
-        show_counts (bool): Display detection count in each zone. Default True.
-        show_names (bool): Display zone names. Default True.
-        font_scale (float): Scale of text labels. Default 0.7.
-        font_thickness (int): Thickness of text. Default 2.
-        text_color (tuple, optional): RGB color for text. If None, uses UI text color.
-        text_bg_color (tuple, optional): RGB color for text background. If None, uses UI background.
-        text_bg_opacity (float): Opacity of text background. Default 0.7.
-        count_position (str): Position for count display ('center', 'top', 'bottom').
-        draw_filled (bool): Whether to fill zones with color. Default True.
-        draw_border (bool): Whether to draw zone borders. Default True.
-    
+        image (np.ndarray): Input image to annotate. Must be 3-channel BGR format.
+        zone_manager: ZoneManager instance containing polygon zones with associated metadata.
+                     Must have 'zones' attribute containing Zone objects with polygon, color, 
+                     name, and count attributes.
+        opacity (float): Fill opacity for zone polygons. Range: [0.0, 1.0]. 
+                        Default is 0.3 (30% transparency).
+        border_thickness (Optional[int]): Pixel thickness of zone borders. If None,
+                                        automatically calculated based on image size.
+                                        Range: [1, 20]. Default adapts to image resolution.
+        show_counts (bool): Whether to display current detection count in each zone.
+                          Shows both current count and total entries if available.
+                          Default is True.
+        show_names (bool): Whether to display zone names as text labels.
+                          Default is True.
+        font_scale (Optional[float]): Scale factor for text size. If None, automatically
+                                    calculated based on image resolution. Range: [0.3, 2.0].
+                                    Default adapts to image size.
+        font_thickness (Optional[int]): Thickness of text stroke in pixels. If None,
+                                      automatically calculated based on image size.
+                                      Range: [1, 5]. Default adapts to font scale.
+        text_color (Optional[Tuple[int, int, int]]): RGB color tuple for text labels.
+                                                   If None, uses white (255, 255, 255).
+                                                   Range: [0, 255] per channel.
+        text_bg_color (Optional[Tuple[int, int, int]]): RGB color tuple for text background.
+                                                      If None, uses black (0, 0, 0).
+                                                      Range: [0, 255] per channel.
+        text_bg_opacity (float): Opacity of text background rectangles. Range: [0.0, 1.0].
+                               Default is 0.7 (70% opacity).
+        count_position (str): Vertical position for count display relative to zone.
+                            Options: 'center' (zone centroid), 'top' (above zone), 
+                            'bottom' (below zone). Default is 'center'.
+        draw_filled (bool): Whether to fill zone polygons with semi-transparent color.
+                          Default is True.
+        draw_border (bool): Whether to draw zone polygon borders. Default is True.
+        
     Returns:
-        np.ndarray: Annotated image with zones visualized
+        np.ndarray: Annotated image with zones visualized. Modifies input image in-place
+                   and returns the modified array.
     
-    Examples:
-        # Simple usage - draws all zones with default settings
-        annotated = zones(image, zone_manager)
+    Raises:
+        AssertionError: If image is not a numpy ndarray.
+        AttributeError: If zone_manager lacks 'zones' attribute or zones lack required 
+                       properties (polygon, color, name, current_count).
+        IndexError: If zone polygon coordinates are outside image boundaries during
+                   text positioning calculations.
         
-        # Transparent zones with counts
-        annotated = zones(image, zone_manager, opacity=0.2, show_counts=True)
+    Example:
+        >>> import cv2
+        >>> import pixelflow as pf
+        >>> from shapely.geometry import Polygon
+        >>> 
+        >>> # Load image and create zone manager with defined areas
+        >>> image = cv2.imread("surveillance_feed.jpg")
+        >>> zone_manager = pf.ZoneManager()
+        >>> zone_manager.add_zone("entrance", Polygon([(100, 100), (300, 100), (300, 200), (100, 200)]))
+        >>> zone_manager.add_zone("restricted", Polygon([(400, 150), (600, 150), (600, 300), (400, 300)]))
+        >>> 
+        >>> # Basic usage - draw all zones with default semi-transparent fill
+        >>> annotated = pf.annotators.zones(image, zone_manager)
+        >>> 
+        >>> # High-visibility zones with custom opacity and thick borders
+        >>> annotated = pf.annotators.zones(image, zone_manager, opacity=0.5, 
+        ...                                border_thickness=4, show_counts=True)
+        >>> 
+        >>> # Border-only zones with names positioned at bottom
+        >>> annotated = pf.annotators.zones(image, zone_manager, draw_filled=False, 
+        ...                                show_names=True, count_position='bottom')
+        >>> 
+        >>> # Minimal zones with custom colors and no background
+        >>> annotated = pf.annotators.zones(image, zone_manager, text_color=(255, 255, 0),
+        ...                                text_bg_opacity=0.0, show_counts=False)
+    
+    Notes:
+        - Modifies the input image in-place for memory efficiency
+        - Text size and thickness automatically adapt to image resolution when not specified
+        - Zone colors are taken from individual Zone objects in the zone_manager
+        - Count display shows format "Count: X" or "Count: X (Total: Y)" when total_entered available
+        - Text positioning uses zone polygon centroid with automatic adjustment for top/bottom modes
+        - Semi-transparent overlays are created using OpenCV's addWeighted for smooth blending
+        - Polygon rendering uses anti-aliased lines for smooth appearance
+        - Text background rectangles include padding calculated from adaptive parameters
         
-        # Border-only zones with names
-        annotated = zones(image, zone_manager, draw_filled=False, show_names=True)
+    Performance Notes:
+        - Processing time scales with number of zones and image resolution
+        - Memory usage is optimized through in-place image modification
+        - Overlay operations create temporary image copies for transparency blending
+        - Text rendering involves multiple OpenCV operations per label
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     

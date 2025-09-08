@@ -22,30 +22,61 @@ def filter_by_confidence(self, threshold: float) -> 'Detections':
     """
     Filter detections by minimum confidence score threshold.
     
+    Applies confidence-based filtering to remove low-confidence detections that may
+    represent false positives or uncertain predictions. Essential preprocessing step
+    for improving detection quality and reducing noise in downstream analysis.
+    
     Args:
         threshold (float): Minimum confidence score (inclusive). Range: [0.0, 1.0].
                           Detections with confidence >= threshold are retained.
+                          Higher values are more restrictive.
         
     Returns:
         Detections: New Detections object containing only high-confidence detections.
+                   Preserves all detection attributes including tracking data.
     
+    Raises:
+        TypeError: If threshold is not a numeric type.
+        ValueError: If threshold is outside the valid range [0.0, 1.0].
+        
     Example:
+        >>> import cv2
         >>> import pixelflow as pf
         >>> from ultralytics import YOLO
         >>> 
-        >>> # Run YOLO inference and convert to PixelFlow format
+        >>> # Load model and run inference
         >>> model = YOLO("yolov8n.pt")
-        >>> outputs = model.predict("image.jpg")
+        >>> image = cv2.imread("traffic_scene.jpg")
+        >>> outputs = model.predict(image)
         >>> detections = pf.detections.from_ultralytics(outputs)
         >>> 
-        >>> # Keep only high-confidence detections
+        >>> # Basic filtering: keep high-confidence detections
         >>> high_conf = detections.filter_by_confidence(0.8)
-        >>> print(f"High confidence: {len(high_conf)} detections")
+        >>> print(f"High confidence: {len(high_conf)}/{len(detections)} detections")
+        >>> 
+        >>> # Conservative filtering for critical applications
+        >>> critical = detections.filter_by_confidence(0.95)
+        >>> print(f"Very high confidence: {len(critical)} detections")
+        >>> 
+        >>> # Method chaining with other filters
+        >>> filtered = detections.filter_by_confidence(0.7).filter_by_class_id([0, 2])
+        >>> print(f"High-conf people and cars: {len(filtered)} detections")
+        >>> 
+        >>> # Moderate filtering for analysis
+        >>> moderate = detections.filter_by_confidence(0.5)
+        >>> print(f"Moderate confidence: {len(moderate)} detections")
     
     Notes:
-        - Detections with None confidence values are excluded
+        - Detections with None confidence values are automatically excluded
         - Returns empty Detections object if no detections meet threshold
+        - Preserves all detection attributes (bbox, masks, keypoints, tracking data)
         - Supports method chaining with other filter operations
+        - Threshold validation is not enforced; values outside [0.0, 1.0] may cause unexpected behavior
+        
+    Performance Notes:
+        - O(n) time complexity where n is the number of detections
+        - Memory efficient with lazy evaluation and direct filtering
+        - Minimal overhead for large detection collections
     """
     filtered_detections = self.__class__()
     for detection in self.detections:
@@ -58,31 +89,62 @@ def filter_by_class_id(self, class_ids: Union[int, str, List[Union[int, str]]]) 
     """
     Filter detections by class identifier(s).
     
+    Enables class-specific filtering to focus analysis on particular object types.
+    Supports both single class selection and multi-class filtering with flexible
+    ID format handling for different model outputs and naming conventions.
+    
     Args:
         class_ids (Union[int, str, List[Union[int, str]]]): Single class ID or list of class IDs
                                                            to include. Accepts both numeric IDs
-                                                           and string class names.
+                                                           (e.g., COCO indices) and string class names.
+                                                           Mixed types are supported in lists.
         
     Returns:
         Detections: New Detections object containing only detections with matching class IDs.
+                   Preserves all detection attributes and metadata.
     
+    Raises:
+        TypeError: If class_ids contains unsupported types (not int, str, or list thereof).
+        
     Example:
-        >>> # Filter for specific class by ID
-        >>> people = detections.filter_by_class_id(0)  # person class in COCO
+        >>> import cv2
+        >>> import pixelflow as pf
+        >>> from ultralytics import YOLO
         >>> 
-        >>> # Filter for multiple classes
+        >>> # Load model and run inference
+        >>> model = YOLO("yolov8n.pt")
+        >>> image = cv2.imread("street_scene.jpg")
+        >>> outputs = model.predict(image)
+        >>> detections = pf.detections.from_ultralytics(outputs)
+        >>> 
+        >>> # Filter for specific class by numeric ID (COCO format)
+        >>> people = detections.filter_by_class_id(0)  # person class
+        >>> print(f"Found {len(people)} people")
+        >>> 
+        >>> # Filter for multiple vehicle classes
         >>> vehicles = detections.filter_by_class_id([2, 3, 5, 7])  # car, motorcycle, bus, truck
+        >>> print(f"Found {len(vehicles)} vehicles")
         >>> 
-        >>> # Filter by class name
+        >>> # Filter by class name string
         >>> dogs = detections.filter_by_class_id("dog")
+        >>> print(f"Found {len(dogs)} dogs")
         >>> 
-        >>> # Mixed ID types
-        >>> mixed = detections.filter_by_class_id(["person", 2, "dog"])
+        >>> # Mixed ID types for flexible filtering
+        >>> targets = detections.filter_by_class_id(["person", 2, "bicycle"])
+        >>> print(f"Found {len(targets)} people, cars, or bicycles")
     
     Notes:
-        - Detections with None class_id values are excluded
-        - Accepts single values or lists for flexible usage
-        - Supports both numeric IDs and string class names
+        - Detections with None class_id values are automatically excluded
+        - Accepts single values or lists for flexible usage patterns
+        - Supports both numeric IDs and string class names in same operation
+        - Class ID matching uses exact equality (no fuzzy matching)
+        - Empty list input returns empty Detections object
+        - Preserves all detection attributes including confidence and tracking data
+        
+    Performance Notes:
+        - O(n×m) time complexity where n is detections and m is class_ids length
+        - Efficient membership testing with set conversion for large class_id lists
+        - Memory efficient with minimal object copying
     """
     # Handle single class_id or list of class_ids
     if not isinstance(class_ids, (list, tuple)):

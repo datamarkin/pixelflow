@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import List, Optional, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..detections import Detections
@@ -8,31 +8,78 @@ import numpy as np
 from ..colors import _get_color_for_prediction
 
 
-def mask(frame: np.ndarray,
-         detections: 'Detections',
-         opacity: float = 0.5,
-         colors=None) -> np.ndarray:
+def mask(
+    frame: np.ndarray,
+    detections: 'Detections',
+    opacity: float = 0.5,
+    colors: Optional[List[tuple]] = None
+) -> np.ndarray:
     """
-    Overlays masks on a video frame, supporting both binary masks and polygon formats.
-
+    Overlay segmentation masks on a video frame with support for both binary masks and polygon formats.
+    
+    Provides efficient mask visualization using optimized single-pass rendering and OpenCV's 
+    accelerated blending operations. Supports both binary mask arrays and polygon coordinate 
+    lists, with automatic format detection and conversion for seamless integration.
+    
     Args:
-        frame (np.ndarray): The video frame (BGR format).
-        detections (Detections): Detections object containing masks.
-        opacity (float): Opacity level for blending masks with the frame (0.0 to 1.0).
-        colors (list, optional): List of BGR color tuples to override default colors.
-                               Colors are mapped to unique class_ids in order of appearance.
-                               If None, uses default ColorManager colors.
-
+        frame (np.ndarray): Input video frame in BGR format (height, width, 3).
+                           Modified in-place with overlaid masks.
+        detections (Detections): Detections object containing mask data.
+                                Each detection's masks attribute can contain binary arrays
+                                or polygon coordinate lists.
+        opacity (float): Opacity level for blending masks with the frame.
+                        Range: [0.0, 1.0]. Default is 0.5 (semi-transparent).
+                        Value of 1.0 creates opaque masks, 0.0 makes them invisible.
+        colors (Optional[List[tuple]]): List of BGR color tuples to override default colors.
+                                       Colors are mapped to unique class_ids in order of appearance.
+                                       If None, uses default ColorManager colors.
+        
     Returns:
-        np.ndarray: The frame with masks overlaid.
+        np.ndarray: Frame with masks overlaid using the specified opacity.
+                   The input frame is modified in-place for memory efficiency.
+    
+    Raises:
+        ValueError: If binary mask dimensions do not match frame dimensions.
+        AttributeError: If detection objects lack required 'masks' attribute.
         
-    Examples:
-        # Use default colors
-        annotated = mask(image, detections)
+    Example:
+        >>> import cv2
+        >>> import pixelflow as pf
+        >>> from ultralytics import YOLO
+        >>> 
+        >>> # Load image and get segmentation predictions
+        >>> image = cv2.imread("path/to/image.jpg")
+        >>> model = YOLO("yolo11n-seg.pt")  # Segmentation model
+        >>> outputs = model.predict(image)  # Raw model outputs
+        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> 
+        >>> # Apply masks with default semi-transparent overlay
+        >>> annotated = pf.annotators.mask(image, detections)
+        >>> 
+        >>> # Use custom colors for specific classes
+        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
+        >>> annotated = pf.annotators.mask(image, detections, colors=custom_colors)
+        >>> 
+        >>> # Create opaque masks for clear segmentation boundaries
+        >>> annotated = pf.annotators.mask(image, detections, opacity=1.0)
+        >>> 
+        >>> # Subtle overlay for background preservation
+        >>> annotated = pf.annotators.mask(image, detections, opacity=0.2)
+    
+    Notes:
+        - Input frame is modified in-place for memory efficiency
+        - Supports both binary mask arrays (boolean or uint8) and polygon coordinate lists
+        - Binary masks must match frame dimensions exactly
+        - Polygon coordinates are automatically converted to binary masks using cv2.fillPoly
+        - Uses single-pass rendering for optimal performance with multiple masks
+        - OpenCV's addWeighted function provides hardware-accelerated blending
+        - Empty or None mask data is automatically skipped
         
-        # Override with custom colors
-        custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
-        annotated = mask(image, detections, colors=custom_colors)
+    Performance Notes:
+        - Single overlay creation minimizes memory allocation
+        - Batch blending operation reduces computational overhead
+        - Direct pixel assignment used for full opacity (opacity=1.0) to bypass blending
+        - Polygon-to-mask conversion cached within the function scope
     """
     # Create a single overlay for all masks
     overlay = np.zeros_like(frame, dtype=np.uint8)

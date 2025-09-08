@@ -15,8 +15,6 @@ import cv2
 import numpy as np
 from .utils import _get_adaptive_params
 
-__all__ = ["blur"]
-
 
 def blur(
     image: np.ndarray, 
@@ -25,62 +23,74 @@ def blur(
     padding_percent: float = 0.05
 ) -> np.ndarray:
     """
-    Applies blur effect to detected regions in the image with padding.
+    Applies Gaussian blur effect to detected regions for privacy protection.
     
-    The blur effect is achieved using Gaussian blur to obscure details
-    in detected regions while maintaining a natural appearance.
+    Creates a natural-looking privacy filter by applying Gaussian blur to detected object
+    regions while preserving the rest of the image. The function automatically handles
+    boundary conditions and provides adaptive kernel sizing for optimal results.
     
     Args:
-        image (np.ndarray): Input image to apply blur on
-        detections (Detections): Detections object containing bounding boxes.
-                                Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
-        kernel_size (Optional[int]): Size of the blur kernel. Larger values create
-                                   stronger blur effect. Must be odd and > 0. 
-                                   If None, uses adaptive sizing based on image dimensions.
-        padding_percent (float): Padding to add around detection as percentage
-                               of box size. Range: 0.0-0.5. Default is 0.05 (5% from each side).
+        image (np.ndarray): Input image as BGR or RGB array with shape (H, W, C).
+                           Must be a valid NumPy array.
+        detections (Detections): PixelFlow Detections object containing bounding boxes.
+                                Each detection must have a 'bbox' attribute with 
+                                (x1, y1, x2, y2) coordinates in pixel units.
+        kernel_size (Optional[int]): Size of the Gaussian blur kernel in pixels.
+                                   Larger values create stronger blur effect.
+                                   Must be positive and odd. If None, uses adaptive 
+                                   sizing based on image dimensions. Default is None.
+        padding_percent (float): Additional padding around each detection as percentage
+                               of bounding box size. Range: 0.0-0.5. Default is 0.05 
+                               (5% padding on each side).
         
     Returns:
         np.ndarray: Image with blurred regions where objects were detected.
                    The input image is modified in-place for memory efficiency.
     
     Raises:
-        AssertionError: If image is not a NumPy array
-        AttributeError: If results objects don't have 'bbox' attribute
-        IndexError: If bbox coordinates are invalid or outside image bounds
+        AssertionError: If image is not a NumPy array.
+        AttributeError: If detections objects don't have required 'bbox' attribute.
+        IndexError: If bbox coordinates are invalid or outside image bounds.
     
     Example:
         >>> import cv2
         >>> import pixelflow as pf
+        >>> from ultralytics import YOLO
         >>> 
         >>> # Load image and get model predictions
-        >>> image = cv2.imread("path/to/image.jpg")
+        >>> image = cv2.imread("faces_in_crowd.jpg")
+        >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)  # Raw model outputs
         >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
-        >>> # Apply blur with default settings
+        >>> # Apply blur with default adaptive settings
         >>> blurred_image = pf.annotators.blur(image, detections)
         >>> 
         >>> # Apply stronger blur with custom kernel size
-        >>> blurred_image = pf.annotators.blur(image, detections, kernel_size=25)
+        >>> strong_blur = pf.annotators.blur(image, detections, kernel_size=25)
         >>> 
-        >>> # Apply blur with more padding around detections
-        >>> blurred_image = pf.annotators.blur(image, detections, padding_percent=0.1)
+        >>> # Apply blur with expanded padding for better coverage
+        >>> padded_blur = pf.annotators.blur(image, detections, padding_percent=0.15)
+        >>> 
+        >>> # Minimal blur for subtle privacy protection
+        >>> subtle_blur = pf.annotators.blur(image, detections, kernel_size=7, padding_percent=0.02)
     
     Notes:
         - Modifies the input image in-place for memory efficiency
         - Automatically adapts kernel size based on image dimensions when not specified
-        - Skips regions too small for the specified kernel size
-        - Padding is automatically clamped to prevent excessive expansion
+        - Even kernel sizes are automatically converted to odd numbers (required for Gaussian blur)
+        - Skips regions smaller than the kernel size to prevent processing errors
+        - Padding is automatically clamped to range [0.0, 0.5] to prevent excessive expansion
+        - Bounding boxes are clipped to image boundaries to handle edge cases
         
     Performance Notes:
-        - Uses OpenCV's optimized Gaussian blur implementation
-        - Efficient for real-time processing
-        - Scales well with image size
+        - Uses OpenCV's highly optimized GaussianBlur implementation
+        - Efficient for real-time video processing applications  
+        - Processing time scales linearly with number of detections and blur strength
+        - Memory usage is minimal due to in-place modification
         
     See Also:
-        pixelate : Alternative privacy protection method using pixelation
-        oval : Shaped region effects for selective blurring
+        pixelate : Alternative privacy protection method using pixelation effects
     """
     assert isinstance(image, np.ndarray), "Input image must be a NumPy array."
     
