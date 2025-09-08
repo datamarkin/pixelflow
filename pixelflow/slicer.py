@@ -545,7 +545,7 @@ class SlicedInference:
             4. Calculate IoU and IoS metrics for spatial overlap analysis
             5. Apply different thresholds based on slice adjacency relationships
             6. Suppress or merge overlapping predictions based on configured mode
-        \"\"\"
+        """
         if not all_predictions:
             return Detections()
         
