@@ -32,29 +32,31 @@
             "group": "Annotators",
             "pages": [
               "docs/annotators/introduction",
+              "docs/annotators/anchors",
+              "docs/annotators/blur",
               "docs/annotators/box",
+              "docs/annotators/crossing",
               "docs/annotators/label",
               "docs/annotators/mask",
-              "docs/annotators/polygon",
               "docs/annotators/oval",
-              "docs/annotators/blur",
               "docs/annotators/pixelate",
+              "docs/annotators/polygon",
               "docs/annotators/zones"
             ]
           },
           {
             "group": "Zones",
             "pages": [
-              "docs/zones/introduction",
-              "docs/zones/polygon_zones",
-              "docs/zones/crossings",
-              "docs/zones/strategies"
+              "docs/introduction",
+              "docs/zones",
+              "docs/crossings",
+              "docs/strategies"
             ]
           },
           {
             "group": "Object Tracking",
             "pages": [
-              "docs/trackers/bytetracker"
+              "docs/tracker/bytetrack"
             ]
           },
           {
@@ -62,14 +64,13 @@
             "pages": [
               "docs/buffer",
               "docs/smoother",
-              "docs/slicer",
-              "docs/colors"
+              "docs/slicer"
             ]
           },
           {
             "group": "Analytics",
             "pages": [
-              "docs/timetracker"
+              "docs/timer"
             ]
           }
         ]
