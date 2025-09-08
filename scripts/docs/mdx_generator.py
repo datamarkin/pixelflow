@@ -50,19 +50,19 @@ class MDXGenerator:
             'class': 'cpu'
         }
     
-    def generate_for_file(self, items: List[Dict], file_stem: str, module_path: str = '') -> str:
+    def generate_for_file(self, items: List[Dict], file_stem: str, module_path: str = '', module_doc: Dict = None) -> str:
         """Generate MDX content for a file containing multiple items."""
         if len(items) == 1:
             # Single item - generate direct documentation
             item = items[0]
-            return self._generate_single_item(item, file_stem)
+            return self._generate_single_item(item, file_stem, module_doc)
         elif len(items) > 1:
             # Multiple items - generate overview with individual sections
-            return self._generate_multi_item(items, file_stem, module_path)
+            return self._generate_multi_item(items, file_stem, module_path, module_doc)
         else:
-            return self._generate_empty_file(file_stem)
+            return self._generate_empty_file(file_stem, module_doc)
     
-    def _generate_single_item(self, item: Dict, file_stem: str) -> str:
+    def _generate_single_item(self, item: Dict, file_stem: str, module_doc: Dict = None) -> str:
         """Generate MDX for a single function or class."""
         parsed_doc = item.get('parsed_doc', {})
         name = item['name']
@@ -72,26 +72,36 @@ class MDXGenerator:
         
         # Frontmatter
         icon = self.icon_map.get(name, self.icon_map.get(item_type, 'function'))
+        title = name.capitalize()  # Capitalize first letter
         lines.extend([
             '---',
-            f'title: {name}',
+            f'title: {title}',
             f'description: {parsed_doc.get("summary", "")}',
             # f'icon: "{icon}"',
             '---',
             ''
         ])
         
-        # Overview
-        lines.extend([
-            '## Overview',
-            '',
-            parsed_doc.get('summary', ''),
-            ''
-        ])
-        
-        if parsed_doc.get('description'):
-            lines.append(parsed_doc['description'])
-            lines.append('')
+        # Overview - only add if there's additional content beyond the summary
+        if parsed_doc.get('description') or (module_doc and module_doc.get('summary')):
+            lines.extend([
+                '## Overview',
+                ''
+            ])
+            
+            # Add module context if available and different from item summary
+            if module_doc and module_doc.get('summary'):
+                lines.append(module_doc['summary'])
+                lines.append('')
+                
+                if module_doc.get('description'):
+                    lines.append(module_doc['description'])
+                    lines.append('')
+            
+            # Add item description if different from summary
+            if parsed_doc.get('description') and parsed_doc['description'] != parsed_doc.get('summary', ''):
+                lines.append(parsed_doc['description'])
+                lines.append('')
         
         # Function signature or class info
         if item_type == 'function':
@@ -123,7 +133,7 @@ class MDXGenerator:
         
         return '\n'.join(lines)
     
-    def _generate_multi_item(self, items: List[Dict], file_stem: str, module_path: str) -> str:
+    def _generate_multi_item(self, items: List[Dict], file_stem: str, module_path: str, module_doc: Dict = None) -> str:
         """Generate MDX for multiple items in one file."""
         lines = []
         
@@ -136,11 +146,15 @@ class MDXGenerator:
         functions = [item for item in items if item['type'] == 'function']
         classes = [item for item in items if item['type'] == 'class']
         
-        description = f"Contains {len(classes)} classes and {len(functions)} functions"
-        if len(classes) > 0 and len(functions) == 0:
-            description = f"Contains {len(classes)} classes for {file_stem}"
-        elif len(functions) > 0 and len(classes) == 0:
-            description = f"Contains {len(functions)} functions for {file_stem}"
+        # Use module docstring summary for description if available, otherwise generate
+        if module_doc and module_doc.get('summary'):
+            description = module_doc['summary']
+        else:
+            description = f"Contains {len(classes)} classes and {len(functions)} functions"
+            if len(classes) > 0 and len(functions) == 0:
+                description = f"Contains {len(classes)} classes for {file_stem}"
+            elif len(functions) > 0 and len(classes) == 0:
+                description = f"Contains {len(functions)} functions for {file_stem}"
         
         # Frontmatter
         icon = self.icon_map.get(file_stem, 'cpu')
@@ -156,10 +170,22 @@ class MDXGenerator:
         # Module overview
         lines.extend([
             f'# {title}',
-            '',
-            description + '.',
             ''
         ])
+        
+        # Add module description if available and different from title
+        if module_doc:
+            if module_doc.get('summary'):
+                lines.append(module_doc['summary'])
+                lines.append('')
+            
+            if module_doc.get('description'):
+                lines.append(module_doc['description'])
+                lines.append('')
+        else:
+            # Fallback to generated description
+            lines.append(description + '.')
+            lines.append('')
         
         # Add overview cards if multiple items
         if len(items) > 1:
@@ -218,17 +244,26 @@ class MDXGenerator:
         
         return '\n'.join(lines)
     
-    def _generate_empty_file(self, file_stem: str) -> str:
+    def _generate_empty_file(self, file_stem: str, module_doc: Dict = None) -> str:
         """Generate MDX for empty file."""
         title = file_stem.replace('_', ' ').title()
+        
+        # Use module docstring if available
+        if module_doc and module_doc.get('summary'):
+            description = module_doc['summary']
+            content = module_doc.get('description', 'This module contains implementation details.')
+        else:
+            description = f"{title} module"
+            content = "This module is currently empty or contains only private functions."
+        
         return f'''---
 title: {title}
-description: {title} module
+description: {description}
 ---
 
 # {title}
 
-This module is currently empty or contains only private functions.
+{content}
 '''
     
     def _add_function_signature(self, lines: List[str], name: str, parsed_doc: Dict):
