@@ -1,0 +1,207 @@
+---
+title: "Quickstart"
+description: "Get productive with PixelFlow in under 5 minutes. From installation to your first computer vision application."
+---
+
+# Get Started in Under 5 Minutes
+
+This guide gets you from zero to running computer vision applications with PixelFlow. You'll install the library, run your first detection, and see the power of unified CV workflows.
+
+## Installation
+
+<Tabs>
+  <Tab title="pip install">
+    ```bash
+    pip install pixelflow
+    ```
+  </Tab>
+  <Tab title="Development">
+    ```bash
+    git clone https://github.com/datamarkin/pixelflow
+    cd pixelflow
+    pip install -e .
+    ```
+  </Tab>
+</Tabs>
+
+## Your First PixelFlow Application
+
+Here's how simple it is to get professional computer vision results:
+
+<CodeGroup>
+```python YOLO + PixelFlow
+import pixelflow as pf
+import cv2
+from ultralytics import YOLO
+
+# Load any YOLO model
+model = YOLO('yolov8n.pt')  # Downloads automatically first time
+
+# Load your image
+image = cv2.imread('your_image.jpg')
+
+# Run detection
+results = model(image)
+
+# Convert to PixelFlow format
+detections = pf.from_ultralytics(results[0])
+
+# Professional annotations in one line
+annotated = pf.annotate.box(image, detections)
+
+# Display or save result
+cv2.imshow('PixelFlow Result', annotated)
+cv2.waitKey(0)
+```
+
+```python Detectron2 + PixelFlow
+import pixelflow as pf
+import cv2
+from detectron2 import model_zoo
+from detectron2.engine import DefaultPredictor
+from detectron2.config import get_cfg
+
+# Setup Detectron2 model
+cfg = get_cfg()
+cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+predictor = DefaultPredictor(cfg)
+
+# Load your image  
+image = cv2.imread('your_image.jpg')
+
+# Run detection
+outputs = predictor(image)
+
+# Same PixelFlow workflow
+detections = pf.from_detectron2(outputs)
+annotated = pf.annotate.box(image, detections)
+
+cv2.imshow('PixelFlow Result', annotated)
+cv2.waitKey(0)
+```
+
+```python MediaPipe + PixelFlow
+import pixelflow as pf
+import cv2
+import mediapipe as mp
+
+# Setup MediaPipe
+mp_pose = mp.solutions.pose.Pose()
+
+# Load your image
+image = cv2.imread('your_image.jpg')
+rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+# Run pose detection
+results = mp_pose.process(rgb_image)
+
+# Unified PixelFlow interface
+detections = pf.from_mediapipe(results, image.shape)
+annotated = pf.annotate.keypoint(image, detections)
+
+cv2.imshow('PixelFlow Result', annotated)
+cv2.waitKey(0)
+```
+</CodeGroup>
+
+<Note>
+All examples use the same PixelFlow workflow: **Model Output** ’ **Convert** ’ **Annotate**. This pattern works across every supported framework.
+</Note>
+
+## Advanced Features in 3 More Lines
+
+Once you have basic detection working, PixelFlow's advanced features are just as simple:
+
+### Object Tracking
+```python
+# Add multi-object tracking
+from pixelflow.tracker import ByteTracker
+
+tracker = ByteTracker()
+tracked_detections = tracker.update(detections, image)
+annotated = pf.annotate.box(image, tracked_detections, show_ids=True)
+```
+
+### Zone-Based Filtering
+```python
+# Filter detections by spatial zones
+from pixelflow.zones import Zones
+
+zones = Zones.from_polygons([[(100, 100), (400, 100), (400, 300), (100, 300)]])
+filtered_detections = detections.filter_by_zones(zones)
+annotated = pf.annotate.zones(image, zones, detections=filtered_detections)
+```
+
+### Privacy Protection
+```python
+# Blur faces for privacy compliance
+person_detections = detections.filter_by_class([0])  # Person class = 0 in COCO
+privacy_safe = pf.annotate.blur(image, person_detections)
+```
+
+## Complete Working Example
+
+Here's a full script that demonstrates PixelFlow's power:
+
+```python complete_example.py
+import pixelflow as pf
+import cv2
+from ultralytics import YOLO
+from pixelflow.tracker import ByteTracker
+from pixelflow.zones import Zones
+
+# Setup
+model = YOLO('yolov8n.pt')
+tracker = ByteTracker()
+
+# Define a zone (rectangle from top-left to bottom-right)
+zone_polygon = [(200, 200), (600, 200), (600, 400), (200, 400)]
+zones = Zones.from_polygons([zone_polygon])
+
+# Process image
+image = cv2.imread('busy_street.jpg')
+results = model(image)
+
+# PixelFlow pipeline
+detections = pf.from_ultralytics(results[0])
+tracked_detections = tracker.update(detections, image)
+zone_detections = tracked_detections.filter_by_zones(zones)
+
+# Professional visualization
+annotated = image.copy()
+annotated = pf.annotate.zones(annotated, zones, alpha=0.3)
+annotated = pf.annotate.box(annotated, zone_detections, show_ids=True)
+annotated = pf.annotate.label(annotated, zone_detections, show_confidence=True)
+
+# Display results
+cv2.imshow('PixelFlow Complete Example', annotated)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+print(f"Detected {len(zone_detections)} objects in the zone")
+```
+
+## Next Steps
+
+You're now ready to build production computer vision applications! Here's where to go next:
+
+<CardGroup cols={2}>
+  <Card title="Detections" icon="target" href="/docs/detections/detections">
+    Master the unified detection format that works with any model
+  </Card>
+  <Card title="Annotations" icon="pen" href="/docs/annotators/introduction">
+    Explore all 20+ professional annotation functions
+  </Card>
+  <Card title="Object Tracking" icon="route" href="/docs/tracker/bytetrack">
+    Add multi-object tracking to your applications
+  </Card>
+  <Card title="Spatial Analytics" icon="map" href="/docs/zones">
+    Use zones and crossings for location-based insights
+  </Card>
+</CardGroup>
+
+<Tip>
+**Pro Tip**: PixelFlow's modular design means you can use any component independently. Start with basic detection and annotations, then add tracking, zones, and advanced features as needed.
+</Tip>
