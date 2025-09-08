@@ -5,7 +5,9 @@ description: A rolling window buffer for frames and detection results.
 
 ## Overview
 
-A rolling window buffer for frames and detection results.
+Buffer module for temporal frame and results management.
+
+This module provides a rolling window buffer that collects frames and their corresponding detection results, enabling temporal context for downstream processing.
 
 The buffer collects a specified number of frames and their results, always returning the middle frame once the buffer is full. This provides temporal context (past and future frames) for advanced processing like smoothing, interpolation, or motion analysis. Attributes: buffer_size: Number of frames to buffer (should be odd for clean middle) frame_buffer: List storing the buffered frames results_buffer: List storing the buffered results is_full: Whether the buffer has reached capacity
 

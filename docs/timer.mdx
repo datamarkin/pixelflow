@@ -1,11 +1,13 @@
 ---
-title: TimeTracker
+title: Timetracker
 description: Unified time tracker that works with frames or system clock.
 ---
 
 ## Overview
 
-Unified time tracker that works with frames or system clock.
+Time tracking module for PixelFlow.
+
+Provides unified time tracking for object detection, zone analysis, and line crossing events. Works with both frame-based and clock-based timing for maximum flexibility.
 
 Automatically tracks overall time, zone time, and line crossing time. This class provides time tracking for: - Total time since first detection of each object - Time spent in specific zones (if zone info is present in detections) - Time since line crossings (if line crossing info is present) The tracker automatically switches between frame-based and clock-based timing based on whether an FPS value is provided during initialization.
 

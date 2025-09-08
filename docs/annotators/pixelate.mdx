@@ -1,11 +1,9 @@
 ---
-title: pixelate
+title: Pixelate
 description: Applies pixelation effect to detected regions in the image with padding.
 ---
 
 ## Overview
-
-Applies pixelation effect to detected regions in the image with padding.
 
 The pixelation effect is achieved by downscaling and then upscaling the region of interest, which reduces detail and creates a blocky appearance. This implementation uses OpenCV's optimized resize functions which leverage SIMD instructions for best performance.
 

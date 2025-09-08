@@ -1,11 +1,13 @@
 ---
-title: smooth
+title: Smooth
 description: Smooth detection results using buffer's temporal context.
 ---
 
 ## Overview
 
-Smooth detection results using buffer's temporal context.
+Smoother module for temporal detection smoothing.
+
+This module provides buffer-based smoothing to reduce bbox jitter and confidence fluctuations for tracked objects using temporal context.
 
 Uses past, current, and future frames for superior smoothing quality with temporal weighting and interpolation for missing detections.
 

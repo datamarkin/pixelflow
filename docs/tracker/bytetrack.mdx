@@ -1,11 +1,13 @@
 ---
-title: ByteTracker
+title: Bytetracker
 description: ByteTrack tracker for multi-object tracking.
 ---
 
 ## Overview
 
-ByteTrack tracker for multi-object tracking.
+ByteTrack: Multi-Object Tracking by Associating Every Detection Box
+
+This module implements the ByteTrack algorithm for multi-object tracking, which achieves high performance by associating both high and low confidence detections.
 
 ByteTrack associates every detection box instead of only high-confidence ones, utilizing similarities with existing tracklets to recover true objects from low-confidence detections while filtering out background.
 
