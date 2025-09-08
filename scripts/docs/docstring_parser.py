@@ -235,14 +235,23 @@ class DocstringParser:
         return notes
 
 
-def extract_items_from_file(file_path: str, exported_names: List[str] = None) -> List[Dict]:
-    """Extract functions and classes from a Python file."""
+def extract_items_from_file(file_path: str, exported_names: List[str] = None) -> Dict[str, Any]:
+    """Extract functions, classes, and module docstring from a Python file.
+    
+    Returns:
+        Dict containing:
+            - 'items': List of functions and classes
+            - 'module_docstring': Module-level docstring or None
+    """
     try:
         with open(file_path, 'r') as f:
             content = f.read()
         
         tree = ast.parse(content)
         items = []
+        
+        # Extract module-level docstring
+        module_docstring = ast.get_docstring(tree)
         
         for node in tree.body:
             if isinstance(node, ast.FunctionDef) and not node.name.startswith('_'):
@@ -267,11 +276,14 @@ def extract_items_from_file(file_path: str, exported_names: List[str] = None) ->
                         'ast_node': node
                     })
         
-        return items
+        return {
+            'items': items,
+            'module_docstring': module_docstring
+        }
     
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
-        return []
+        return {'items': [], 'module_docstring': None}
 
 
 def get_exports_from_init(init_file: str) -> List[str]:

@@ -133,8 +133,10 @@ class DocumentationGenerator:
         try:
             print(f"   📄 Processing: {py_file.name}")
             
-            # Extract items from file
-            items = extract_items_from_file(str(py_file), exports)
+            # Extract items and module docstring from file
+            extraction_result = extract_items_from_file(str(py_file), exports)
+            items = extraction_result['items']
+            module_docstring = extraction_result['module_docstring']
             
             # Filter to only exported items
             if exports:
@@ -151,11 +153,16 @@ class DocumentationGenerator:
                 else:
                     item['parsed_doc'] = {}
             
+            # Parse module docstring if available
+            parsed_module_doc = {}
+            if module_docstring:
+                parsed_module_doc = self.parser.parse(module_docstring)
+            
             # Generate MDX content
             file_stem = py_file.stem
             relative_module_path = str(py_file.parent.relative_to(self.pixelflow_dir))
             
-            mdx_content = self.generator.generate_for_file(items, file_stem, relative_module_path)
+            mdx_content = self.generator.generate_for_file(items, file_stem, relative_module_path, parsed_module_doc)
             
             # Write MDX file
             output_file = output_dir / f"{file_stem}.mdx"
