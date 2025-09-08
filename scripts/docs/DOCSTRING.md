@@ -4,7 +4,16 @@ This file provides comprehensive standards for creating MkDocs-ready documentati
 
 ## Module-Level Documentation
 
-Every module should start with:
+**When to Include Module-Level Docstrings:**
+- **Multi-function modules**: Modules containing multiple functions or classes
+- **Complex modules**: Modules with intricate logic or multiple responsibilities
+- **API entry points**: Main modules that serve as package interfaces
+
+**Skip Module-Level Docstrings for:**
+- **Single-function modules**: Simple modules containing only one function (like annotators)
+- **Utility modules**: Simple helper modules where the function name clearly indicates purpose
+
+For modules that need module-level documentation, start with:
 
 ```python
 """
@@ -21,7 +30,7 @@ from [internal imports]
 __all__ = ["function1", "function2"]  # Export list for API docs
 ```
 
-## Standard Template for Complex Functions
+## Standard Template for Functions
 
 Use this comprehensive template for complex functions (see Template Selection Guidelines below):
 
@@ -87,49 +96,6 @@ def function_name(
     """
 ```
 
-## Lightweight Template for Simple Functions
-
-For simple utility functions, validators, and basic converters, use this streamlined template:
-
-```python
-def simple_function(param1: Type1, param2: Optional[Type2] = None) -> ReturnType:
-    """
-    [One-line summary of what the function does].
-    
-    Args:
-        param1 (Type1): [Description with expected format/constraints]
-        param2 (Optional[Type2]): [Description including default behavior]
-        
-    Returns:
-        ReturnType: [Description of return value]
-    
-    Raises:
-        ExceptionType: [When this exception occurs - only if relevant]
-        
-    Example:
-        >>> import pixelflow as pf
-        >>> result = pf.module.simple_function(value)
-        >>> # Optional second example if needed
-        >>> result = pf.module.simple_function(value, custom_param)
-    """
-```
-
-## Template Selection Guidelines
-
-**Use Standard Template for:**
-- Complex algorithms (annotators, processors, ML integrations)
-- Functions with 3+ parameters or complex parameter relationships
-- Computationally intensive operations
-- Functions requiring detailed performance considerations
-- Multi-step workflows or extensive examples
-
-**Use Lightweight Template for:**
-- Simple validators (`is_valid_bbox`, `check_coordinates`)
-- Basic converters (`to_numpy`, `from_list`) 
-- Utility functions (`clamp_value`, `normalize_path`)
-- Simple getters/setters
-- Functions with 1-2 straightforward parameters
-
 ## Documentation Standards
 
 ### 1. **Args Section**
@@ -141,12 +107,11 @@ def simple_function(param1: Type1, param2: Optional[Type2] = None) -> ReturnType
 
 ### 2. **Examples Section**
 - **Always show PixelFlow workflow** (for functions using results): `outputs -> pf.results.from_*() -> function`
-- **Standard Template**: Provide 3-4 examples showing:
+- **Functions Template**: Provide 3-4 examples showing:
   - Basic usage with defaults
   - Advanced usage with custom parameters  
   - Edge case or alternative workflow
   - Different parameter combinations
-- **Lightweight Template**: Provide 1-2 examples showing:
   - Basic usage
   - Alternative usage (if applicable)
 - Use realistic variable names and paths
@@ -170,12 +135,6 @@ def simple_function(param1: Type1, param2: Optional[Type2] = None) -> ReturnType
 - Use format: `function_name : Description`
 - Link to complementary, alternative, or prerequisite functions
 
-### 6. **Performance Documentation** (Conditional)
-- **Include only for computationally intensive functions**: image processing, ML operations, large data operations
-- **Skip for simple utilities**: validators, converters, basic getters/setters
-- When included, mention optimization techniques used (OpenCV, vectorization, etc.)
-- Note scaling characteristics and efficiency considerations
-
 ### 7. **Implementation Notes**
 - Document in-place modifications
 - Explain automatic adaptations or validations
@@ -187,8 +146,12 @@ def simple_function(param1: Type1, param2: Optional[Type2] = None) -> ReturnType
 ### Framework Adapter Pattern
 Always show the two-step process in examples:
 ```python
+>>> import pixelflow as pf
+>>> from ultralytics import YOLO # or from detectron2 or transformers or other framework
+>>> image = cv2.imread("image.jpg") # or from pillow or other library read image
+>>> model = YOLO("yolo11l.pt")
 >>> outputs = model.predict(image)  # Raw framework output
->>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow
+>>> results = pf.results.from_ultralytics(outputs)  # or from_detectron2() or from_transformers() Convert to PixelFlow unified
 >>> processed = pf.annotators.function_name(image, results)
 ```
 
@@ -213,17 +176,10 @@ Document automatic validation behaviors:
 - [ ] Raises section covers relevant exceptions
 - [ ] No unused imports in typing section
 - [ ] Follows Python 3.9+ compatibility requirements
-
-### Standard Template Additional Requirements
 - [ ] Examples show PixelFlow workflow (`outputs -> pf.results.from_*()`) when applicable
 - [ ] 3-4 examples covering different use cases
 - [ ] Notes section explains implementation details
 - [ ] Performance notes included if computationally intensive
 - [ ] See Also references related functions if they exist
-
-### Lightweight Template Requirements
-- [ ] 1-2 clear, focused examples
-- [ ] Simple, direct documentation
-- [ ] Skip Performance Notes and See Also unless clearly applicable
 
 This flexible approach ensures appropriate documentation depth while maintaining quality standards for all function types.
