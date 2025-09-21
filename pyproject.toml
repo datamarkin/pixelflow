@@ -1,7 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "pixelflow"
 version = "0.1.1"
-description = "Reusable computer vision tools"
+description = "Computer vision processing library for visualizing and analyzing detection results from ML models"
+readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
@@ -9,23 +14,46 @@ authors = [
     {name = "Emrah Nazif", email = "emrah@datamarkin.com"}
 ]
 
+keywords = [
+    "computer-vision",
+    "visualization",
+    "annotation",
+    "post-processing",
+    "tracking",
+    "opencv",
+    "yolo",
+    "detectron2",
+    "ml-results"
+]
+
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 dependencies = [
-    "shapely>=2.0.0",  # Add dependencies here
+    "shapely>=2.0.0",
     "numpy>=1.21.0",
     "opencv-python>=4.8.0",
     "scipy>=1.10.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/datamarkin/pixelflow"
+Repository = "https://github.com/datamarkin/pixelflow"
+Issues = "https://github.com/datamarkin/pixelflow/issues"
+Documentation = "https://pixelflow.datamarkin.com"
 
 [tool.setuptools.packages.find]
 include = ["pixelflow*"]
