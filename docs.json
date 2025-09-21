@@ -43,6 +43,35 @@
               "docs/annotators/polygon",
               "docs/annotators/zones"
             ]
+          },
+          {
+            "group": "Zones",
+            "pages": [
+              "docs/introduction",
+              "docs/zones",
+              "docs/crossings",
+              "docs/strategies"
+            ]
+          },
+          {
+            "group": "Object Tracking",
+            "pages": [
+              "docs/tracker/bytetrack"
+            ]
+          },
+          {
+            "group": "Processing Tools",
+            "pages": [
+              "docs/buffer",
+              "docs/smoother",
+              "docs/slicer"
+            ]
+          },
+          {
+            "group": "Analytics",
+            "pages": [
+              "docs/timer"
+            ]
           }
         ]
       }
