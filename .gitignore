@@ -1,11 +1,43 @@
 
+# Build artifacts
 build/
+dist/
 wheels/
-pixelflow.egg-info/
+*.egg-info/
 
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# IDEs
 /.cursor
 /.idea
+/.vscode
+
+# OS files
 .DS_Store
-/pixelflow/__pycache__
-/examples/ultralytics
-/pixelflow/annotators/__pycache__
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
