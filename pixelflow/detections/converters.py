@@ -1404,61 +1404,43 @@ def _convert_new_ppstructure(result_obj: Any, language: str, page_index: int, de
     if hasattr(result_obj, 'json') and callable(result_obj.json):
         try:
             json_data = result_obj.json()
-            print(f"DEBUG [converter]: Accessed result.json(), type: {type(json_data)}")
             if isinstance(json_data, dict) and 'parsing_res_list' in json_data:
-                print(f"DEBUG [converter]: Found parsing_res_list in json data")
                 return _convert_from_parsing_res_list(json_data['parsing_res_list'], language, page_index, detections_obj)
         except Exception as e:
-            print(f"DEBUG [converter]: Could not access .json(): {e}")
+            pass
 
     # Fallback to original dict-like access
-    print(f"DEBUG [converter]: result_obj type: {type(result_obj)}")
     if hasattr(result_obj, 'keys'):
-        print(f"DEBUG [converter]: result_obj keys: {list(result_obj.keys())}")
+        pass
 
     # Check if parsing_res_list is directly accessible
     parsing_res_list = result_obj.get('parsing_res_list', None) if hasattr(result_obj, 'get') else None
     if parsing_res_list is not None:
-        print(f"DEBUG [converter]: Found parsing_res_list directly, type: {type(parsing_res_list)}, len: {len(parsing_res_list) if hasattr(parsing_res_list, '__len__') else 'N/A'}")
         if parsing_res_list and hasattr(parsing_res_list, '__len__') and len(parsing_res_list) > 0:
-            print(f"DEBUG [converter]: Using parsing_res_list for conversion")
             return _convert_from_parsing_res_list(parsing_res_list, language, page_index, detections_obj)
 
     # Access as dict - result_obj is dict-like
     layout_det_res = result_obj.get('layout_det_res', None) if hasattr(result_obj, 'get') else None
-    print(f"DEBUG [converter]: layout_det_res type: {type(layout_det_res)}")
 
     if layout_det_res is None:
-        print("DEBUG [converter]: layout_det_res is None, returning empty")
         return detections_obj
-
-    # layout_det_res is a DetResult object - check its structure
-    print(f"DEBUG [converter]: layout_det_res attributes: {dir(layout_det_res)}")
 
     # DetResult likely has 'boxes' or 'bboxes' attribute
     boxes = None
     if hasattr(layout_det_res, 'boxes'):
         boxes = layout_det_res.boxes
-        print(f"DEBUG [converter]: layout_det_res.boxes type: {type(boxes)}, len: {len(boxes) if hasattr(boxes, '__len__') else 'N/A'}")
     elif hasattr(layout_det_res, 'bboxes'):
         boxes = layout_det_res.bboxes
-        print(f"DEBUG [converter]: layout_det_res.bboxes type: {type(boxes)}, len: {len(boxes) if hasattr(boxes, '__len__') else 'N/A'}")
     elif isinstance(layout_det_res, dict):
-        print(f"DEBUG [converter]: layout_det_res is dict with keys: {layout_det_res.keys()}")
         boxes = layout_det_res.get('boxes', layout_det_res.get('bboxes', []))
     elif hasattr(layout_det_res, 'keys'):
         # Dict-like object
-        print(f"DEBUG [converter]: layout_det_res is dict-like with keys: {list(layout_det_res.keys())}")
         boxes = layout_det_res.get('boxes', layout_det_res.get('bboxes', []))
     else:
-        print(f"DEBUG [converter]: layout_det_res structure unknown")
         return detections_obj
 
     if boxes is None or len(boxes) == 0:
-        print(f"DEBUG [converter]: No boxes found")
         return detections_obj
-
-    print(f"DEBUG [converter]: Found {len(boxes)} boxes")
 
     # Get OCR results if available
     overall_ocr_res = result_obj.get('overall_ocr_res', None) if hasattr(result_obj, 'get') else None
@@ -1469,31 +1451,14 @@ def _convert_new_ppstructure(result_obj: Any, language: str, page_index: int, de
     # Get formula results if available
     formula_res_list = result_obj.get('formula_res_list', None) if hasattr(result_obj, 'get') else None
 
-    print(f"DEBUG [converter]: overall_ocr_res type: {type(overall_ocr_res)}")
-
     # Use parsing_res_list which contains the already-processed regions with text
     parsing_res_list = result_obj.get('parsing_res_list', None) if hasattr(result_obj, 'get') else None
-
-    print(f"DEBUG [converter]: parsing_res_list type: {type(parsing_res_list)}")
-    if parsing_res_list is not None and hasattr(parsing_res_list, '__len__'):
-        print(f"DEBUG [converter]: parsing_res_list length: {len(parsing_res_list)}")
-        if len(parsing_res_list) > 0:
-            print(f"DEBUG [converter]: parsing_res_list[0] type: {type(parsing_res_list[0])}")
-            if hasattr(parsing_res_list[0], 'keys'):
-                print(f"DEBUG [converter]: parsing_res_list[0] keys: {list(parsing_res_list[0].keys())}")
-
-    print(f"DEBUG [converter]: table_res_list type: {type(table_res_list)}, len: {len(table_res_list) if table_res_list and hasattr(table_res_list, '__len__') else 0}")
-    print(f"DEBUG [converter]: formula_res_list type: {type(formula_res_list)}, len: {len(formula_res_list) if formula_res_list and hasattr(formula_res_list, '__len__') else 0}")
 
     # Process each layout box
     for idx, box in enumerate(boxes):
         # Debug first box
         if idx == 0:
-            print(f"DEBUG [converter]: box[0] type: {type(box)}")
-            if hasattr(box, 'keys'):
-                print(f"DEBUG [converter]: box[0] keys: {list(box.keys())}")
-            if hasattr(box, '__dict__'):
-                print(f"DEBUG [converter]: box[0] attributes: {list(vars(box).keys())}")
+            pass
 
         # Extract box information
         # Format: {'cls_id': 1, 'label': 'text', 'score': 0.98, 'coordinate': [x1,y1,x2,y2]}
@@ -1513,7 +1478,6 @@ def _convert_new_ppstructure(result_obj: Any, language: str, page_index: int, de
             coordinate = getattr(box, 'coordinate', getattr(box, 'bbox', []))
         else:
             # Fallback for other formats
-            print(f"DEBUG [converter]: box {idx} has unknown format")
             continue
 
         # Convert coordinate to XYXY format
@@ -1683,21 +1647,10 @@ def _convert_from_parsing_res_list(parsing_res_list: List[Any], language: str, p
     """
     from .detections import Detection, OCRData
 
-    print(f"DEBUG [parsing_res_list converter]: Processing {len(parsing_res_list)} parsed regions")
-
     for idx, region in enumerate(parsing_res_list):
         # Debug first region
         if idx == 0:
-            print(f"DEBUG [parsing_res_list converter]: First region type: {type(region)}")
-            if hasattr(region, 'keys'):
-                print(f"DEBUG [parsing_res_list converter]: First region keys: {list(region.keys())}")
-            if hasattr(region, '__dict__'):
-                print(f"DEBUG [parsing_res_list converter]: First region attributes: {list(vars(region).keys())}")
-            # Try to access common attributes
-            print(f"DEBUG [parsing_res_list converter]: Has 'bbox': {hasattr(region, 'bbox')}")
-            print(f"DEBUG [parsing_res_list converter]: Has 'layout_bbox': {hasattr(region, 'layout_bbox')}")
-            print(f"DEBUG [parsing_res_list converter]: Has 'type': {hasattr(region, 'type')}")
-            print(f"DEBUG [parsing_res_list converter]: Has 'text': {hasattr(region, 'text')}")
+            pass
 
         # Extract bounding box - try object attributes first
         layout_bbox = None
@@ -1724,11 +1677,9 @@ def _convert_from_parsing_res_list(parsing_res_list: List[Any], language: str, p
             layout_type = region.get('type', region.get('layout', 'unknown'))
 
         if layout_bbox is None:
-            print(f"DEBUG [parsing_res_list converter]: Region {idx} has no bbox")
             continue
 
         if layout_bbox is None or len(layout_bbox) != 4:
-            print(f"DEBUG [parsing_res_list converter]: Region {idx} has invalid bbox: {layout_bbox}")
             continue
 
         # Convert bbox to XYXY
@@ -1746,33 +1697,28 @@ def _convert_from_parsing_res_list(parsing_res_list: List[Any], language: str, p
         # Check for 'content' attribute first (LayoutBlock structure)
         if hasattr(region, 'content'):
             content = region.content
-            print(f"DEBUG [parsing_res_list converter]: Region {idx} has content attribute, type: {type(content)}")
 
             # Content might be a string or a structured object
             if isinstance(content, str):
                 text_content = content
                 element_type = layout_type.lower() if layout_type != "unknown" else "text"
-                print(f"DEBUG [parsing_res_list converter]: Region {idx} content is string: {content[:50]}...")
             elif content is not None:
                 # Content might have text, html, or latex fields
                 if hasattr(content, 'text'):
                     text_content = content.text if content.text else ""
                     element_type = "text"
-                    print(f"DEBUG [parsing_res_list converter]: Region {idx} content.text: {text_content[:50]}...")
 
                 if hasattr(content, 'html'):
                     table_html = content.html
                     if table_html:
                         element_type = "table"
                         text_content = "Table"
-                        print(f"DEBUG [parsing_res_list converter]: Region {idx} has table HTML")
 
                 if hasattr(content, 'latex'):
                     formula_latex = content.latex
                     if formula_latex:
                         element_type = "formula"
                         text_content = formula_latex
-                        print(f"DEBUG [parsing_res_list converter]: Region {idx} has formula LaTeX")
         elif hasattr(region, 'text'):
             text_content = region.text if region.text else ""
             element_type = "text"
@@ -1841,8 +1787,6 @@ def _convert_from_parsing_res_list(parsing_res_list: List[Any], language: str, p
         if element_type == "unknown" and layout_type:
             element_type = layout_type.lower()
 
-        print(f"DEBUG [parsing_res_list converter]: Region {idx}: type={element_type}, text_len={len(text_content)}, bbox={bbox_xyxy}")
-
         # Create OCRData object
         ocr_data = OCRData(
             text=text_content.strip() if text_content else "",
@@ -1869,5 +1813,4 @@ def _convert_from_parsing_res_list(parsing_res_list: List[Any], language: str, p
 
         detections_obj.add_detection(detection)
 
-    print(f"DEBUG [parsing_res_list converter]: Converted {len(detections_obj.detections)} detections")
     return detections_obj
