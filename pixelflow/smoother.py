@@ -309,7 +309,7 @@ def _smooth_temporal_detections(detections: List[Tuple[str, int, Detection]], te
         keypoints=current_detection.keypoints,
         zones=current_detection.zones,
         zone_names=current_detection.zone_names,
-        data=current_detection.data
+        metadata=current_detection.metadata
     )
 
 
@@ -472,7 +472,7 @@ def _find_missing_detections(context: Dict, tracker_detections: Dict[int, List[T
         >>> 
         >>> # Check interpolated detections
         >>> for detection in missing:
-        >>>     if detection.data and detection.data.get('interpolated'):
+        >>>     if detection.metadata and detection.metadata.get('interpolated'):
         >>>         print(f"Interpolated tracker {detection.tracker_id}: {detection.bbox}")
         >>> 
         >>> # Use with smoothing pipeline
@@ -562,7 +562,7 @@ def _interpolate_missing_detection(detections: List[Tuple[str, int, Detection]])
         >>> interpolated = pf.smoother._interpolate_missing_detection(temporal_data)
         >>> print(f"Interpolated bbox: {interpolated.bbox}")  # [105, 97.5, 205, 202.5]
         >>> print(f"Interpolated confidence: {interpolated.confidence}")  # ~0.744 (avg * 0.85)
-        >>> print(f"Is interpolated: {interpolated.data['interpolated']}")  # True
+        >>> print(f"Is interpolated: {interpolated.metadata['interpolated']}")  # True
         >>> 
         >>> # Handle insufficient data
         >>> incomplete_data = [('past', -1, past_det)]  # Missing future detection

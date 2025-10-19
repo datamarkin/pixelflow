@@ -123,9 +123,3 @@ def oval(
         )
     
     return image
-
-
-
-
-# Alias for backward compatibility
-footprint = oval

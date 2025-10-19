@@ -240,11 +240,11 @@ class SlicedInference:
             >>> 
             >>> # Original box at (10, 20, 50, 60) in slice becomes (522, 276, 562, 316) in full image
             >>> for detection in shifted:
-            ...     print(f"Box: {detection.bbox}, From slice: {detection.data.get('slice_id')}")
-            
+            ...     print(f"Box: {detection.bbox}, From slice: {detection.metadata.get('slice_id')}")
+
         Notes:
             - Only bbox coordinates are currently shifted; masks, segments, and keypoints need manual handling
-            - Slice_id is stored in detection.data for use in merge algorithms
+            - Slice_id is stored in detection.metadata for use in merge algorithms
             - Original prediction objects are not modified; new objects are created
             - Preserves all detection attributes (class_id, confidence, etc.)
             
@@ -270,7 +270,7 @@ class SlicedInference:
                 class_name=pred.class_name,
                 confidence=pred.confidence,
                 tracker_id=pred.tracker_id,
-                data={'slice_id': slice_id} if pred.data is None else {**pred.data, 'slice_id': slice_id}
+                metadata={'slice_id': slice_id} if pred.metadata is None else {**pred.metadata, 'slice_id': slice_id}
             )
             shifted_results.add_detection(shifted_pred)
         
@@ -575,8 +575,8 @@ class SlicedInference:
                 ios = self.calculate_ios(pred_i.bbox, pred_j.bbox)
                 
                 # Get slice IDs
-                slice_i = pred_i.data.get('slice_id', -1) if pred_i.data else -1
-                slice_j = pred_j.data.get('slice_id', -1) if pred_j.data else -1
+                slice_i = pred_i.metadata.get('slice_id', -1) if pred_i.metadata else -1
+                slice_j = pred_j.metadata.get('slice_id', -1) if pred_j.metadata else -1
                 adjacent = self.are_adjacent_slices(slice_i, slice_j, slices) if slice_i >= 0 and slice_j >= 0 else False
                 
                 # Decision logic for merging/suppression
