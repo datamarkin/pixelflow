@@ -6,6 +6,7 @@ from . import detections
 
 from . import media
 from . import annotators as annotate
+from . import transforms as transform
 from . import colors
 # from . import zones
 # from . import crossings
@@ -27,37 +28,40 @@ from .timer import TimeTracker
 __all__ = [
     # Core data structures
     "detections",
-    
+
     # Visual components
     "annotate",
     "colors",
-    
+
+    # Image transformations
+    "transform",
+
     # Media handling
     "media",
     "Media",
-    "MediaInfo", 
+    "MediaInfo",
     "write_frame",
     "show_frame",
     "close_display",
-    
+
     # Spatial analysis
     "zones",
     "Zones",
-    "crossings", 
+    "crossings",
     "Crossings",
-    
+
     # Processing utilities
     "slicer",
     "SlicedInference",
     "auto_slice_size",
     "Buffer",
     "smooth",
-    
+
     # Performance & tracking
     "timer",
     "TimeTracker",
     "tracker",
-    
+
     # Metadata
     "__version__",
     "__author__"
