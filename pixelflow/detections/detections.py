@@ -625,6 +625,61 @@ class Detection:
             # Apply the simplify function to each mask (assuming self.masks is a list of polygons)
             self.masks = [simplify_polygon(mask, tolerance, preserve_topology) for mask in self.masks]
 
+    def copy(self) -> "Detection":
+        """
+        Create a deep copy of this detection.
+
+        Creates a new Detection instance with deep copies of all fields to ensure
+        complete independence from the original. Useful for immutable transform
+        operations and safe data manipulation workflows.
+
+        Returns:
+            Detection: New detection instance with all fields deep copied.
+
+        Example:
+            >>> import pixelflow as pf
+            >>>
+            >>> # Create and copy detection
+            >>> detection = pf.detections.Detection(bbox=[100, 50, 200, 150], class_name="car")
+            >>> copied = detection.copy()
+            >>>
+            >>> # Modifications don't affect original
+            >>> copied.bbox[0] = 150
+            >>> print(detection.bbox)  # [100, 50, 200, 150] - unchanged
+            >>> print(copied.bbox)     # [150, 50, 200, 150] - modified
+            >>>
+            >>> # Use in transform workflows
+            >>> new_detection = detection.copy()
+            >>> new_detection.bbox = transform_bbox(new_detection.bbox)
+
+        Notes:
+            - All list and dict fields are deep copied for complete independence
+            - OCRData objects are shared (considered immutable)
+            - Keypoints list is shallow copied (KeyPoint objects are immutable)
+            - Useful for immutable transform operations in detection processing
+        """
+        import copy as copy_module
+
+        return Detection(
+            inference_id=self.inference_id,
+            bbox=self.bbox.copy() if self.bbox else None,
+            masks=copy_module.deepcopy(self.masks) if self.masks else None,
+            segments=copy_module.deepcopy(self.segments) if self.segments else None,
+            keypoints=self.keypoints.copy() if self.keypoints else None,
+            class_id=self.class_id,
+            class_name=self.class_name,
+            labels=self.labels.copy() if self.labels else None,
+            confidence=self.confidence,
+            tracker_id=self.tracker_id,
+            ocr_data=self.ocr_data,  # OCRData is immutable, safe to share reference
+            metadata=self.metadata.copy() if self.metadata else {},
+            zones=self.zones.copy() if self.zones else [],
+            zone_names=self.zone_names.copy() if self.zone_names else [],
+            line_crossings=copy_module.deepcopy(self.line_crossings) if self.line_crossings else [],
+            first_seen_time=self.first_seen_time,
+            total_time=self.total_time
+        )
+
 
 class Detections:
     """
@@ -797,6 +852,48 @@ class Detections:
         for detection in self.detections:
             detection.simplify_masks(tolerance=tolerance, preserve_topology=preserve_topology)
         return self
+
+    def copy(self) -> "Detections":
+        """
+        Create a deep copy of all detections in the collection.
+
+        Creates a new Detections container with deep copies of all Detection objects,
+        ensuring complete independence from the original collection. Enables safe
+        immutable operations and transform workflows without modifying original data.
+
+        Returns:
+            Detections: New detections container with copied detection objects.
+
+        Example:
+            >>> import pixelflow as pf
+            >>>
+            >>> # Create and copy detections
+            >>> detections = model.predict(image)
+            >>> copied = detections.copy()
+            >>>
+            >>> # Modifications don't affect original
+            >>> copied[0].bbox[0] = 150
+            >>> print(detections[0].bbox[0])  # Original unchanged
+            >>> print(copied[0].bbox[0])      # 150 - modified
+            >>>
+            >>> # Use in immutable transform workflows
+            >>> transformed = detections.copy()
+            >>> for detection in transformed:
+            ...     detection.bbox = transform_bbox(detection.bbox)
+            >>>
+            >>> # Chain with filters
+            >>> filtered = detections.copy().filter_by_confidence(0.7)
+
+        Notes:
+            - All Detection objects are deep copied using Detection.copy()
+            - Completely independent from original collection
+            - Safe for concurrent operations and immutable patterns
+            - Useful for transform operations that modify detection data
+        """
+        new_detections = Detections()
+        for detection in self.detections:
+            new_detections.add_detection(detection.copy())
+        return new_detections
 
     def to_json(self) -> str:
         """
