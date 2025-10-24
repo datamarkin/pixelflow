@@ -40,7 +40,7 @@ class MDXGenerator:
             # Utilities
             'from_ultralytics': 'brand-pytorch',
             'from_detectron2': 'brand-facebook',
-            'from_datamarkin_api': 'api',
+            'from_datamarkin': 'api',
             'filter_by_confidence': 'filter',
             'filter_by_class_id': 'category',
             'remove_duplicates': 'copy-minus',
