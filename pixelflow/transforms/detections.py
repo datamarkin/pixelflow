@@ -90,42 +90,32 @@ def rotate_detections(
     rotation_matrix[0, 2] += (new_w / 2) - center[0]
     rotation_matrix[1, 2] += (new_h / 2) - center[1]
 
-    # Transform detections in-place
-    angle_rad = math.radians(-angle)  # Negative for OpenCV coordinate system
-    cos_a = math.cos(angle_rad)
-    sin_a = math.sin(angle_rad)
-
+    # Transform detections in-place using rotation matrix
     for detection in detections:
         # Transform bbox
         if detection.bbox is not None:
             x1, y1, x2, y2 = detection.bbox
-            corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
-            rotated_corners = []
+            corners = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.float32)
+            # Apply rotation matrix using cv2.transform (handles rotation + translation)
+            rotated_corners = cv2.transform(corners.reshape(1, -1, 2), rotation_matrix)[0]
 
-            for x, y in corners:
-                x_rot = (x - center[0]) * cos_a - (y - center[1]) * sin_a + center[0]
-                y_rot = (x - center[0]) * sin_a + (y - center[1]) * cos_a + center[1]
-                x_final = x_rot + rotation_matrix[0, 2]
-                y_final = y_rot + rotation_matrix[1, 2]
-                rotated_corners.append((x_final, y_final))
-
-            xs = [pt[0] for pt in rotated_corners]
-            ys = [pt[1] for pt in rotated_corners]
-            detection.bbox = [min(xs), min(ys), max(xs), max(ys)]
+            xs = rotated_corners[:, 0]
+            ys = rotated_corners[:, 1]
+            detection.bbox = [float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())]
 
         # Transform keypoints
         if detection.keypoints is not None:
-            new_keypoints = []
-            for kp in detection.keypoints:
-                x, y = kp.x, kp.y
-                x_rot = (x - center[0]) * cos_a - (y - center[1]) * sin_a + center[0]
-                y_rot = (x - center[0]) * sin_a + (y - center[1]) * cos_a + center[1]
-                x_final = x_rot + rotation_matrix[0, 2]
-                y_final = y_rot + rotation_matrix[1, 2]
+            # Collect all keypoint coordinates
+            keypoint_coords = np.array([[kp.x, kp.y] for kp in detection.keypoints], dtype=np.float32)
+            # Apply rotation matrix using cv2.transform
+            transformed_coords = cv2.transform(keypoint_coords.reshape(1, -1, 2), rotation_matrix)[0]
 
+            # Create new keypoints with transformed coordinates
+            new_keypoints = []
+            for i, kp in enumerate(detection.keypoints):
                 new_kp = KeyPoint(
-                    x=int(x_final),
-                    y=int(y_final),
+                    x=int(transformed_coords[i, 0]),
+                    y=int(transformed_coords[i, 1]),
                     name=kp.name,
                     visibility=kp.visibility
                 )
@@ -135,28 +125,24 @@ def rotate_detections(
         # Transform segments (polygons)
         if detection.segments is not None:
             if isinstance(detection.segments, np.ndarray):
-                for i in range(len(detection.segments)):
-                    x, y = detection.segments[i]
-                    x_rot = (x - center[0]) * cos_a - (y - center[1]) * sin_a + center[0]
-                    y_rot = (x - center[0]) * sin_a + (y - center[1]) * cos_a + center[1]
-                    detection.segments[i] = [x_rot + rotation_matrix[0, 2], y_rot + rotation_matrix[1, 2]]
+                # Single segment as numpy array
+                segment_coords = detection.segments.astype(np.float32).reshape(1, -1, 2)
+                transformed = cv2.transform(segment_coords, rotation_matrix)[0]
+                detection.segments = transformed
             elif isinstance(detection.segments, list):
+                # Multiple segments as list
                 new_segments_list = []
                 for segment in detection.segments:
                     if isinstance(segment, np.ndarray):
-                        for i in range(len(segment)):
-                            x, y = segment[i]
-                            x_rot = (x - center[0]) * cos_a - (y - center[1]) * sin_a + center[0]
-                            y_rot = (x - center[0]) * sin_a + (y - center[1]) * cos_a + center[1]
-                            segment[i] = [x_rot + rotation_matrix[0, 2], y_rot + rotation_matrix[1, 2]]
-                        new_segments_list.append(segment)
+                        # Segment is numpy array
+                        segment_coords = segment.astype(np.float32).reshape(1, -1, 2)
+                        transformed = cv2.transform(segment_coords, rotation_matrix)[0]
+                        new_segments_list.append(transformed)
                     elif isinstance(segment, list):
-                        new_segment = []
-                        for x, y in segment:
-                            x_rot = (x - center[0]) * cos_a - (y - center[1]) * sin_a + center[0]
-                            y_rot = (x - center[0]) * sin_a + (y - center[1]) * cos_a + center[1]
-                            new_segment.append([x_rot + rotation_matrix[0, 2], y_rot + rotation_matrix[1, 2]])
-                        new_segments_list.append(new_segment)
+                        # Segment is list of [x, y] coordinates
+                        segment_coords = np.array(segment, dtype=np.float32).reshape(1, -1, 2)
+                        transformed = cv2.transform(segment_coords, rotation_matrix)[0]
+                        new_segments_list.append(transformed.tolist())
                 detection.segments = new_segments_list
 
         # Transform masks
@@ -164,6 +150,7 @@ def rotate_detections(
             new_masks = []
             for mask in detection.masks:
                 if isinstance(mask, np.ndarray):
+                    # Binary mask - use warpAffine
                     rotated_mask = cv2.warpAffine(
                         mask.astype(np.uint8),
                         rotation_matrix,
@@ -174,12 +161,10 @@ def rotate_detections(
                     new_masks.append(rotated_mask)
                 else:
                     if isinstance(mask, list):
-                        new_mask = []
-                        for x, y in mask:
-                            x_rot = (x - center[0]) * cos_a - (y - center[1]) * sin_a + center[0]
-                            y_rot = (x - center[0]) * sin_a + (y - center[1]) * cos_a + center[1]
-                            new_mask.append([x_rot + rotation_matrix[0, 2], y_rot + rotation_matrix[1, 2]])
-                        new_masks.append(new_mask)
+                        # Polygon mask - use cv2.transform
+                        mask_coords = np.array(mask, dtype=np.float32).reshape(1, -1, 2)
+                        transformed = cv2.transform(mask_coords, rotation_matrix)[0]
+                        new_masks.append(transformed.tolist())
                     else:
                         new_masks.append(mask)
             detection.masks = new_masks
