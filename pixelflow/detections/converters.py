@@ -14,7 +14,8 @@ import numpy as np
 from typing import (List, Dict, Any, Union)
 
 __all__ = [
-    "from_datamarkin_api",
+    "from_datamarkin",
+    "from_florence2",
     "from_detectron2",
     "from_ultralytics",
     "from_transformers",
@@ -28,98 +29,409 @@ __all__ = [
 ]
 
 
-def from_datamarkin_api(api_response: Dict[str, Any]):
+def from_datamarkin(api_response: Dict[str, Any]):
     """
     Convert Datamarkin API response to a unified Detections object.
-    
-    Processes detection results from Datamarkin's cloud-based object detection API, 
-    extracting bounding boxes, segmentation masks, keypoints, class labels, and 
+
+    Processes detection results from Datamarkin's cloud-based object detection API,
+    extracting bounding boxes, segmentation masks, keypoints, class labels, and
     confidence scores into PixelFlow's standardized format for further processing.
-    
+
     Args:
         api_response (Dict[str, Any]): Datamarkin API response dictionary containing
                                       nested 'predictions' -> 'objects' structure
                                       with detection data. Each object should have
                                       'bbox', 'mask', 'keypoints', 'class', and
                                       'bbox_score' fields.
-        
+
     Returns:
         Detections: Unified Detections object containing all detected objects with
                    standardized XYXY bounding boxes, polygon masks, keypoint data,
                    and confidence scores. Empty Detections object if no predictions.
-    
+
     Raises:
         KeyError: If required API response structure is missing or malformed
         TypeError: If bbox coordinates cannot be converted to numeric format
         ValueError: If confidence scores are outside valid range [0.0, 1.0]
-        
+
     Example:
         >>> import pixelflow as pf
         >>> import requests
-        >>> 
+        >>>
         >>> # Call Datamarkin API for object detection
         >>> response = requests.post(
-        ...     "https://api.datamarkin.com/detect", 
+        ...     "https://api.datamarkin.com/detect",
         ...     files={"image": open("image.jpg", "rb")}
         ... )
         >>> api_response = response.json()  # Raw API output
-        >>> detections = pf.detections.from_datamarkin_api(api_response)  # Convert to PixelFlow format
-        >>> 
+        >>> detections = pf.detections.from_datamarkin(api_response)  # Convert to PixelFlow format
+        >>>
         >>> # Basic usage - access detection data
         >>> for detection in detections.detections:
         ...     print(f"Class: {detection.class_id}, Confidence: {detection.confidence:.2f}")
-        >>> 
+        >>>
         >>> # Advanced usage - filter by confidence
         >>> high_conf_detections = [d for d in detections.detections if d.confidence > 0.8]
         >>> print(f"High confidence detections: {len(high_conf_detections)}")
-        >>> 
+        >>>
         >>> # Process masks and keypoints
         >>> for detection in detections.detections:
         ...     if detection.masks:
         ...         print(f"Object has {len(detection.masks)} mask regions")
         ...     if detection.keypoints:
         ...         print(f"Object has {len(detection.keypoints)} keypoints")
-        >>> 
+        >>>
         >>> # Empty response handling
         >>> empty_response = {"predictions": {"objects": []}}
-        >>> empty_detections = pf.detections.from_datamarkin_api(empty_response)
+        >>> empty_detections = pf.detections.from_datamarkin(empty_response)
         >>> print(f"Empty result: {len(empty_detections.detections)} objects")
-    
+
     Notes:
         - Bounding boxes are expected in XYXY format from the API
         - Mask data is stored as polygon coordinates in nested list format
-        - Keypoints preserve the original API structure without transformation
-        - Class names are stored as strings in the class_id field
+        - Keypoints are converted from API format (name, point, probability) to PixelFlow KeyPoint objects
+        - API 'probability' field is converted to 'visibility' in KeyPoint (values > 0 = visible)
+        - Class names are stored in class_name field (API doesn't provide numeric class_id)
         - Missing or null confidence scores are preserved as None values
         - Function gracefully handles missing optional fields (mask, keypoints)
-        
+
     Performance Notes:
         - Efficient single-pass processing of API response structure
         - Minimal data copying for large mask or keypoint arrays
         - No validation overhead for well-formed API responses
     """
-    from .detections import Detections, Detection
+    from .detections import Detections, Detection, KeyPoint
 
     detections_obj = Detections()
 
     for obj in api_response.get("predictions", {}).get("objects", []):
         bbox = obj.get("bbox", [])
         mask = obj.get("mask", [])
-        keypoints = obj.get("keypoints", [])
+        keypoints_api = obj.get("keypoints", [])
         class_name = obj.get("class", "")
         confidence = obj.get("bbox_score", None)
+
+        # Convert API keypoint format to PixelFlow KeyPoint objects
+        # API format: {"name": "p0", "point": [x, y], "probability": 0.375}
+        # PixelFlow format: KeyPoint(x, y, name, visibility)
+        keypoints = None
+        if keypoints_api and len(keypoints_api) > 0:
+            keypoints = []
+            for kp_dict in keypoints_api:
+                point = kp_dict.get("point", [0, 0])
+                probability = kp_dict.get("probability", 0.0)
+
+                # Convert probability to visibility (True if probability > 0)
+                visibility = probability > 0.0
+
+                keypoint = KeyPoint(
+                    x=int(point[0]),
+                    y=int(point[1]),
+                    name=kp_dict.get("name", ""),
+                    visibility=visibility
+                )
+                keypoints.append(keypoint)
 
         # Create the Detection object
         detection = Detection(
             bbox=bbox,
             masks=mask,
             keypoints=keypoints,
-            class_id=class_name,
+            class_id=0,  # API doesn't provide numeric class IDs, default to 0
+            class_name=class_name,
             confidence=confidence,
         )
 
         # Add the prediction to the list
         detections_obj.add_detection(detection)
+
+    return detections_obj
+
+
+def from_florence2(
+    parsed_result: Dict[str, Any],
+    task_prompt: str,
+    image_size: Union[tuple, None] = None
+):
+    """
+    Convert Florence-2 model results to a unified Detections object.
+
+    Processes detection results from Microsoft's Florence-2 vision foundation model,
+    extracting bounding boxes, segmentation polygons, OCR text with quad boxes, and
+    labels into PixelFlow's standardized format. Supports all Florence-2 vision tasks
+    including object detection, grounding, segmentation, and OCR with regions.
+
+    Args:
+        parsed_result (Dict[str, Any]): Parsed output from Florence-2 processor.
+                                        Must be dictionary with task prompt as key
+                                        containing nested data with 'bboxes', 'labels',
+                                        'polygons', or 'quad_boxes' depending on task.
+        task_prompt (str): Florence-2 task identifier used for prediction. Examples:
+                          '<OD>' (object detection), '<CAPTION_TO_PHRASE_GROUNDING>',
+                          '<REFERRING_EXPRESSION_SEGMENTATION>', '<OCR_WITH_REGION>'.
+                          Must match a key in parsed_result dictionary.
+        image_size (tuple, optional): Image dimensions as (width, height) tuple for
+                                     coordinate normalization. If None, assumes
+                                     coordinates are already in absolute pixels.
+                                     Default is None.
+
+    Returns:
+        Detections: Unified Detections object containing detected objects with
+                   standardized XYXY bounding boxes, polygon masks for segmentation
+                   tasks, OCR data with quad boxes, and sequential class IDs for
+                   consistent color mapping. Empty Detections if no objects found.
+
+    Raises:
+        ValueError: If task_prompt not found in parsed_result, or if task is text-only
+                   (pure caption/OCR without regions), or if required data fields are
+                   missing for the specified task type.
+        KeyError: If expected nested dictionary keys are missing from parsed_result
+        TypeError: If coordinate values cannot be converted to numeric format
+
+    Example:
+        >>> import torch
+        >>> import pixelflow as pf
+        >>> from transformers import AutoProcessor, AutoModelForCausalLM
+        >>> from PIL import Image
+        >>>
+        >>> # Load Florence-2 model
+        >>> model = AutoModelForCausalLM.from_pretrained(
+        ...     "microsoft/Florence-2-large",
+        ...     trust_remote_code=True
+        ... )
+        >>> processor = AutoProcessor.from_pretrained(
+        ...     "microsoft/Florence-2-large",
+        ...     trust_remote_code=True
+        ... )
+        >>>
+        >>> # Object detection task
+        >>> image = Image.open("image.jpg")
+        >>> task = "<OD>"
+        >>> inputs = processor(text=task, images=image, return_tensors="pt")
+        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
+        >>> parsed = processor.post_process_generation(
+        ...     outputs,
+        ...     task=task,
+        ...     image_size=(image.width, image.height)
+        ... )
+        >>> # parsed format: {'<OD>': {'bboxes': [[x1,y1,x2,y2],...], 'labels': ['car','person',...]}}
+        >>> detections = pf.detections.from_florence2(
+        ...     parsed[task],
+        ...     task_prompt=task,
+        ...     image_size=(image.width, image.height)
+        ... )
+        >>> for det in detections.detections:
+        ...     print(f"Class: {det.class_name}, BBox: {det.bbox}")
+        >>>
+        >>> # Grounding task (phrase → bounding boxes)
+        >>> task = "<CAPTION_TO_PHRASE_GROUNDING>"
+        >>> prompt = "A green car and a person with red shirt"
+        >>> inputs = processor(text=prompt, images=image, return_tensors="pt")
+        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
+        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(image.width, image.height))
+        >>> detections = pf.detections.from_florence2(parsed[task], task_prompt=task)
+        >>> # Each detection has bbox + class_name from grounded phrase
+        >>>
+        >>> # Segmentation task (referring expression → mask)
+        >>> task = "<REFERRING_EXPRESSION_SEGMENTATION>"
+        >>> prompt = "the red car"
+        >>> inputs = processor(text=prompt, images=image, return_tensors="pt")
+        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
+        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(image.width, image.height))
+        >>> detections = pf.detections.from_florence2(parsed[task], task_prompt=task)
+        >>> for det in detections.detections:
+        ...     if det.masks:
+        ...         print(f"Polygon mask with {len(det.masks[0])} points")
+        >>>
+        >>> # OCR with region detection
+        >>> task = "<OCR_WITH_REGION>"
+        >>> inputs = processor(text=task, images=document_image, return_tensors="pt")
+        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
+        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(document_image.width, document_image.height))
+        >>> detections = pf.detections.from_florence2(parsed[task], task_prompt=task)
+        >>> for det in detections.detections:
+        ...     print(f"Text: {det.ocr_data.text}, Quad: {det.segments}")
+
+    Notes:
+        - Florence-2 output format: {task_prompt: {'bboxes': [...], 'labels': [...]}}
+        - Detection tasks (<OD>, <DENSE_REGION_CAPTION>, etc.) provide bboxes + labels
+        - Segmentation tasks provide triple-nested polygons: [[[x1,y1,x2,y2,...]]]
+        - OCR tasks provide quad_boxes (8 values): [x1,y1,x2,y2,x3,y3,x4,y4]
+        - Text-only tasks (<CAPTION>, <MORE_DETAILED_CAPTION>, <OCR>) raise ValueError
+        - Sequential class_ids (0,1,2,...) assigned for consistent color mapping
+        - Confidence defaults to 1.0 if scores not provided in parsed_result
+        - All coordinates assumed to be in absolute pixels (no normalization needed)
+
+    Performance Notes:
+        - Efficient single-pass processing of Florence-2 output dictionary
+        - Minimal data copying for bboxes, polygons, and quad coordinates
+        - O(n) complexity where n is number of detected objects
+        - Lazy polygon processing deferred until mask data actually accessed
+
+    See Also:
+        from_detectron2 : Convert Detectron2 results to PixelFlow format
+        from_ultralytics : Convert YOLO results to PixelFlow format
+        from_easyocr : Convert EasyOCR results for pure OCR tasks
+    """
+    from .detections import Detections, Detection, OCRData
+
+    detections_obj = Detections()
+
+    # Text-only tasks that should not be converted to Detections
+    TEXT_ONLY_TASKS = {
+        '<CAPTION>',
+        '<DETAILED_CAPTION>',
+        '<MORE_DETAILED_CAPTION>',
+        '<OCR>',  # Pure OCR without regions
+    }
+
+    # Validate that task_prompt exists in parsed_result
+    if task_prompt not in parsed_result:
+        raise ValueError(
+            f"Task prompt '{task_prompt}' not found in parsed_result. "
+            f"Available keys: {list(parsed_result.keys())}"
+        )
+
+    # Reject text-only tasks
+    if task_prompt in TEXT_ONLY_TASKS:
+        raise ValueError(
+            f"Task '{task_prompt}' returns text only and cannot be converted to Detections. "
+            f"Text-only tasks: {TEXT_ONLY_TASKS}"
+        )
+
+    # Extract the task-specific data
+    task_data = parsed_result[task_prompt]
+
+    # Handle different task types based on available data fields
+    if 'bboxes' in task_data and 'labels' in task_data:
+        # Detection tasks: <OD>, <CAPTION_TO_PHRASE_GROUNDING>, <DENSE_REGION_CAPTION>, etc.
+        bboxes = task_data['bboxes']
+        labels = task_data['labels']
+        scores = task_data.get('scores', None)  # Optional confidence scores
+
+        # Assign sequential class IDs for consistent coloring
+        unique_labels = []
+        label_to_id = {}
+        for label in labels:
+            if label not in label_to_id:
+                label_to_id[label] = len(unique_labels)
+                unique_labels.append(label)
+
+        for idx, (bbox, label) in enumerate(zip(bboxes, labels)):
+            class_id = label_to_id[label]
+            confidence = float(scores[idx]) if scores is not None else 1.0
+
+            # Florence-2 bboxes are already in XYXY format [x1, y1, x2, y2]
+            detection = Detection(
+                bbox=[float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])],
+                class_id=class_id,
+                class_name=label,
+                confidence=confidence
+            )
+            detections_obj.add_detection(detection)
+
+    elif 'polygons' in task_data and 'labels' in task_data:
+        # Segmentation tasks: <REFERRING_EXPRESSION_SEGMENTATION>
+        polygons = task_data['polygons']  # Triple-nested: [[[x1,y1,x2,y2,...]]]
+        labels = task_data['labels']
+
+        # Assign sequential class IDs
+        unique_labels = []
+        label_to_id = {}
+        for label in labels:
+            if label not in label_to_id:
+                label_to_id[label] = len(unique_labels)
+                unique_labels.append(label)
+
+        for idx, (poly_nested, label) in enumerate(zip(polygons, labels)):
+            class_id = label_to_id[label]
+
+            # Florence-2 polygons are triple-nested: [[[x1,y1,x2,y2,...]]]
+            # Extract the innermost list of coordinates
+            if len(poly_nested) > 0 and len(poly_nested[0]) > 0:
+                poly_coords = poly_nested[0][0]  # Get innermost list
+
+                # Convert flat list [x1,y1,x2,y2,...] to list of tuples [(x1,y1), (x2,y2), ...]
+                segments = []
+                for i in range(0, len(poly_coords), 2):
+                    if i + 1 < len(poly_coords):
+                        segments.append((int(poly_coords[i]), int(poly_coords[i + 1])))
+
+                # Compute axis-aligned bounding box from polygon
+                if segments:
+                    x_coords = [p[0] for p in segments]
+                    y_coords = [p[1] for p in segments]
+                    bbox = [
+                        float(min(x_coords)),
+                        float(min(y_coords)),
+                        float(max(x_coords)),
+                        float(max(y_coords))
+                    ]
+                else:
+                    bbox = None
+
+                detection = Detection(
+                    bbox=bbox,
+                    segments=segments,  # Store polygon as segments
+                    masks=[segments],   # Also store as mask for compatibility
+                    class_id=class_id,
+                    class_name=label,
+                    confidence=1.0
+                )
+                detections_obj.add_detection(detection)
+
+    elif 'quad_boxes' in task_data and 'labels' in task_data:
+        # OCR with region: <OCR_WITH_REGION>
+        quad_boxes = task_data['quad_boxes']  # Format: [[x1,y1,x2,y2,x3,y3,x4,y4], ...]
+        labels = task_data['labels']  # Text content
+
+        for idx, (quad, text) in enumerate(zip(quad_boxes, labels)):
+            # quad is 8 values: [x1,y1, x2,y2, x3,y3, x4,y4]
+            # Convert to list of (x,y) tuples for segments
+            segments = [
+                (int(quad[0]), int(quad[1])),  # Top-left
+                (int(quad[2]), int(quad[3])),  # Top-right
+                (int(quad[4]), int(quad[5])),  # Bottom-right
+                (int(quad[6]), int(quad[7]))   # Bottom-left
+            ]
+
+            # Compute axis-aligned bounding box from quad
+            x_coords = [p[0] for p in segments]
+            y_coords = [p[1] for p in segments]
+            bbox = [
+                float(min(x_coords)),
+                float(min(y_coords)),
+                float(max(x_coords)),
+                float(max(y_coords))
+            ]
+
+            # Create OCRData for structured text information
+            ocr_data = OCRData(
+                text=text.strip(),
+                confidence=1.0,  # Florence-2 doesn't provide OCR confidence
+                language='multi',  # Florence-2 is multi-lingual
+                level='word',
+                order=idx,
+                element_type='text'
+            )
+
+            detection = Detection(
+                bbox=bbox,
+                segments=segments,  # Store quad as segments
+                ocr_data=ocr_data,
+                class_id=0,  # OCR has single class
+                class_name='text',
+                confidence=1.0
+            )
+            detections_obj.add_detection(detection)
+
+    else:
+        # Unknown task format
+        raise ValueError(
+            f"Unsupported Florence-2 task format for '{task_prompt}'. "
+            f"Available data fields: {list(task_data.keys())}. "
+            f"Expected 'bboxes+labels', 'polygons+labels', or 'quad_boxes+labels'."
+        )
 
     return detections_obj
 
@@ -373,7 +685,7 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
         
     See Also:
         from_detectron2 : Convert Detectron2 results to PixelFlow format
-        from_datamarkin_api : Convert cloud API results to PixelFlow format
+        from_datamarkin : Convert cloud API results to PixelFlow format
     """
     from .detections import Detections, Detection
     
@@ -669,7 +981,7 @@ def from_datamarkin_csv(group: Any, height: int, width: int):
         - Memory-efficient tuple creation for polygon coordinates
         
     See Also:
-        from_datamarkin_api : Convert Datamarkin API responses to PixelFlow format
+        from_datamarkin : Convert Datamarkin API responses to PixelFlow format
     """
     from .detections import Detections, Detection
 
