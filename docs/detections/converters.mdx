@@ -9,14 +9,14 @@ Provides standardized conversion utilities to transform detection outputs from v
 
 ## Functions
 
-- [`from_datamarkin_api`](#from_datamarkin_api) - Convert Datamarkin API response to a unified Detections object.
+- [`from_datamarkin`](#from_datamarkin) - Convert Datamarkin API response to a unified Detections object.
 - [`from_detectron2`](#from_detectron2) - Convert Detectron2 inference results to a unified Detections object.
 - [`from_ultralytics`](#from_ultralytics) - Convert Ultralytics YOLO results to a unified Detections object.
 - [`from_transformers`](#from_transformers) - Convert Transformers library results to a unified Detections object.
 - [`from_sam`](#from_sam) - Convert Segment Anything Model (SAM) results to a unified Detections object.
 - [`from_datamarkin_csv`](#from_datamarkin_csv) - Convert CSV data from Datamarkin format to a unified Detections object.
 
-## from_datamarkin_api
+## from_datamarkin
 
 Convert Datamarkin API response to a unified Detections object.
 
@@ -25,7 +25,7 @@ Processes detection results from Datamarkin's cloud-based object detection API, 
 ## Function Signature
 
 ```python
-from_datamarkin_api(
+from_datamarkin(
     api_response: Dict[str, Any]
 ) -> Detections
 ```
