@@ -107,7 +107,7 @@ Help users choose the right tool:
 **Research with Detectron2?** → `pf.from_detectron2()`
 *Best accuracy for complex scenes*
 
-**Using Datamarkin's API?** → `pf.from_datamarkin_api()`
+**Using Datamarkin's API?** → `pf.from_datamarkin()`
 *Instant deployment, no model management*
 
 **Custom model outputs?** → Build your own converter
