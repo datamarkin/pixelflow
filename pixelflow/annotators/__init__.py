@@ -26,8 +26,8 @@ from .filled_box import filled_box
 # from .fps_counter import fps_counter
 from .grid_overlay import grid_overlay
 # from .heatmap import heatmap
-# from .keypoint import keypoint
-# from .keypoint_skeleton import keypoint_skeleton
+from .keypoint import keypoint
+from .keypoint_skeleton import keypoint_skeleton
 # from .motion_dots import motion_dots
 # from .motion_trails import motion_trails
 # from .scale_bar import scale_bar
@@ -43,15 +43,17 @@ __all__ = [
     'box',
     'label',
     'mask',
-    
+    'keypoint',
+    'keypoint_skeleton',
+
     # Privacy annotators
     'blur',
     'pixelate',
-    
+
     # Shape annotators
     'oval',
     'polygon',
-    
+
     # Zone annotators
     'zones',
     'crossings'
