@@ -1,0 +1,98 @@
+---
+title: Smooth
+description: Smooth detection results using buffer's temporal context for jitter reduction.
+---
+
+## Overview
+
+Temporal detection smoothing for reducing jitter and stabilizing tracked objects.
+
+This module provides advanced buffer-based smoothing algorithms that use temporal context from past, current, and future frames to reduce bounding box jitter, stabilize confidence scores, and interpolate missing detections. Designed to work seamlessly with PixelFlow's buffer system for high-quality temporal smoothing in real-time applications.
+
+Applies sophisticated temporal smoothing using past, current, and future frames with exponential weight decay. Reduces bounding box jitter, stabilizes confidence scores, and interpolates missing detections when objects temporarily disappear.
+
+## Function Signature
+
+```python
+smooth(
+    buffer: Buffer,
+    temporal_weight_decay: float = 0.8
+) -> Detections
+```
+
+## Parameters
+
+<ParamField path="buffer" type="Buffer" required>
+  Buffer instance containing temporal context with past, current, and future detection frames. Must have temporal context available.
+</ParamField>
+
+<ParamField path="temporal_weight_decay" type="float" optional default="0.8">
+  Exponential decay factor for temporal weighting. Current frame weight = 1.0, adjacent frames = decay^1, next frames = decay^2, etc. Range: [0.1, 1.0]. Default is 0.8 (20% decay per frame distance).
+</ParamField>
+
+## Returns
+
+<ResponseField name="result" type="Detections">
+  Smoothed detections for the current frame with reduced jitter and stabilized confidence scores. Returns raw current frame results if temporal context is unavailable.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```python Example
+import cv2
+import pixelflow as pf
+from pixelflow.buffer import Buffer
+from ultralytics import YOLO
+
+# Setup video processing with buffer
+model = YOLO("yolo11n.pt")
+buffer = Buffer(buffer_size=5)  # 2 past + current + 2 future
+cap = cv2.VideoCapture("video.mp4")
+
+# Process video frames with smoothing
+while True:
+ret, frame = cap.read()
+if not ret: break
+
+# Get raw detections and add to buffer
+outputs = model.predict(frame)
+results = pf.results.from_ultralytics(outputs)
+buffer.add_frame(frame, results)
+
+# Apply temporal smoothing
+smoothed = pf.smoother.smooth(buffer)
+
+# Advanced usage with custom decay
+smoothed = pf.smoother.smooth(buffer, temporal_weight_decay=0.7)
+
+# Conservative smoothing for fast-moving objects
+smoothed = pf.smoother.smooth(buffer, temporal_weight_decay=0.9)
+
+```
+
+</CodeGroup>
+
+## Error Handling
+
+<Warning>
+  This function may raise the following exceptions:
+  - **AttributeError**: If buffer lacks required methods or temporal context structure.
+  - **ValueError**: If temporal_weight_decay is outside valid range [0.1, 1.0].
+  - **TypeError**: If buffer is not a valid Buffer instance.
+</Warning>
+
+## Notes
+
+<Note>
+  - Requires buffer to be filled with temporal context (past + current + future frames)
+  - Returns raw current frame results when temporal context is unavailable
+  - Automatically interpolates missing detections when objects appear in past/future but not current frame
+  - Preserves all detection attributes (masks, keypoints, etc.) from current frame
+  - Weight decay applies exponentially: frame distance 1 = decay^1, distance 2 = decay^2, etc.
+  - Smoothing quality improves with larger buffer sizes but increases latency
+  - Computational complexity: O(n*k) where n=detections, k=buffer_size
+  - Memory usage scales linearly with buffer size and detection count
+  - Optimized for real-time processing with minimal overhead
+</Note>

@@ -1,0 +1,104 @@
+---
+title: Timetracker
+description: Unified time tracker for object detection and tracking workflows.
+---
+
+## Overview
+
+Time tracking utilities for computer vision applications.
+
+Provides comprehensive time tracking for object detection workflows including total detection time, zone occupancy duration, and line crossing analysis. Supports both frame-based timing for video processing and real-time clock-based timing for live streams.
+
+Provides comprehensive time tracking capabilities including total detection time, zone occupancy duration, and line crossing analysis. Automatically adapts between frame-based timing (for video processing) and real-time clock-based timing (for live streams). The tracker maintains internal state for all tracked objects and provides both simple integration through detection object modification and detailed analytics through comprehensive statistics methods.
+
+## Class Overview
+
+The `TimeTracker` class provides structured data management for timetracker operations.
+
+## Parameters
+
+<ParamField path="fps" type="Optional[float]" optional>
+  Frame rate for frame-based timing. If None, uses system clock timing. Frame-based timing provides more accurate results for video processing with consistent frame rates. Range: > 0.0. Default is None (clock-based timing). Attributes:
+</ParamField>
+
+<ParamField path="fps" type="Optional[float]" optional>
+  Frame rate used for timing calculations.
+</ParamField>
+
+<ParamField path="frame_count" type="int" required>
+  Current frame number (frame-based timing only).
+</ParamField>
+
+<ParamField path="use_clock" type="bool" required>
+  Whether using system clock (True) or frame-based (False) timing.
+</ParamField>
+
+<ParamField path="first_seen" type="Dict[int, Union[datetime, int]]" required>
+  First detection time for each tracker ID.
+</ParamField>
+
+<ParamField path="zone_times" type="Dict[tuple, Union[datetime, int]]" required>
+  Zone entry times keyed by (tracker_id, zone_id).
+</ParamField>
+
+<ParamField path="line_cross_times" type="Dict[tuple, Union[datetime, int]]" required>
+  Line crossing times keyed by (tracker_id, line_id, direction).
+</ParamField>
+
+## Examples
+
+<CodeGroup>
+
+```python Example
+import cv2
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Basic setup with clock-based timing
+model = YOLO("yolo11n.pt")
+time_tracker = pf.timer.TimeTracker()
+
+# Process video frame
+frame = cv2.imread("frame.jpg")
+outputs = model.track(frame)  # Enable tracking
+results = pf.results.from_ultralytics(outputs)
+
+# Update timing (modifies detections in-place)
+time_tracker.update(results)
+print(f"Detection times: {[d.total_time for d in results]}")
+
+# Frame-based timing for video processing
+time_tracker = pf.timer.TimeTracker(fps=30.0)
+cap = cv2.VideoCapture("video.mp4")
+while True:
+ret, frame = cap.read()
+if not ret: break
+outputs = model.track(frame)
+results = pf.results.from_ultralytics(outputs)
+time_tracker.update(results)  # Automatically tracks frame-based timing
+
+# Get detailed statistics for analysis
+stats = time_tracker.get_detailed_stats(results)
+total_times = stats['total']  # numpy array of total times
+zone_times = stats['zones']   # dict of zone-specific times
+
+# Reset specific trackers when objects leave scene
+inactive_ids = [1, 3, 5]
+time_tracker.reset(inactive_ids)
+
+```
+
+</CodeGroup>
+
+## Notes
+
+<Note>
+  - Detection objects are modified in-place with timing information
+  - Frame-based timing requires consistent FPS throughout processing
+  - Zone and line crossing data requires corresponding attributes in detection objects
+  - Memory usage scales with number of unique tracker IDs over time
+  - Use cleanup_inactive_trackers() periodically for long-running applications
+  - O(n) time complexity where n is number of detections per frame
+  - Memory usage grows with unique tracker count and zone/line complexity
+  - Frame-based timing is more CPU efficient than datetime calculations
+</Note>

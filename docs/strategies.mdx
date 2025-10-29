@@ -1,0 +1,176 @@
+---
+title: Strategies
+description: Detection strategy system for spatial analysis and region-based filtering in PixelFlow.
+---
+
+
+
+This module provides a comprehensive strategy system for determining how object detections interact with spatial regions, zones, and crossing lines. It supports multiple anchor points, geometric relationships, and logical combinations for precise control over detection filtering.
+
+## Functions
+
+- [`validate_strategy`](#validate_strategy) - Validate that strategy string(s) are among the supported detection strategies.
+- [`get_anchor_position`](#get_anchor_position) - Extract specific anchor point coordinates from a bounding box based on strategy.
+- [`check_detection_in_region`](#check_detection_in_region) - Determine if a detection satisfies spatial relationship criteria with a region.
+
+## validate_strategy
+
+Validate that strategy string(s) are among the supported detection strategies.
+
+Ensures that provided strategy strings are valid options for spatial detection analysis. Supports both single strategy validation and batch validation for multiple strategies used in compound logical operations.
+
+## Function Signature
+
+```python
+validate_strategy(
+    strategy: Union[str, List[str]]
+) -> Any
+```
+
+### Parameters
+
+<ParamField path="strategy" type="Union[str, List[str]]" required>
+  Single strategy string or list of strategy strings to validate. Supported strategies include: anchor points (center, corners, edges), geometric relationships (overlap, contains), and area-based analysis (percentage).
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Any">
+  Union[str, List[str]]: The validated strategy unchanged if all entries are valid. Returns same type as input (string or list).
+</ResponseField>
+
+### Example
+
+```python Example
+import pixelflow as pf
+
+# Validate single strategy
+valid_strategy = pf.strategies.validate_strategy("center")
+print(valid_strategy)  # Output: "center"
+
+# Validate multiple strategies for compound logic
+strategies = pf.strategies.validate_strategy(["center", "bottom_center"])
+print(strategies)  # Output: ["center", "bottom_center"]
+
+# Validate edge/corner strategies
+edge_strategy = pf.strategies.validate_strategy("any_corner")
+print(edge_strategy)  # Output: "any_corner"
+
+# Error case - invalid strategy
+try:
+```
+
+## get_anchor_position
+
+Extract specific anchor point coordinates from a bounding box based on strategy.
+
+Computes the exact pixel coordinates of strategic anchor points on detection bounding boxes. Used for crossing line analysis, zone entry detection, and precise spatial positioning in computer vision workflows.
+
+## Function Signature
+
+```python
+get_anchor_position(
+    bbox: List[float],
+    strategy: str
+) -> Any
+```
+
+### Parameters
+
+<ParamField path="bbox" type="List[float]" required>
+  Bounding box coordinates in [x1, y1, x2, y2] format where (x1, y1) is top-left corner and (x2, y2) is bottom-right. Coordinates should be in pixel units.
+</ParamField>
+
+<ParamField path="strategy" type="str" required>
+  Anchor point strategy defining which position to extract. Must be one of: "center", "bottom_center", "top_center", "left_center", "right_center", "top_left", "top_right", "bottom_left", "bottom_right". Strategy is not validated internally - use validate_strategy() first if needed.
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="Any">
+  Tuple[float, float]: The (x, y) coordinates of the specified anchor point in the same coordinate system as the input bbox. Returns center coordinates if strategy is unrecognized.
+</ResponseField>
+
+### Example
+
+```python Example
+import cv2
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Load and process image
+image = cv2.imread("person_detection.jpg")
+model = YOLO("yolo11n.pt")
+outputs = model.predict(image)
+results = pf.results.from_ultralytics(outputs)
+
+# Extract center point for each detection
+for detection in results:
+```
+
+## check_detection_in_region
+
+Determine if a detection satisfies spatial relationship criteria with a region.
+
+Performs comprehensive spatial analysis using configurable strategies to determine detection-region relationships. Supports anchor point analysis, geometric overlap calculations, and compound logical operations for complex filtering scenarios.
+
+## Function Signature
+
+```python
+check_detection_in_region(
+    bbox: List[float],
+    strategy: Union[str, List[str]],
+    region: Polygon,
+    overlap_threshold: float = 0.5,
+    mode: Literal["any", "all"] = 'all'
+) -> bool
+```
+
+### Parameters
+
+<ParamField path="bbox" type="List[float]" required>
+  Detection bounding box in [x1, y1, x2, y2] format where coordinates represent pixel positions. Must contain exactly 4 float values.
+</ParamField>
+
+<ParamField path="strategy" type="Union[str, List[str]]" required>
+  Spatial analysis strategy or list of strategies. Single string for basic checks or list for compound logic. Supported: anchor points ("center", "bottom_center", etc.), geometric ("overlap", "contains"), area-based ("percentage").
+</ParamField>
+
+<ParamField path="region" type="Polygon" required>
+  Shapely Polygon object defining the spatial region for analysis. Must be a valid polygon with defined boundaries.
+</ParamField>
+
+<ParamField path="overlap_threshold" type="float" optional default="0.5">
+  Minimum overlap ratio for "percentage" strategy. Range: [0.0, 1.0]. Default is 0.5 (50% overlap required).
+</ParamField>
+
+<ParamField path="mode" type="Literal["any", "all"]" optional default="'all'">
+  Logical combination mode for multiple strategies. "all" requires all strategies to pass (AND logic), "any" requires at least one to pass (OR logic). Default is "all".
+</ParamField>
+
+### Returns
+
+<ResponseField name="result" type="bool">
+  True if detection satisfies the spatial criteria according to the specified strategy/strategies and logical mode, False otherwise.
+</ResponseField>
+
+### Example
+
+```python Example
+import cv2
+import pixelflow as pf
+from ultralytics import YOLO
+from shapely.geometry import Polygon
+
+# Setup detection pipeline
+image = cv2.imread("traffic_scene.jpg")
+model = YOLO("yolo11n.pt")
+outputs = model.predict(image)
+results = pf.results.from_ultralytics(outputs)
+
+# Define region of interest (e.g., crosswalk area)
+crosswalk_region = Polygon([(100, 200), (400, 200), (400, 300), (100, 300)])
+
+# Basic center-point analysis
+for detection in results:
+```

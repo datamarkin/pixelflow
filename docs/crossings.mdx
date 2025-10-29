@@ -1,0 +1,146 @@
+---
+title: Crossings
+description: Line crossing detection and directional counting for object tracking.
+---
+
+
+
+This module provides sophisticated line crossing detection capabilities for video streams, implementing temporal validation and directional counting algorithms. It supports both single and multi-crossing scenarios with debouncing, distance validation, and per-class tracking statistics, making it ideal for traffic monitoring, people counting, and access control applications.
+
+## Classes
+
+- [`Crossing`](#crossing) - Detects and counts objects crossing a defined line with directional tracking and temporal validation.
+- [`Crossings`](#crossings) - Centralized manager for multiple crossing line detectors with unified processing and analytics.
+
+## Crossing
+
+Detects and counts objects crossing a defined line with directional tracking and temporal validation.
+
+This class implements a sophisticated line crossing detection algorithm that tracks objects crossing a line segment from one side to another. It uses temporal consistency validation, debouncing, and minimum distance requirements to ensure accurate counting while preventing false positives from noise or oscillation. The algorithm maintains separate directional counts and supports per-class statistics for detailed analytics. The crossing detection algorithm works by: 1. Tracking object positions relative to the line over multiple frames 2. Validating crossings using temporal consistency (debouncing) 3. Enforcing minimum distance requirements to filter out noise 4. Maintaining directional state history to detect actual crossings 5. Supporting multiple anchor points for different object types
+
+### Parameters
+
+<ParamField path="start" type="Tuple[float, float]" required>
+  Starting point of the line (x, y) in pixels
+</ParamField>
+
+<ParamField path="end" type="Tuple[float, float]" required>
+  Ending point of the line (x, y) in pixels
+</ParamField>
+
+<ParamField path="line_id" type="Union[int, str]" required>
+  Unique identifier for the crossing line. Default is 0
+</ParamField>
+
+<ParamField path="name" type="str" required>
+  Human-readable name for the crossing. Auto-generated if empty
+</ParamField>
+
+<ParamField path="color" type="Optional[Tuple[int, int, int]]" optional>
+  RGB color tuple for visualization. Auto-generated if None
+</ParamField>
+
+<ParamField path="triggering_anchor" type="Union[str, List[str]]" required>
+  Anchor point(s) to check for crossing. Options: "center", "bottom_center", "top_left", "top_right", "bottom_left", "bottom_right". Default is "center"
+</ParamField>
+
+<ParamField path="minimum_crossing_threshold" type="int" required>
+  Number of consecutive frames an object must be on the opposite side to count as crossed. Range: [1, inf]. Default is 1
+</ParamField>
+
+<ParamField path="mode" type="Literal["any", "all"]" required>
+  Logic mode for multiple anchor strategies. "all" uses AND logic, "any" uses OR logic. Default is "all"
+</ParamField>
+
+<ParamField path="boundary_margin" type="float" required>
+  Distance in pixels from line endpoints where crossings are still considered valid. Range: [0, inf]. Default is 50.0
+</ParamField>
+
+<ParamField path="debounce_time" type="int" required>
+  Number of frames to wait before allowing another crossing for the same tracker ID. Range: [0, inf]. Default is 30
+</ParamField>
+
+<ParamField path="minimum_distance" type="float" required>
+  Minimum distance in pixels an object must travel to be considered a valid crossing. Range: [0, inf]. Default is 10.0
+</ParamField>
+
+<ParamField path="metadata" type="Optional[Dict[str, Any]]" optional>
+  Additional custom data for the crossing Attributes:
+</ParamField>
+
+<ParamField path="in_count" type="int" required>
+  Total number of objects that crossed from right to left (positive side to negative side)
+</ParamField>
+
+<ParamField path="out_count" type="int" required>
+  Total number of objects that crossed from left to right (negative side to positive side)
+</ParamField>
+
+<ParamField path="in_count_per_class" type="Dict[int, int]" required>
+  Per-class counts for right-to-left crossings
+</ParamField>
+
+<ParamField path="out_count_per_class" type="Dict[int, int]" required>
+  Per-class counts for left-to-right crossings
+</ParamField>
+
+<ParamField path="line_id" type="Union[int, str]" required>
+  Unique identifier for this crossing
+</ParamField>
+
+<ParamField path="name" type="str" required>
+  Human-readable name for this crossing
+</ParamField>
+
+<ParamField path="color" type="Tuple[int, int, int]" required>
+  RGB color tuple for visualization
+</ParamField>
+
+<ParamField path="start" type="Tuple[float, float]" required>
+  Starting point of the line
+</ParamField>
+
+<ParamField path="end" type="Tuple[float, float]" required>
+  Ending point of the line
+</ParamField>
+
+### Example
+
+```python Example
+import cv2
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Basic crossing detection setup
+model = YOLO("yolo11n.pt")
+tracker = pf.tracker.ByteTracker()
+crossing = pf.crossings.Crossing(
+```
+
+## Crossings
+
+Centralized manager for multiple crossing line detectors with unified processing and analytics.
+
+This class provides sophisticated management of multiple crossing instances, enabling complex crossing detection scenarios such as multi-gate entrances, traffic intersections, and zone-based monitoring systems. It offers unified processing of detections against all crossings simultaneously, consolidated analytics, and automatic result annotation with crossing event metadata. The manager handles: - Creation and lifecycle management of multiple crossing instances - Unified detection processing across all crossings in a single call - Automatic annotation of detections with crossing event information - Consolidated analytics and reporting across all managed crossings - Collision-free ID management and lookup operations
+
+### Parameters
+
+<ParamField path="crossings" type="List[Crossing]" required>
+  List of all managed crossing instances
+</ParamField>
+
+### Example
+
+```python Example
+import cv2
+import pixelflow as pf
+from ultralytics import YOLO
+
+# Setup multi-crossing detection system
+model = YOLO("yolo11n.pt")
+tracker = pf.tracker.ByteTracker()
+crossings = pf.crossings.Crossings()
+
+# Add multiple crossing lines
+crossings.add_crossing(
+```
