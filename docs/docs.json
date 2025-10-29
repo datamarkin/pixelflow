@@ -7,7 +7,7 @@
     "light": "#07C983",
     "dark": "#15803D"
   },
-  "favicon": "/logo/favicon.svg",
+  "favicon": "logo/favicon.svg",
   "navigation": {
     "tabs": [
       {
@@ -17,58 +17,58 @@
             "group": "Getting Started",
             "pages": [
               "index",
-              "docs/quickstart"
+              "quickstart"
             ]
           },
           {
             "group": "Detections",
             "pages": [
-              "docs/detections/detections",
-              "docs/detections/converters",
-              "docs/detections/filters"
+              "detections/detections",
+              "detections/converters",
+              "detections/filters"
             ]
           },
           {
             "group": "Annotators",
             "pages": [
-              "docs/annotators/anchors",
-              "docs/annotators/blur",
-              "docs/annotators/box",
-              "docs/annotators/crossing",
-              "docs/annotators/label",
-              "docs/annotators/mask",
-              "docs/annotators/oval",
-              "docs/annotators/pixelate",
-              "docs/annotators/polygon",
-              "docs/annotators/zones"
+              "annotators/anchors",
+              "annotators/blur",
+              "annotators/box",
+              "annotators/crossing",
+              "annotators/label",
+              "annotators/mask",
+              "annotators/oval",
+              "annotators/pixelate",
+              "annotators/polygon",
+              "annotators/zones"
             ]
           },
           {
             "group": "Zones",
             "pages": [
-              "docs/zones",
-              "docs/crossings",
-              "docs/strategies"
+              "zones",
+              "crossings",
+              "strategies"
             ]
           },
           {
             "group": "Object Tracking",
             "pages": [
-              "docs/tracker/bytetrack"
+              "tracker/bytetrack"
             ]
           },
           {
             "group": "Processing Tools",
             "pages": [
-              "docs/buffer",
-              "docs/smoother",
-              "docs/slicer"
+              "buffer",
+              "smoother",
+              "slicer"
             ]
           },
           {
             "group": "Analytics",
             "pages": [
-              "docs/timer"
+              "timer"
             ]
           }
         ]
@@ -76,8 +76,8 @@
     ]
   },
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "logo/light.svg",
+    "dark": "logo/dark.svg"
   },
   "navbar": {
     "links": [
