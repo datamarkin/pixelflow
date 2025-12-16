@@ -11,7 +11,7 @@ for downstream processing, visualization, and analysis workflows.
 import ast
 import cv2
 import numpy as np
-from typing import (List, Dict, Any, Union)
+from typing import (List, Dict, Any, Union, Optional)
 
 __all__ = [
     "from_datamarkin",
@@ -436,7 +436,7 @@ def from_florence2(
     return detections_obj
 
 
-def from_detectron2(detectron2_results: Dict[str, Any]):
+def from_detectron2(detectron2_results: Dict[str, Any], class_names: Optional[List[str]] = None):
     """
     Convert Detectron2 inference results to a unified Detections object.
     
@@ -448,10 +448,14 @@ def from_detectron2(detectron2_results: Dict[str, Any]):
     Args:
         detectron2_results (Dict[str, Any]): Detectron2 inference results dictionary
                                            containing 'instances' key with prediction
-                                           data including pred_boxes, scores, 
+                                           data including pred_boxes, scores,
                                            pred_classes, pred_masks, and pred_keypoints.
                                            Results should be from DefaultPredictor output.
-        
+        class_names (Optional[List[str]]): List of class names indexed by class ID.
+                                          If provided, Detection objects will include
+                                          class_name attribute. Obtain from MetadataCatalog:
+                                          `MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).thing_classes`
+
     Returns:
         Detections: Unified Detections object with all detected instances converted
                    to standardized format. Contains XYXY bounding boxes as lists,
@@ -470,19 +474,24 @@ def from_detectron2(detectron2_results: Dict[str, Any]):
         >>> from detectron2 import model_zoo
         >>> from detectron2.engine import DefaultPredictor
         >>> from detectron2.config import get_cfg
-        >>> 
+        >>> from detectron2.data import MetadataCatalog
+        >>>
         >>> # Setup Detectron2 object detection model
         >>> cfg = get_cfg()
         >>> cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
         >>> cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
         >>> predictor = DefaultPredictor(cfg)
+        >>>
+        >>> # Get class names from metadata
+        >>> class_names = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).thing_classes
+        >>>
         >>> image = cv2.imread("path/to/image.jpg")
         >>> outputs = predictor(image)  # Raw Detectron2 output
-        >>> detections = pf.detections.from_detectron2(outputs)  # Convert to PixelFlow format
-        >>> 
-        >>> # Basic usage - access detection data
+        >>> detections = pf.detections.from_detectron2(outputs, class_names=class_names)
+        >>>
+        >>> # Access detection data with class names
         >>> for detection in detections.detections:
-        ...     print(f"Class: {detection.class_id}, Confidence: {detection.confidence:.2f}")
+        ...     print(f"Class: {detection.class_name}, Confidence: {detection.confidence:.2f}")
         >>> 
         >>> # Advanced usage - segmentation model with masks
         >>> cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
@@ -561,9 +570,15 @@ def from_detectron2(detectron2_results: Dict[str, Any]):
         # Extract confidence score
         confidence = float(scores[i]) if scores is not None else None
         
-        # Extract class ID  
+        # Extract class ID
         class_id = int(classes[i]) if classes is not None else None
-        
+
+        # Extract class name from provided class_names list
+        class_name = None
+        if class_names is not None and class_id is not None:
+            if class_id < len(class_names):
+                class_name = class_names[class_id]
+
         # Handle segmentation masks
         mask = None
         if masks is not None:
@@ -585,6 +600,7 @@ def from_detectron2(detectron2_results: Dict[str, Any]):
             segments=None,
             keypoints=kpts,
             class_id=class_id,
+            class_name=class_name,
             confidence=confidence
         )
 
