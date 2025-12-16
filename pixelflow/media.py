@@ -205,62 +205,14 @@ class Media:
 # Global writer cache with specs
 _writers: Dict[str, cv2.VideoWriter] = {}
 _writer_specs: Dict[str, MediaInfo] = {}
-_detected_codec: Optional[tuple] = None  # Cache detected codec globally
-
-
-def _get_video_codec(output_path: str, frame_size: tuple) -> tuple:
-    """Try H264 codecs first for web compatibility, fall back to mp4v.
-
-    Tests available codecs in order of preference and returns the first
-    working codec. Results are cached globally to avoid repeated detection.
-
-    Args:
-        output_path: Path for test file (will be removed after testing)
-        frame_size: Tuple of (width, height) for the video
-
-    Returns:
-        Tuple of (fourcc, codec_name) for use with VideoWriter
-    """
-    import warnings
-    import os
-    global _detected_codec
-
-    # Return cached codec if already detected
-    if _detected_codec is not None:
-        return _detected_codec
-
-    # H264 codecs to try in order of preference
-    h264_codecs = ['avc1', 'H264', 'x264', 'X264']
-
-    for codec in h264_codecs:
-        fourcc = cv2.VideoWriter_fourcc(*codec)
-        test_writer = cv2.VideoWriter()
-        test_writer.open(output_path, fourcc, 1, frame_size)
-        if test_writer.isOpened():
-            test_writer.release()
-            # Remove test file
-            if os.path.exists(output_path):
-                os.remove(output_path)
-            _detected_codec = (fourcc, codec)
-            return _detected_codec
-        test_writer.release()
-
-    # Fallback to mp4v with warning
-    warnings.warn(
-        f"H264 codec not available. Using mp4v which may not be web-compatible. "
-        f"Re-encode with: ffmpeg -i {output_path} -c:v libx264 output_web.mp4",
-        UserWarning
-    )
-    _detected_codec = (cv2.VideoWriter_fourcc(*'mp4v'), 'mp4v')
-    return _detected_codec
-
 
 def write_frame(output_path: str, frame: np.ndarray, video_info: MediaInfo = None, width: int = None):
     """Write a single frame to video file with automatic writer management.
-
+    
     Automatically manages VideoWriter lifecycle, creating writers as needed and
-    caching them for subsequent frames. Supports optional resizing and auto-detects
-    H264 codec for web compatibility. Writers are automatically released on program exit.
+    caching them for subsequent frames. Supports optional resizing and uses
+    MP4V codec for broad compatibility. Writers are automatically released
+    on program exit.
     
     Args:
         output_path (str): Path to output video file. Should end with .mp4
@@ -302,8 +254,7 @@ def write_frame(output_path: str, frame: np.ndarray, video_info: MediaInfo = Non
     Notes:
         - VideoWriter instances are automatically cached and reused per output path
         - All writers are automatically released on program exit via atexit handler
-        - Auto-detects H264 codec (avc1, H264, x264) for web compatibility
-        - Falls back to mp4v with warning if H264 is unavailable
+        - Uses MP4V codec which provides good compatibility across platforms
         - Frame resizing maintains aspect ratio when width parameter is provided
         - Video metadata is cached per output path to avoid repeated specification
         
@@ -338,9 +289,8 @@ def write_frame(output_path: str, frame: np.ndarray, video_info: MediaInfo = Non
         
         # Cache the specs for future calls
         _writer_specs[output_path] = video_info
-
-        # Auto-detect H264 codec for web compatibility, fallback to mp4v
-        fourcc, _ = _get_video_codec(output_path, (video_info.width, video_info.height))
+        
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         writer = cv2.VideoWriter(
             output_path, fourcc, video_info.fps, 
             (video_info.width, video_info.height)
