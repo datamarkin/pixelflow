@@ -322,7 +322,7 @@ report = detections.to_json_with_metrics()
 
 ## Documentation
 
-Full documentation available at [http://datamarkin.com/docs/pixelflow/](http://datamarkin.com/docs/pixelflow/)
+Full documentation available at [https://datamarkin.com/docs/pixelflow/](https://datamarkin.com/docs/pixelflow/)
 
 ## Contributing
 
