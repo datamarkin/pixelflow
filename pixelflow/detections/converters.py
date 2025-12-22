@@ -4,7 +4,7 @@ Detection Converters for Machine Learning Framework Integration.
 Provides standardized conversion utilities to transform detection outputs from 
 various machine learning frameworks (Detectron2, Ultralytics YOLO, Datamarkin API, 
 Transformers) into PixelFlow's unified Detections format. This module enables seamless 
-integration with different ML backends while maintaining consistent data structures 
+integration with different ML backends while maintaining consistent data structures r
 for downstream processing, visualization, and analysis workflows.
 """
 
@@ -26,6 +26,14 @@ __all__ = [
     "from_easyocr",
     "from_paddleocr",
     "from_ppstructure"
+]
+
+# COCO pose keypoint names (17 keypoints)
+COCO_KEYPOINT_NAMES = [
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle"
 ]
 
 
@@ -703,14 +711,14 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
         from_detectron2 : Convert Detectron2 results to PixelFlow format
         from_datamarkin : Convert cloud API results to PixelFlow format
     """
-    from .detections import Detections, Detection
-    
+    from .detections import Detections, Detection, KeyPoint
+
     detections_obj = Detections()
-    
+
     # Handle empty results
     if not ultralytics_results:
         return detections_obj
-    
+
     # Handle both single result and list of results
     if isinstance(ultralytics_results, list):
         # Get the first result (YOLO returns a list with one result per image)
@@ -718,7 +726,43 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
     else:
         # Already a single result object
         result = ultralytics_results
-    
+
+    # Handle classification models (no boxes, only probs)
+    if hasattr(result, 'probs') and result.probs is not None:
+        probs = result.probs
+
+        # Get top-1 prediction
+        top1_idx = int(probs.top1)
+        top1_conf = float(probs.top1conf)
+
+        # Get class name
+        class_name = None
+        if hasattr(result, 'names') and result.names:
+            class_name = result.names.get(top1_idx, str(top1_idx))
+
+        # Get top-5 predictions for metadata
+        top5_indices = [int(idx) for idx in probs.top5]
+        top5_confs = probs.top5conf.cpu().numpy().tolist()
+        top5_names = []
+        if hasattr(result, 'names') and result.names:
+            top5_names = [result.names.get(idx, str(idx)) for idx in top5_indices]
+
+        # Create single detection for classification result
+        detection = Detection(
+            bbox=None,  # Classification has no bbox
+            class_id=top1_idx,
+            class_name=class_name,
+            confidence=top1_conf,
+            metadata={
+                'task': 'classification',
+                'top5_indices': top5_indices,
+                'top5_confidences': top5_confs,
+                'top5_names': top5_names
+            }
+        )
+        detections_obj.add_detection(detection)
+        return detections_obj
+
     # Handle case where there are no detections
     if result.boxes is None or len(result.boxes) == 0:
         return detections_obj
@@ -754,7 +798,13 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
             orig_shape = result.masks.orig_shape  # (height, width)
         elif hasattr(result, 'orig_shape'):
             orig_shape = result.orig_shape  # (height, width)
-    
+
+    # Check if we have keypoints (pose estimation)
+    has_keypoints = hasattr(result, 'keypoints') and result.keypoints is not None
+    keypoints_data = None
+    if has_keypoints:
+        keypoints_data = result.keypoints.data.cpu().numpy()  # Shape: [N, 17, 3]
+
     for i in range(num_detections):
         # Basic detection info
         bbox = xyxy[i].tolist()
@@ -814,13 +864,33 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
             elif segments is not None:
                 # Fallback to polygon format if binary not available
                 masks = [segments]
-        
+
+        # Handle keypoints if available (pose estimation)
+        keypoints_list = None
+        if has_keypoints and keypoints_data is not None:
+            kpts = keypoints_data[i]  # Shape: [17, 3] for detection i
+
+            keypoints_list = []
+            for kpt_idx, kpt in enumerate(kpts):
+                x, y, conf = kpt[0], kpt[1], kpt[2]
+                # Use visibility threshold (conf > 0.5 means visible)
+                visibility = conf > 0.5
+                name = COCO_KEYPOINT_NAMES[kpt_idx] if kpt_idx < len(COCO_KEYPOINT_NAMES) else f"keypoint_{kpt_idx}"
+
+                keypoint = KeyPoint(
+                    x=int(x),
+                    y=int(y),
+                    name=name,
+                    visibility=visibility
+                )
+                keypoints_list.append(keypoint)
+
         # Create detection object
         detection = Detection(
             bbox=bbox,
             masks=masks,  # Can be either binary mask or polygon coordinates
             segments=segments,  # Always polygon coordinates
-            keypoints=None,
+            keypoints=keypoints_list,
             class_id=class_id,
             class_name=class_name,
             confidence=confidence,
