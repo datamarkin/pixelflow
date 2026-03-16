@@ -70,13 +70,13 @@ class TestDetection:
             confidence=0.95,
             class_id=0,
             class_name="person",
-            label="person 0.95"
+            labels=["person 0.95"]
         )
         assert det.bbox == [100, 100, 200, 200]
         assert det.confidence == 0.95
         assert det.class_id == 0
         assert det.class_name == "person"
-        assert det.label == "person 0.95"
+        assert det.labels == ["person 0.95"]
 
     def test_detection_with_mask(self):
         """Test detection with binary mask."""
@@ -101,19 +101,22 @@ class TestDetection:
 
     def test_detection_with_ocr_fields(self):
         """Test detection with OCR-specific fields."""
+        ocr_data = pf.detections.OCRData(
+            text="Sample Text",
+            confidence=0.92,
+            language="en",
+            level="word",
+            order=1
+        )
         det = pf.detections.Detection(
             bbox=[100, 100, 300, 150],
-            text="Sample Text",
-            text_confidence=0.92,
-            text_language="en",
-            text_level="word",
-            text_order=1
+            ocr_data=ocr_data
         )
-        assert det.text == "Sample Text"
-        assert det.text_confidence == 0.92
-        assert det.text_language == "en"
-        assert det.text_level == "word"
-        assert det.text_order == 1
+        assert det.ocr_data.text == "Sample Text"
+        assert det.ocr_data.confidence == 0.92
+        assert det.ocr_data.language == "en"
+        assert det.ocr_data.level == "word"
+        assert det.ocr_data.order == 1
 
     def test_detection_with_tracking(self):
         """Test detection with tracking information."""
