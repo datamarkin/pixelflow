@@ -672,7 +672,7 @@ class Detection:
             confidence=self.confidence,
             tracker_id=self.tracker_id,
             ocr_data=self.ocr_data,  # OCRData is immutable, safe to share reference
-            metadata=self.metadata.copy() if self.metadata else {},
+            metadata=self.metadata.copy() if self.metadata else None,
             zones=self.zones.copy() if self.zones else [],
             zone_names=self.zone_names.copy() if self.zone_names else [],
             line_crossings=copy_module.deepcopy(self.line_crossings) if self.line_crossings else [],
