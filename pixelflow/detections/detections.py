@@ -655,7 +655,7 @@ class Detection:
         Notes:
             - All list and dict fields are deep copied for complete independence
             - OCRData objects are shared (considered immutable)
-            - Keypoints list is shallow copied (KeyPoint objects are immutable)
+            - Keypoints are deep copied to ensure complete independence from original
             - Useful for immutable transform operations in detection processing
         """
         import copy as copy_module
@@ -665,7 +665,7 @@ class Detection:
             bbox=self.bbox.copy() if self.bbox else None,
             masks=copy_module.deepcopy(self.masks) if self.masks else None,
             segments=copy_module.deepcopy(self.segments) if self.segments else None,
-            keypoints=self.keypoints.copy() if self.keypoints else None,
+            keypoints=[KeyPoint(kp.x, kp.y, kp.name, kp.visibility) for kp in self.keypoints] if self.keypoints else None,
             class_id=self.class_id,
             class_name=self.class_name,
             labels=self.labels.copy() if self.labels else None,
