@@ -81,7 +81,7 @@ def filter_by_confidence(self, threshold: float) -> 'Detections':
     filtered_detections = self.__class__()
     for detection in self.detections:
         if detection.confidence is not None and detection.confidence >= threshold:
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
@@ -153,7 +153,7 @@ def filter_by_class_id(self, class_ids: Union[int, str, List[Union[int, str]]]) 
     filtered_detections = self.__class__()
     for detection in self.detections:
         if detection.class_id is not None and detection.class_id in class_ids:
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
@@ -197,34 +197,17 @@ def remap_class_ids(self, from_ids: Union[int, str, List[Union[int, str]]], to_i
         
     remapped_detections = self.__class__()
     for detection in self.detections:
-        # Create a copy of the detection
-        new_detection = Detection(
-            inference_id=detection.inference_id,
-            bbox=detection.bbox,
-            masks=detection.masks,
-            segments=detection.segments,
-            keypoints=detection.keypoints,
-            class_id=detection.class_id,
-            class_name=detection.class_name,
-            labels=detection.labels,
-            confidence=detection.confidence,
-            tracker_id=detection.tracker_id,
-            metadata=detection.metadata,
-            zones=detection.zones,
-            zone_names=detection.zone_names,
-            line_crossings=detection.line_crossings,
-            first_seen_time=detection.first_seen_time,
-            total_time=detection.total_time
-        )
-        
+        # Create a copy of the detection using fixed copy method
+        new_detection = detection.copy()
+
         # Remap class_id if it matches
         if new_detection.class_id is not None and new_detection.class_id in from_ids:
             new_detection.class_id = to_id
             # Clear class_name since it may no longer be accurate
             new_detection.class_name = None
-        
+
         remapped_detections.add_detection(new_detection)
-    
+
     return remapped_detections
 
 
@@ -260,22 +243,22 @@ def filter_by_size(self, min_area: Optional[float] = None, max_area: Optional[fl
     for detection in self.detections:
         if detection.bbox is None:
             continue
-            
+
         # Calculate bounding box area
         x1, y1, x2, y2 = detection.bbox
         area = (x2 - x1) * (y2 - y1)
-        
+
         # Check area constraints
         if min_area is not None and area < min_area:
             continue
         if max_area is not None and area > max_area:
             continue
-            
-        filtered_detections.add_detection(detection)
+
+        filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
-def filter_by_dimensions(self, min_width: Optional[float] = None, max_width: Optional[float] = None, 
+def filter_by_dimensions(self, min_width: Optional[float] = None, max_width: Optional[float] = None,
                          min_height: Optional[float] = None, max_height: Optional[float] = None) -> 'Detections':
     """
     Filter detections by individual width and height constraints.
@@ -331,7 +314,7 @@ def filter_by_dimensions(self, min_width: Optional[float] = None, max_width: Opt
         if max_height is not None and height > max_height:
             continue
             
-        filtered_detections.add_detection(detection)
+        filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
@@ -391,7 +374,7 @@ def filter_by_aspect_ratio(self, min_ratio: Optional[float] = None, max_ratio: O
         if max_ratio is not None and aspect_ratio > max_ratio:
             continue
             
-        filtered_detections.add_detection(detection)
+        filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
@@ -442,13 +425,13 @@ def filter_by_zones(self, zone_ids: Union[str, int, List[Union[str, int]]], excl
         if not hasattr(detection, 'zones') or detection.zones is None:
             # If no zone info, include only if we're excluding zones
             if exclude:
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
         else:
             # Check if detection is in any of the specified zones
             in_specified_zones = any(z in zone_ids for z in detection.zones)
             
             if (in_specified_zones and not exclude) or (not in_specified_zones and exclude):
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
                 
     return filtered_detections
 
@@ -519,35 +502,35 @@ def filter_by_position(self, region: str, margin_percent: float = 0.1,
             # Center region (excluding margins from all sides)
             if (margin_x <= center_x <= frame_width - margin_x and
                 margin_y <= center_y <= frame_height - margin_y):
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
                 
         elif region == "edge":
             # Edge region (within margins from any side)
             if (center_x < margin_x or center_x > frame_width - margin_x or
                 center_y < margin_y or center_y > frame_height - margin_y):
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
                 
         elif region == "top":
             if center_y < margin_y:
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
                 
         elif region == "bottom":
             if center_y > frame_height - margin_y:
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
                 
         elif region == "left":
             if center_x < margin_x:
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
                 
         elif region == "right":
             if center_x > frame_width - margin_x:
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
                 
         elif region == "corners":
             # Corners are both edge horizontally AND vertically
             if ((center_x < margin_x or center_x > frame_width - margin_x) and
                 (center_y < margin_y or center_y > frame_height - margin_y)):
-                filtered_detections.add_detection(detection)
+                filtered_detections.add_detection(detection.copy())
         else:
             raise ValueError(f"Invalid region '{region}'. Valid options are: center, edge, top, bottom, left, right, corners")
             
@@ -619,7 +602,7 @@ def filter_by_relative_size(self, min_percent: Optional[float] = None, max_perce
         if max_percent is not None and relative_size > max_percent:
             continue
             
-        filtered_detections.add_detection(detection)
+        filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
@@ -663,7 +646,7 @@ def filter_by_tracking_duration(self, min_seconds: Optional[float] = None, max_s
         if max_seconds is not None and duration > max_seconds:
             continue
             
-        filtered_detections.add_detection(detection)
+        filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
@@ -711,7 +694,7 @@ def filter_by_first_seen_time(self, start_time: Optional[float] = None, end_time
         if end_time is not None and first_seen > end_time:
             continue
             
-        filtered_detections.add_detection(detection)
+        filtered_detections.add_detection(detection.copy())
     return filtered_detections
 
 
@@ -749,7 +732,7 @@ def filter_tracked_objects(self, require_tracker_id: bool = True) -> 'Detections
         has_tracker = detection.tracker_id is not None
         
         if (require_tracker_id and has_tracker) or (not require_tracker_id and not has_tracker):
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
             
     return filtered_detections
 
@@ -889,7 +872,7 @@ def remove_duplicates(self, iou_threshold: float = 0.8, keep: str = 'first') -> 
                     keep_index = idx
         
         # Add the chosen detection and mark all others as processed
-        filtered_detections.add_detection(self.detections[keep_index])
+        filtered_detections.add_detection(self.detections[keep_index].copy())
         processed_indices.update(overlapping_group)
         
     return filtered_detections
@@ -957,7 +940,7 @@ def filter_overlapping(self, min_overlap: float = 0.5, target_class_ids: Optiona
                 break
         
         if has_overlap:
-            filtered_detections.add_detection(detection_i)
+            filtered_detections.add_detection(detection_i.copy())
 
     return filtered_detections
 
@@ -1009,7 +992,7 @@ def filter_by_text_confidence(self, min_confidence: float) -> "Detections":
 
     for detection in self.detections:
         if detection.ocr_data is not None and detection.ocr_data.confidence >= min_confidence:
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
 
     return filtered_detections
 
@@ -1056,7 +1039,7 @@ def filter_by_text_level(self, level: str) -> "Detections":
 
     for detection in self.detections:
         if detection.ocr_data is not None and detection.ocr_data.level == level:
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
 
     return filtered_detections
 
@@ -1102,7 +1085,7 @@ def filter_by_text_language(self, languages: List[str]) -> "Detections":
 
     for detection in self.detections:
         if detection.ocr_data is not None and detection.ocr_data.language in languages:
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
 
     return filtered_detections
 
@@ -1162,7 +1145,7 @@ def filter_by_text_contains(self, pattern: str, case_sensitive: bool = False) ->
         text_to_search = detection.ocr_data.text if case_sensitive else detection.ocr_data.text.lower()
 
         if search_pattern in text_to_search:
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
 
     return filtered_detections
 
@@ -1255,6 +1238,6 @@ def filter_by_text_parent(self, parent_id: str) -> "Detections":
 
     for detection in self.detections:
         if detection.ocr_data is not None and detection.ocr_data.parent_id == parent_id:
-            filtered_detections.add_detection(detection)
+            filtered_detections.add_detection(detection.copy())
 
     return filtered_detections
