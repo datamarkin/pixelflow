@@ -124,11 +124,11 @@ class TestDetection:
             bbox=[100, 100, 200, 200],
             tracker_id=42,
             first_seen_time=1.5,
-            tracking_duration=3.2
+            total_time=3.2
         )
         assert det.tracker_id == 42
         assert det.first_seen_time == 1.5
-        assert det.tracking_duration == 3.2
+        assert det.total_time == 3.2
 
     def test_detection_to_dict_basic(self, sample_detection):
         """Test detection serialization to dict."""
