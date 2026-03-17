@@ -14,6 +14,7 @@ from . import slicer
 from . import smoother
 from . import timer
 from . import tracker
+from . import assets
 
 # Import specific functions for top-level access
 from .media import Media, MediaInfo, write_frame, show_frame, close_display
@@ -51,6 +52,7 @@ __all__ = [
     "Crossings",
 
     # Processing utilities
+    "assets",
     "slicer",
     "SlicedInference",
     "auto_slice_size",
