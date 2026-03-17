@@ -20,7 +20,9 @@ __all__ = [
     "from_ultralytics",
     "from_transformers",
     "from_sam",
-    "from_datamarkin_csv"
+    "from_datamarkin_csv",
+    "from_supervision",
+    "from_rfdetr"
 ]
 
 # COCO pose keypoint names (17 keypoints)
@@ -1095,3 +1097,133 @@ def from_datamarkin_csv(group: Any, height: int, width: int):
         detections_obj.add_detection(detection)
 
     return detections_obj
+
+
+def from_supervision(supervision_detections: Any) -> "Detections":
+    """
+    Convert supervision library's Detections to a unified PixelFlow Detections object.
+
+    Processes detection results from the supervision library (used by RF-DETR and other
+    models), extracting bounding boxes, segmentation masks, class IDs, and confidence
+    scores into PixelFlow's standardized format for downstream processing and visualization.
+
+    Args:
+        supervision_detections: sv.Detections instance from supervision library.
+                               Expected to have attributes: xyxy (n,4), confidence (n,),
+                               class_id (n,), mask (optional list of masks).
+
+    Returns:
+        Detections: PixelFlow Detections container with converted Detection objects.
+                   Empty Detections if input has no detections.
+
+    Raises:
+        AttributeError: If supervision_detections lacks required attributes (xyxy)
+        ValueError: If xyxy array is malformed or empty
+
+    Example:
+        >>> import supervision as sv
+        >>> import pixelflow as pf
+        >>> from rfdetr import RFDETRMedium
+        >>> from PIL import Image
+        >>>
+        >>> # Load and run RF-DETR model (returns sv.Detections)
+        >>> model = RFDETRMedium()
+        >>> image = Image.open("image.jpg")
+        >>> sv_detections = model.predict(image, threshold=0.5)
+        >>>
+        >>> # Convert to PixelFlow format for unified processing
+        >>> pf_detections = pf.detections.from_supervision(sv_detections)
+        >>>
+        >>> # Access detection data with filtering
+        >>> print(f"Detected {len(pf_detections)} objects")
+        >>> high_conf = pf_detections.filter_by_confidence(0.7)
+        >>> for det in high_conf:
+        ...     print(f"  Class {det.class_id}: {det.confidence:.2f}")
+
+    Notes:
+        - Supervision's xyxy is shape (n,4) numpy array → converted to list for bbox
+        - Optional fields (confidence, class_id, mask) may be None → handled gracefully
+        - Masks are stored as list elements if present in supervision detections
+        - RF-DETR returns class_ids matching COCO classes (0-79)
+
+    See Also:
+        from_ultralytics : Convert Ultralytics YOLO results to PixelFlow format
+        from_detectron2 : Convert Detectron2 results to PixelFlow format
+    """
+    from .detections import Detections, Detection
+
+    detections_obj = Detections()
+
+    # Check if input has required xyxy attribute
+    if not hasattr(supervision_detections, 'xyxy'):
+        raise AttributeError(
+            "Input must be supervision library's sv.Detections with 'xyxy' attribute"
+        )
+
+    xyxy = supervision_detections.xyxy  # shape (n, 4) numpy array
+
+    # Handle empty detections
+    if len(xyxy) == 0:
+        return detections_obj
+
+    # Extract optional fields from supervision detections
+    confidence = getattr(supervision_detections, 'confidence', None)  # Optional, shape (n,) or None
+    class_id = getattr(supervision_detections, 'class_id', None)  # Optional, shape (n,) or None
+    mask = getattr(supervision_detections, 'mask', None)  # Optional, list of masks or None
+
+    for i in range(len(xyxy)):
+        detection = Detection(
+            bbox=xyxy[i].tolist(),  # Convert [x1,y1,x2,y2] numpy array to list
+            confidence=float(confidence[i]) if confidence is not None else None,
+            class_id=int(class_id[i]) if class_id is not None else None,
+        )
+
+        # Handle masks if present - store as list of mask arrays
+        if mask is not None and i < len(mask) and mask[i] is not None:
+            detection.masks = [mask[i]]  # Store single mask as list element
+
+        detections_obj.add_detection(detection)
+
+    return detections_obj
+
+
+def from_rfdetr(supervision_detections: Any) -> "Detections":
+    """
+    Convert RF-DETR output to a unified PixelFlow Detections object.
+
+    Alias for from_supervision(). RF-DETR models return supervision library's
+    sv.Detections format, so this function provides a more discoverable name
+    for users working with RF-DETR who may not know the underlying format.
+
+    Args:
+        supervision_detections: RF-DETR output (sv.Detections from supervision).
+                               Expected to have attributes: xyxy (n,4),
+                               confidence (n,), class_id (n,), mask (optional).
+
+    Returns:
+        Detections: PixelFlow Detections container with converted Detection objects.
+
+    Example:
+        >>> import pixelflow as pf
+        >>> from rfdetr import RFDETRMedium
+        >>> from PIL import Image
+        >>>
+        >>> # Load and run RF-DETR model
+        >>> model = RFDETRMedium()
+        >>> image = Image.open("image.jpg")
+        >>> rfdetr_output = model.predict(image, threshold=0.5)
+        >>>
+        >>> # Convert using the RF-DETR specific alias (more discoverable)
+        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output)
+        >>> print(f"Detected {len(pf_detections)} objects")
+
+    Notes:
+        - This is an alias for from_supervision()
+        - RF-DETR returns supervision library's sv.Detections format
+        - Use this function name if you're working with RF-DETR specifically
+
+    See Also:
+        from_supervision : Convert any supervision library Detections to PixelFlow
+    """
+    # Delegate to from_supervision for actual conversion
+    return from_supervision(supervision_detections)

@@ -13,7 +13,9 @@ from .converters import (
     from_ultralytics,
     from_transformers,
     from_sam,
-    from_datamarkin_csv
+    from_datamarkin_csv,
+    from_supervision,
+    from_rfdetr
 )
 
 # Import filter functions (now public API)
@@ -49,6 +51,8 @@ __all__ = [
     'from_transformers',
     'from_sam',
     'from_datamarkin_csv',
+    'from_supervision',
+    'from_rfdetr',
 
     # Filter functions
     'filter_by_confidence',
