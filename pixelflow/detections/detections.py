@@ -16,7 +16,7 @@ from pixelflow.validators import (validate_bbox,
 from typing import (List,
                     Iterator, Optional, Union, Any, Dict)
 
-__all__ = ["KeyPoint", "OCRData", "Detection", "Detections"]
+__all__ = ["KeyPoint", "Detection", "Detections"]
 
 
 # Object-oriented approach instead of a NumPy array-based approach
@@ -100,172 +100,6 @@ class KeyPoint:
             "y": y_val,
             "name": self.name,
             "visibility": self.visibility
-        }
-
-
-class OCRData:
-    """
-    Encapsulates OCR and document structure information for text-based detections.
-
-    Provides a structured container for all OCR-related metadata including text content,
-    confidence scores, hierarchical document structure, geometric properties, and
-    specialized document element types (tables, formulas, etc). Designed to work with
-    various OCR engines and document parsing systems like Tesseract, EasyOCR, PaddleOCR,
-    and PP-StructureV3.
-
-    Args:
-        text (str): Recognized text content from OCR engine.
-        confidence (float): OCR confidence score [0.0-1.0], automatically rounded
-                          to 4 decimal places for consistency.
-        language (Optional[str]): ISO 639-1 language code (e.g., 'en', 'es', 'zh', 'ar').
-        level (Optional[str]): Text hierarchy level for document structure:
-                              'char', 'word', 'line', 'paragraph', 'block', or 'page'.
-        order (Optional[int]): Reading sequence number for proper text ordering within a level.
-        parent_id (Optional[str]): ID of parent element for hierarchical document reconstruction.
-        angle (Optional[float]): Text rotation angle in degrees. Positive values indicate
-                                clockwise rotation, negative for counterclockwise.
-        direction (Optional[str]): Text reading direction: 'ltr' (left-to-right),
-                                  'rtl' (right-to-left), 'ttb' (top-to-bottom),
-                                  'btt' (bottom-to-top).
-        element_type (Optional[str]): Document element classification for structured documents:
-                                     'text', 'table', 'formula', 'seal', 'chart', 'image',
-                                     'title', 'header', 'footer', etc.
-        page_index (Optional[int]): Page number for multi-page documents (0-indexed).
-        table_html (Optional[str]): HTML representation of table structure for table elements.
-        formula_latex (Optional[str]): LaTeX code representation for mathematical formulas.
-
-    Example:
-        >>> import pixelflow as pf
-        >>>
-        >>> # Basic OCR data for text detection
-        >>> ocr_data = pf.detections.OCRData(
-        ...     text="Hello World",
-        ...     confidence=0.98,
-        ...     language="en",
-        ...     level="line"
-        ... )
-        >>>
-        >>> # Create detection with OCR data
-        >>> detection = pf.detections.Detection(
-        ...     bbox=[100, 50, 200, 80],
-        ...     ocr_data=ocr_data
-        ... )
-        >>>
-        >>> # Document structure with hierarchy
-        >>> paragraph_ocr = pf.detections.OCRData(
-        ...     text="First paragraph content",
-        ...     confidence=0.95,
-        ...     language="en",
-        ...     level="paragraph",
-        ...     order=1,
-        ...     parent_id="page_1"
-        ... )
-        >>>
-        >>> # Table element from PP-StructureV3
-        >>> table_ocr = pf.detections.OCRData(
-        ...     text="",
-        ...     confidence=0.92,
-        ...     element_type="table",
-        ...     page_index=0,
-        ...     table_html="<table><tr><td>Cell 1</td></tr></table>"
-        ... )
-        >>>
-        >>> # Mathematical formula element
-        >>> formula_ocr = pf.detections.OCRData(
-        ...     text="E=mc²",
-        ...     confidence=0.96,
-        ...     element_type="formula",
-        ...     formula_latex="E=mc^2"
-        ... )
-
-    Notes:
-        - Confidence scores are automatically rounded using round_to_decimal for precision
-        - All fields except text and confidence are optional
-        - Compatible with Tesseract, EasyOCR, PaddleOCR, PP-StructureV3, and custom OCR engines
-        - Use element_type to distinguish between different document element types
-        - Hierarchical structure via level, order, and parent_id enables document tree reconstruction
-    """
-
-    def __init__(
-        self,
-        text: str,
-        confidence: float,
-        language: Optional[str] = None,
-        level: Optional[str] = None,
-        order: Optional[int] = None,
-        parent_id: Optional[str] = None,
-        angle: Optional[float] = None,
-        direction: Optional[str] = None,
-        element_type: Optional[str] = None,
-        page_index: Optional[int] = None,
-        table_html: Optional[str] = None,
-        formula_latex: Optional[str] = None,
-    ):
-        self.text = text
-        self.confidence = round_to_decimal(confidence)
-        self.language = language
-        self.level = level
-        self.order = order
-        self.parent_id = parent_id
-        self.angle = angle
-        self.direction = direction
-        self.element_type = element_type
-        self.page_index = page_index
-        self.table_html = table_html
-        self.formula_latex = formula_latex
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert OCRData to dictionary format for JSON serialization and storage.
-
-        Transforms the OCRData object into a standardized dictionary representation
-        suitable for JSON export, API responses, and data persistence workflows.
-        Automatically converts NumPy types to native Python types for JSON compatibility.
-
-        Returns:
-            Dict[str, Any]: Dictionary containing all OCR fields in standardized format.
-
-        Example:
-            >>> import pixelflow as pf
-            >>> import json
-            >>>
-            >>> # Basic OCR data serialization
-            >>> ocr_data = pf.detections.OCRData(text="Hello", confidence=0.95, language="en")
-            >>> data = ocr_data.to_dict()
-            >>> json_str = json.dumps(data)
-            >>>
-            >>> # Table element serialization
-            >>> table_ocr = pf.detections.OCRData(
-            ...     text="",
-            ...     confidence=0.90,
-            ...     element_type="table",
-            ...     table_html="<table>...</table>"
-            ... )
-            >>> table_dict = table_ocr.to_dict()
-        """
-        # Helper to convert numpy types to native Python types
-        def to_python_type(value):
-            if value is None:
-                return None
-            if isinstance(value, np.integer):
-                return int(value)
-            if isinstance(value, np.floating):
-                return float(value)
-            return value
-
-        return {
-            "text": self.text,
-            "confidence": to_python_type(self.confidence),
-            "language": self.language,
-            "level": self.level,
-            "order": to_python_type(self.order),
-            "parent_id": self.parent_id,
-            "angle": to_python_type(self.angle),
-            "direction": self.direction,
-            "element_type": self.element_type,
-            "page_index": to_python_type(self.page_index),
-            "table_html": self.table_html,
-            "formula_latex": self.formula_latex,
         }
 
 
@@ -376,7 +210,6 @@ class Detection:
                  labels: Optional[List[str]] = None,
                  confidence: Optional[float] = None,
                  tracker_id: Optional[int] = None,
-                 ocr_data: Optional[OCRData] = None,
                  metadata: Optional[Dict[str, Any]] = None,
                  zones: Optional[List[str]] = None,
                  zone_names: Optional[List[str]] = None,
@@ -394,7 +227,6 @@ class Detection:
         self.confidence = round_to_decimal(confidence)
         self.tracker_id = tracker_id
 
-        self.ocr_data = ocr_data
         self.metadata = metadata
 
         self.zones = zones if zones is not None else []  # List of zone IDs
@@ -506,7 +338,6 @@ class Detection:
             "labels": self.labels,
             "confidence": to_python_type(self.confidence),
             "tracker_id": to_python_type(self.tracker_id),
-            "ocr_data": self.ocr_data.to_dict() if self.ocr_data is not None else None,
             "metadata": self.metadata,
             "zones": self.zones,
             "zone_names": self.zone_names,
@@ -671,7 +502,6 @@ class Detection:
             labels=self.labels.copy() if self.labels else None,
             confidence=self.confidence,
             tracker_id=self.tracker_id,
-            ocr_data=self.ocr_data,  # OCRData is immutable, safe to share reference
             metadata=self.metadata.copy() if self.metadata else None,
             zones=self.zones.copy() if self.zones else [],
             zone_names=self.zone_names.copy() if self.zone_names else [],
@@ -1008,14 +838,7 @@ from .filters import (
     filter_tracked_objects,
     remove_duplicates,
     filter_overlapping,
-    _calculate_iou,
-    # OCR filter methods
-    filter_by_text_confidence,
-    filter_by_text_level,
-    filter_by_text_language,
-    filter_by_text_contains,
-    sort_by_text_order,
-    filter_by_text_parent
+    _calculate_iou
 )
 
 
@@ -1035,11 +858,3 @@ Detections.filter_tracked_objects = filter_tracked_objects
 Detections.remove_duplicates = remove_duplicates
 Detections.filter_overlapping = filter_overlapping
 Detections._calculate_iou = lambda self, bbox1, bbox2: _calculate_iou(bbox1, bbox2)
-
-# Attach OCR filter methods
-Detections.filter_by_text_confidence = filter_by_text_confidence
-Detections.filter_by_text_level = filter_by_text_level
-Detections.filter_by_text_language = filter_by_text_language
-Detections.filter_by_text_contains = filter_by_text_contains
-Detections.sort_by_text_order = sort_by_text_order
-Detections.filter_by_text_parent = filter_by_text_parent

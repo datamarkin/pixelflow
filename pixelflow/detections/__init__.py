@@ -4,6 +4,7 @@
 # Import core classes
 from .detections import KeyPoint, Detection, Detections
 
+
 # Import converter functions
 from .converters import (
     from_datamarkin,
@@ -12,12 +13,7 @@ from .converters import (
     from_ultralytics,
     from_transformers,
     from_sam,
-    from_datamarkin_csv,
-    # OCR converters
-    from_tesseract,
-    from_easyocr,
-    from_paddleocr,
-    from_ppstructure
+    from_datamarkin_csv
 )
 
 # Import filter functions (now public API)
@@ -35,23 +31,16 @@ from .filters import (
     filter_by_first_seen_time,
     filter_tracked_objects,
     remove_duplicates,
-    filter_overlapping,
-    # OCR filter functions
-    filter_by_text_confidence,
-    filter_by_text_level,
-    filter_by_text_language,
-    filter_by_text_contains,
-    sort_by_text_order,
-    filter_by_text_parent
+    filter_overlapping
 )
 
 # All public exports - maintains exact same API as before
 __all__ = [
     # Core classes
     'KeyPoint',
-    'Detection', 
+    'Detection',
     'Detections',
-    
+
     # Converter functions
     'from_datamarkin',
     'from_florence2',
@@ -60,12 +49,7 @@ __all__ = [
     'from_transformers',
     'from_sam',
     'from_datamarkin_csv',
-    # OCR converters
-    'from_tesseract',
-    'from_easyocr',
-    'from_paddleocr',
-    'from_ppstructure',
-    
+
     # Filter functions
     'filter_by_confidence',
     'filter_by_class_id',
@@ -80,12 +64,5 @@ __all__ = [
     'filter_by_first_seen_time',
     'filter_tracked_objects',
     'remove_duplicates',
-    'filter_overlapping',
-    # OCR filter functions
-    'filter_by_text_confidence',
-    'filter_by_text_level',
-    'filter_by_text_language',
-    'filter_by_text_contains',
-    'sort_by_text_order',
-    'filter_by_text_parent'
+    'filter_overlapping'
 ]
