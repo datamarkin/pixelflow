@@ -125,9 +125,6 @@ class Detection:
         confidence (Optional[float]): Detection confidence score [0.0-1.0], automatically rounded
                                      to 4 decimal places for consistency.
         tracker_id (Optional[int]): Unique tracking identifier for multi-frame object tracking.
-        ocr_data (Optional[OCRData]): Structured OCR/document data with text content, confidence,
-                                     language, hierarchy level, reading order, and element type.
-                                     Use OCRData class for all OCR-related information.
         metadata (Optional[Dict[str, Any]]): Additional custom metadata and framework-specific data.
         zones (Optional[List[str]]): List of zone identifiers the detection intersects.
                                    Defaults to empty list if None.
@@ -177,20 +174,7 @@ class Detection:
         ...     class_name="person",
         ...     keypoints=[nose_point]
         ... )
-        >>>
-        >>> # OCR detection with structured OCRData
-        >>> ocr_data = pf.detections.OCRData(
-        ...     text="Hello World",
-        ...     confidence=0.98,
-        ...     language="en",
-        ...     level="line",
-        ...     order=1
-        ... )
-        >>> ocr_detection = pf.detections.Detection(
-        ...     bbox=[50, 100, 200, 130],
-        ...     ocr_data=ocr_data
-        ... )
-    
+
     Notes:
         - Bounding box coordinates are automatically validated using validate_bbox function
         - Confidence scores are automatically rounded using round_to_decimal for precision
@@ -485,7 +469,6 @@ class Detection:
 
         Notes:
             - All list and dict fields are deep copied for complete independence
-            - OCRData objects are shared (considered immutable)
             - Keypoints are deep copied to ensure complete independence from original
             - Useful for immutable transform operations in detection processing
         """
