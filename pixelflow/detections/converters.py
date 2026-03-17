@@ -274,7 +274,6 @@ def from_florence2(
     See Also:
         from_detectron2 : Convert Detectron2 results to PixelFlow format
         from_ultralytics : Convert YOLO results to PixelFlow format
-        from_easyocr : Convert EasyOCR results for pure OCR tasks
     """
     from .detections import Detections, Detection, OCRData
 
