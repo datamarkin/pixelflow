@@ -127,12 +127,17 @@ def _format_bytes(n: int) -> str:
         return f"{n / (1024 * 1024 * 1024):.1f} GB"
 
 
-def _show_progress(filename: str, downloaded: int, total: Optional[int]) -> None:
+def _show_progress(
+    filename: str, downloaded: int, total: Optional[int], speed: float = 0.0
+) -> None:
     if total and total > 0:
         pct = min(100, int(downloaded * 100 / total))
+        bar_width = 30
+        filled = int(bar_width * downloaded // total)
+        bar = "█" * filled + "░" * (bar_width - filled)
+        speed_str = f"/ {_format_bytes(int(speed))}/s" if speed > 0 else ""
         sys.stderr.write(
-            f"\rDownloading {filename}: "
-            f"{_format_bytes(downloaded)} / {_format_bytes(total)} [{pct}%]"
+            f"\rDownloading {filename}: [{bar}] {_format_bytes(downloaded)} / {_format_bytes(total)} ({pct}%){speed_str}"
         )
     else:
         sys.stderr.write(
@@ -161,6 +166,8 @@ def _download_file(
                 total = resp.headers.get("Content-Length")
                 total = int(total) if total else None
                 downloaded = 0
+                start_time = time.time()
+                last_update = start_time
 
                 with open(tmp, "wb") as f:
                     while True:
@@ -169,8 +176,13 @@ def _download_file(
                             break
                         f.write(chunk)
                         downloaded += len(chunk)
-                        if not quiet:
-                            _show_progress(filename, downloaded, total)
+                        current_time = time.time()
+                        # Update progress every 0.5 seconds or at end
+                        if not quiet and (current_time - last_update >= 0.1 or not chunk):
+                            elapsed = current_time - start_time
+                            speed = downloaded / elapsed if elapsed > 0 else 0
+                            _show_progress(filename, downloaded, total, speed)
+                            last_update = current_time
 
             if not quiet and downloaded > 0:
                 sys.stderr.write("\n")
