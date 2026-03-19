@@ -1,75 +1,75 @@
-# BGR format for OpenCV compatibility
+# RGB format — all color tuples are (R, G, B)
 # Scientifically chosen for maximum perceptual distinction
 # Ordered to maximize distinction between adjacent colors
 
 DEFAULT_PALETTE = [
-    (255, 127, 14),  # Vivid Orange
-    (31, 119, 180),  # Strong Blue
+    (14, 127, 255),  # Vivid Orange
+    (180, 119, 31),  # Strong Blue
     (44, 160, 44),  # Green
-    (214, 39, 40),  # Vivid Red
-    (148, 103, 189),  # Purple
-    (140, 86, 75),  # Brown
-    (227, 119, 194),  # Pink
+    (40, 39, 214),  # Vivid Red
+    (189, 103, 148),  # Purple
+    (75, 86, 140),  # Brown
+    (194, 119, 227),  # Pink
     (127, 127, 127),  # Gray
-    (188, 189, 34),  # Olive
-    (23, 190, 207),  # Cyan
-    (255, 187, 120),  # Light Orange
-    (174, 199, 232),  # Light Blue
-    (152, 223, 138),  # Light Green
-    (255, 152, 150),  # Light Red
-    (197, 176, 213),  # Light Purple
-    (196, 156, 148),  # Light Brown
-    (247, 182, 210),  # Light Pink
+    (34, 189, 188),  # Olive
+    (207, 190, 23),  # Cyan
+    (120, 187, 255),  # Light Orange
+    (232, 199, 174),  # Light Blue
+    (138, 223, 152),  # Light Green
+    (150, 152, 255),  # Light Red
+    (213, 176, 197),  # Light Purple
+    (148, 156, 196),  # Light Brown
+    (210, 182, 247),  # Light Pink
     (199, 199, 199),  # Light Gray
-    (219, 219, 141),  # Light Olive
-    (158, 218, 229),  # Light Cyan
+    (141, 219, 219),  # Light Olive
+    (229, 218, 158),  # Light Cyan
 ]
 
 # High contrast palette for better visibility
 VIBRANT_PALETTE = [
-    (0, 0, 255),  # Pure Red
+    (255, 0, 0),  # Pure Red
     (0, 255, 0),  # Pure Green
-    (255, 0, 0),  # Pure Blue
-    (0, 255, 255),  # Yellow
+    (0, 0, 255),  # Pure Blue
+    (255, 255, 0),  # Yellow
     (255, 0, 255),  # Magenta
-    (255, 255, 0),  # Cyan
-    (0, 128, 255),  # Orange
-    (255, 0, 128),  # Purple
-    (128, 255, 0),  # Lime
-    (0, 128, 128),  # Olive
+    (0, 255, 255),  # Cyan
+    (255, 128, 0),  # Orange
+    (128, 0, 255),  # Purple
+    (0, 255, 128),  # Lime
+    (128, 128, 0),  # Olive
     (128, 0, 128),  # Maroon
-    (128, 128, 0),  # Navy
-    (64, 224, 208),  # Turquoise
-    (250, 128, 114),  # Salmon
-    (255, 215, 0),  # Gold
-    (255, 105, 180),  # Hot Pink
-    (0, 191, 255),  # Deep Sky Blue
+    (0, 128, 128),  # Navy
+    (208, 224, 64),  # Turquoise
+    (114, 128, 250),  # Salmon
+    (0, 215, 255),  # Gold
+    (180, 105, 255),  # Hot Pink
+    (255, 191, 0),  # Deep Sky Blue
     (50, 205, 50),  # Lime Green
-    (255, 20, 147),  # Deep Pink
-    (255, 140, 0),  # Dark Orange
+    (147, 20, 255),  # Deep Pink
+    (0, 140, 255),  # Dark Orange
 ]
 
 # Soft pastel colors for subtle annotations
 PASTEL_PALETTE = [
-    (203, 195, 255),  # Pastel Red
-    (195, 255, 203),  # Pastel Green
-    (255, 203, 195),  # Pastel Blue
-    (195, 255, 255),  # Pastel Yellow
+    (255, 195, 203),  # Pastel Red
+    (203, 255, 195),  # Pastel Green
+    (195, 203, 255),  # Pastel Blue
+    (255, 255, 195),  # Pastel Yellow
     (255, 195, 255),  # Pastel Magenta
-    (255, 255, 195),  # Pastel Cyan
-    (195, 225, 255),  # Pastel Orange
-    (255, 195, 225),  # Pastel Purple
-    (225, 255, 195),  # Pastel Lime
-    (214, 234, 248),  # Pastel Sky
-    (250, 219, 216),  # Pastel Rose
-    (253, 235, 208),  # Pastel Peach
-    (222, 234, 210),  # Pastel Mint
-    (239, 224, 255),  # Pastel Lavender
-    (255, 245, 215),  # Pastel Cream
-    (230, 244, 241),  # Pastel Teal
-    (255, 239, 213),  # Pastel Apricot
-    (241, 238, 252),  # Pastel Periwinkle
-    (255, 250, 230),  # Pastel Beige
+    (195, 255, 255),  # Pastel Cyan
+    (255, 225, 195),  # Pastel Orange
+    (225, 195, 255),  # Pastel Purple
+    (195, 255, 225),  # Pastel Lime
+    (248, 234, 214),  # Pastel Sky
+    (216, 219, 250),  # Pastel Rose
+    (208, 235, 253),  # Pastel Peach
+    (210, 234, 222),  # Pastel Mint
+    (255, 224, 239),  # Pastel Lavender
+    (215, 245, 255),  # Pastel Cream
+    (241, 244, 230),  # Pastel Teal
+    (213, 239, 255),  # Pastel Apricot
+    (252, 238, 241),  # Pastel Periwinkle
+    (230, 250, 255),  # Pastel Beige
     (240, 255, 240),  # Pastel Honeydew
 ]
 
@@ -87,11 +87,11 @@ def _get_color_for_prediction(prediction, colors_override=None, palette='default
 
     Args:
         prediction: Object with class_id attribute
-        colors_override: Optional list of BGR color tuples (highest priority)
+        colors_override: Optional list of RGB color tuples (highest priority)
         palette: Palette name ('default', 'vibrant', 'pastel') - ignored if colors_override is provided
 
     Returns:
-        BGR color tuple for the prediction
+        RGB color tuple for the prediction
     """
     if colors_override:
         return colors_override[prediction.class_id % len(colors_override)]
