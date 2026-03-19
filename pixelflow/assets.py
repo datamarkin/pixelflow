@@ -233,7 +233,6 @@ def download(
     path: str,
     *,
     directory: Optional[Union[str, Path]] = None,
-    sha256: Optional[str] = None,
     force: bool = False,
     quiet: bool = False,
     retries: int = 3,
@@ -254,8 +253,6 @@ def download(
         directory: Where to save the file. Defaults to the current working
             directory. Use :func:`get_cache_dir` for the standard cache
             location.
-        sha256: Expected SHA-256 hex digest. Verified once after download.
-            Overrides server sidecar verification.
         force: If ``True``, re-download even when the file already exists.
         quiet: Suppress progress output to stderr.
         retries: Number of download attempts (default 3).
@@ -287,27 +284,21 @@ def download(
 
     _download_file(url, local_path, quiet=quiet, retries=retries)
 
-    # One-time integrity verification
-    if sha256 is not None:
-        # Explicit hash takes priority
+    # Automatic sidecar integrity verification
+    server_hash = _fetch_server_sha256(url)
+    if server_hash is not None:
         actual = _sha256_file(local_path)
-        if actual != sha256:
+        if actual != server_hash:
             local_path.unlink(missing_ok=True)
             raise ChecksumError(
                 f"SHA-256 mismatch for {path}: "
-                f"expected {sha256}, got {actual}"
+                f"expected {server_hash} (from server), got {actual}"
             )
-    else:
-        # Try server sidecar
-        server_hash = _fetch_server_sha256(url)
-        if server_hash is not None:
-            actual = _sha256_file(local_path)
-            if actual != server_hash:
-                local_path.unlink(missing_ok=True)
-                raise ChecksumError(
-                    f"SHA-256 mismatch for {path}: "
-                    f"expected {server_hash} (from server), got {actual}"
-                )
+    elif not quiet:
+        sys.stderr.write(
+            f"Warning: No SHA-256 sidecar found for {path}, "
+            f"skipping integrity verification.\n"
+        )
 
     return local_path
 
