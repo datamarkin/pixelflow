@@ -3,12 +3,16 @@ Media handling and display utilities for PixelFlow.
 
 Provides purpose-built classes for reading video files, streaming from cameras,
 and writing video output. Includes display utilities and image loading.
+
+All image data uses **RGB** channel ordering throughout the library.
+Conversion to/from OpenCV's BGR format happens at the I/O boundary.
 """
 
 from pathlib import Path
 from typing import Union, Optional, Iterator
 import cv2
 import numpy as np
+from PIL import Image
 
 from pixelflow import assets
 
@@ -19,6 +23,8 @@ __all__ = [
     "read_image",
     "show_frame",
     "close_display",
+    "to_pil",
+    "from_pil",
 ]
 
 
@@ -52,7 +58,7 @@ def read_image(source: str, width: Optional[int] = None) -> np.ndarray:
         width: Optional width for aspect-ratio resize.
 
     Returns:
-        BGR numpy array.
+        RGB numpy array.
 
     Raises:
         FileNotFoundError: If the file does not exist.
@@ -62,6 +68,7 @@ def read_image(source: str, width: Optional[int] = None) -> np.ndarray:
     image = cv2.imread(str(path))
     if image is None:
         raise RuntimeError(f"Failed to decode image: {source}")
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return _resize_frame(image, width)
 
 
@@ -135,14 +142,22 @@ class VideoReader:
     def __len__(self) -> int:
         return self._frame_count
 
+    def _read_rgb_frame(self) -> Optional[np.ndarray]:
+        """Read one frame, convert BGR→RGB, and resize."""
+        ret, frame = self._cap.read()
+        if not ret:
+            return None
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        return _resize_frame(frame, self._resize_width)
+
     def __iter__(self) -> Iterator[np.ndarray]:
         """Iterate over frames. Resets to frame 0 on each call (replayable)."""
         self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         while True:
-            ret, frame = self._cap.read()
-            if not ret:
+            frame = self._read_rgb_frame()
+            if frame is None:
                 break
-            yield _resize_frame(frame, self._resize_width)
+            yield frame
 
     def seek(self, frame_number: int) -> None:
         """Jump to a specific frame number."""
@@ -220,20 +235,25 @@ class CameraStream:
 
     # -- read / iterate ------------------------------------------------------
 
-    def read(self) -> Optional[np.ndarray]:
-        """Grab a single frame. Returns None on failure."""
+    def _read_rgb_frame(self) -> Optional[np.ndarray]:
+        """Read one frame, convert BGR→RGB, and resize."""
         ret, frame = self._cap.read()
         if not ret:
             return None
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         return _resize_frame(frame, self._resize_width)
+
+    def read(self) -> Optional[np.ndarray]:
+        """Grab a single frame. Returns None on failure."""
+        return self._read_rgb_frame()
 
     def __iter__(self) -> Iterator[np.ndarray]:
         """Infinite iteration. Skips dropped frames, stops when stream closes."""
         while self._cap.isOpened():
-            ret, frame = self._cap.read()
-            if not ret:
+            frame = self._read_rgb_frame()
+            if frame is None:
                 break
-            yield _resize_frame(frame, self._resize_width)
+            yield frame
 
     # -- cleanup -------------------------------------------------------------
 
@@ -292,7 +312,7 @@ class VideoWriter:
     # -- write ---------------------------------------------------------------
 
     def write(self, frame: np.ndarray) -> None:
-        """Write a frame. Resolution auto-detected from first frame."""
+        """Write an RGB frame. Resolution auto-detected from first frame."""
         frame = _resize_frame(frame, self._resize_width)
         if self._writer is None:
             h, w = frame.shape[:2]
@@ -304,7 +324,7 @@ class VideoWriter:
                 raise RuntimeError(
                     f"Failed to open video writer for {self._output_path}"
                 )
-        self._writer.write(frame)
+        self._writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         self._frames_written += 1
 
     # -- cleanup -------------------------------------------------------------
@@ -339,7 +359,7 @@ def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1,
 
     Args:
         window_name: Name of the display window.
-        frame: BGR numpy array to display.
+        frame: RGB numpy array to display.
         wait_key: Milliseconds to wait for key press. Default 1.
         width: Optional display resize width.
 
@@ -347,7 +367,7 @@ def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1,
         The key code (int) if a key was pressed, otherwise None.
     """
     display_frame = _resize_frame(frame, width)
-    cv2.imshow(window_name, display_frame)
+    cv2.imshow(window_name, cv2.cvtColor(display_frame, cv2.COLOR_RGB2BGR))
     key = cv2.waitKey(wait_key) & 0xFF
     if key == 255:
         return None
@@ -357,3 +377,17 @@ def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1,
 def close_display() -> None:
     """Close all OpenCV display windows."""
     cv2.destroyAllWindows()
+
+
+# ---------------------------------------------------------------------------
+# Format conversion helpers
+# ---------------------------------------------------------------------------
+
+def to_pil(image: np.ndarray) -> Image.Image:
+    """Convert an RGB numpy array to a PIL Image."""
+    return Image.fromarray(image)
+
+
+def from_pil(image: Image.Image) -> np.ndarray:
+    """Convert a PIL Image to an RGB numpy array."""
+    return np.array(image)
