@@ -10,6 +10,8 @@ from typing import Union, Optional, Iterator
 import cv2
 import numpy as np
 
+from pixelflow import assets
+
 __all__ = [
     "VideoReader",
     "CameraStream",
@@ -29,6 +31,19 @@ def _resize_frame(frame: np.ndarray, width: Optional[int]) -> np.ndarray:
     return cv2.resize(frame, (width, height))
 
 
+def _resolve_path(source: str) -> Path:
+    """Return a local Path for source, downloading via assets if needed."""
+    path = Path(source)
+    if path.exists():
+        return path
+    try:
+        return assets.download(source)
+    except Exception:
+        raise FileNotFoundError(
+            f"File not found locally and download failed: {source}"
+        )
+
+
 def read_image(source: str, width: Optional[int] = None) -> np.ndarray:
     """Load a single image from disk with optional resizing.
 
@@ -43,9 +58,7 @@ def read_image(source: str, width: Optional[int] = None) -> np.ndarray:
         FileNotFoundError: If the file does not exist.
         RuntimeError: If OpenCV cannot decode the file.
     """
-    path = Path(source)
-    if not path.exists():
-        raise FileNotFoundError(f"Image not found: {source}")
+    path = _resolve_path(source)
     image = cv2.imread(str(path))
     if image is None:
         raise RuntimeError(f"Failed to decode image: {source}")
@@ -67,9 +80,7 @@ class VideoReader:
 
     def __init__(self, source: str, width: Optional[int] = None):
         self._cap = None
-        path = Path(source)
-        if not path.exists():
-            raise FileNotFoundError(f"Video file not found: {source}")
+        path = _resolve_path(source)
         self._source = str(path)
         self._resize_width = width
         self._cap = cv2.VideoCapture(self._source)
