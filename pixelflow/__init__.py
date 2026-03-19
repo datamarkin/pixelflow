@@ -17,7 +17,10 @@ from . import tracker
 from . import assets
 
 # Import specific functions for top-level access
-from .media import Media, MediaInfo, write_frame, show_frame, close_display
+from .media import (
+    VideoReader, CameraStream, VideoWriter,
+    read_image, show_frame, close_display,
+)
 from .zones import Zones
 from .crossings import Crossings
 from .slicer import SlicedInference, auto_slice_size
@@ -39,9 +42,10 @@ __all__ = [
 
     # Media handling
     "media",
-    "Media",
-    "MediaInfo",
-    "write_frame",
+    "VideoReader",
+    "CameraStream",
+    "VideoWriter",
+    "read_image",
     "show_frame",
     "close_display",
 

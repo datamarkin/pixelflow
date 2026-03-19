@@ -1,427 +1,348 @@
 """
 Media handling and display utilities for PixelFlow.
 
-Provides unified media handling for videos, images, and streams with built-in 
-resizing, frame iteration, and video writing capabilities. Includes display 
-utilities with graceful exit handling and automatic resource cleanup.
+Provides purpose-built classes for reading video files, streaming from cameras,
+and writing video output. Includes display utilities and image loading.
 """
 
-import atexit
 from pathlib import Path
-from typing import Union, Iterator, Optional, Dict
+from typing import Union, Optional, Iterator
 import cv2
 import numpy as np
 
 __all__ = [
-    "DisplayExit",
-    "MediaInfo", 
-    "Media",
-    "write_frame",
+    "VideoReader",
+    "CameraStream",
+    "VideoWriter",
+    "read_image",
     "show_frame",
-    "close_display"
+    "close_display",
 ]
 
 
-class DisplayExit(Exception):
-    """Exception raised when user wants to exit display (e.g., presses 'q').
-    
-    This custom exception allows for graceful handling of user-initiated
-    exit requests from display windows, enabling proper cleanup of resources
-    before program termination.
-    
-    Example:
-        >>> try:
-        ...     show_frame("preview", frame)
-        ... except DisplayExit:
-        ...     print("User requested exit")
-        ...     close_display()
-    """
-    pass
+def _resize_frame(frame: np.ndarray, width: Optional[int]) -> np.ndarray:
+    """Resize maintaining aspect ratio. Returns frame unchanged if width is None."""
+    if width is None:
+        return frame
+    h, w = frame.shape[:2]
+    height = int(h * width / w)
+    return cv2.resize(frame, (width, height))
 
 
-class MediaInfo:
-    """Media metadata container for video and image information.
-    
-    Stores essential media properties including resolution, framerate, 
-    duration, and codec information. Provides structured access to
-    media metadata with automatic duration calculation.
-    
+def read_image(source: str, width: Optional[int] = None) -> np.ndarray:
+    """Load a single image from disk with optional resizing.
+
     Args:
-        width (int): Media width in pixels
-        height (int): Media height in pixels  
-        fps (float): Frames per second for video content
-        frame_count (int): Total number of frames in the media
-        duration (float): Duration in seconds
-        codec (Optional[str]): Codec identifier string. Default is None.
-        
-    Example:
-        >>> import pixelflow as pf
-        >>> media = pf.Media("video.mp4")
-        >>> info = media.info
-        >>> print(f"Resolution: {info.width}x{info.height}")
-        Resolution: 1920x1080
-        >>> print(f"Duration: {info.duration:.1f}s")
-        Duration: 30.5s
+        source: Path to the image file.
+        width: Optional width for aspect-ratio resize.
+
+    Returns:
+        BGR numpy array.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        RuntimeError: If OpenCV cannot decode the file.
     """
-    
-    def __init__(self, width: int, height: int, fps: float, frame_count: int, 
-                 duration: float, codec: str = None):
-        self.width = width
-        self.height = height
-        self.fps = fps
-        self.frame_count = frame_count
-        self.duration = duration
-        self.codec = codec
-    
-    def __repr__(self):
-        return (f"MediaInfo(resolution={self.width}x{self.height}, "
-                f"fps={self.fps:.2f}, frames={self.frame_count}, "
-                f"duration={self.duration:.2f}s)")
+    path = Path(source)
+    if not path.exists():
+        raise FileNotFoundError(f"Image not found: {source}")
+    image = cv2.imread(str(path))
+    if image is None:
+        raise RuntimeError(f"Failed to decode image: {source}")
+    return _resize_frame(image, width)
 
 
-class Media:
-    """Unified media handler for videos, images, streams, and webcams.
-    
-    Provides a consistent interface for accessing various media sources
-    including local files, network streams, and webcam feeds. Supports
-    automatic resizing and lazy frame iteration for memory efficiency.
-    
+class VideoReader:
+    """Read video files frame by frame.
+
     Args:
-        source (Union[str, int]): Media source path, URL, or webcam index.
-                                 Supports local files, RTSP/RTMP streams, 
-                                 HTTP URLs, and webcam indices (0, 1, etc.)
-        width (Optional[int]): Optional width for automatic frame resizing.
-                              Maintains aspect ratio. Default is None (no resize).
-                              
+        source: Path to a video file.
+        width: Optional width for aspect-ratio frame resizing.
+
     Example:
-        >>> import pixelflow as pf
-        >>> import cv2
-        >>> 
-        >>> # Load video file
-        >>> media = pf.Media("video.mp4")
-        >>> print(f"Video info: {media.info}")
-        Video info: MediaInfo(resolution=1920x1080, fps=30.00, frames=900, duration=30.00s)
-        >>> 
-        >>> # Process frames with resizing
-        >>> media_resized = pf.Media("video.mp4", width=640)
-        >>> for frame in media_resized.frames:
-        ...     # Process each frame (resized to 640px width)
-        ...     cv2.imshow("Frame", frame)
-        ...     if cv2.waitKey(1) & 0xFF == ord('q'):
-        ...         break
-        >>> 
-        >>> # Use webcam
-        >>> webcam = pf.Media(0)  # First webcam
-        >>> for frame in webcam.frames:
-        ...     # Process webcam frames
-        ...     break
-        
-    Notes:
-        - Automatically detects source type (file, stream, webcam)
-        - Uses lazy loading for memory efficiency with large videos
-        - Maintains aspect ratio when resizing frames
-        - Resources are automatically cleaned up on object destruction
-        
-    See Also:
-        MediaInfo : Container for media metadata
-        show_frame : Display frames with automatic resizing
+        >>> video = pf.VideoReader("input.mp4", width=640)
+        >>> for frame in video:
+        ...     process(frame)
     """
-    
-    def __init__(self, source: Union[str, int], width: int = None):
-        self.source = source
-        self._info = None
+
+    def __init__(self, source: str, width: Optional[int] = None):
         self._cap = None
+        path = Path(source)
+        if not path.exists():
+            raise FileNotFoundError(f"Video file not found: {source}")
+        self._source = str(path)
         self._resize_width = width
-        self._source_type = self._detect_source_type(source)
-    
-    def _detect_source_type(self, source: Union[str, int]) -> str:
-        """Detect the type of media source."""
-        if isinstance(source, int):
-            return "webcam"
-        elif isinstance(source, str):
-            if source.startswith(('rtsp://', 'rtmp://', 'udp://')):
-                return "stream"
-            elif source.startswith(('http://', 'https://')):
-                return "url"
-            elif Path(source).exists():
-                return "file"
-            else:
-                # Try to find in local directory with same name
-                local_file = Path(source).name
-                if Path(local_file).exists():
-                    self.source = local_file
-                    return "file"
-                return "mapped"  # Will need resource manager
-        return "unknown"
-    
-    def _get_capture(self) -> cv2.VideoCapture:
-        """Get or create cached VideoCapture."""
-        if self._cap is None:
-            self._cap = cv2.VideoCapture(self.source)
-            if not self._cap.isOpened():
-                raise RuntimeError(f"Could not open video source: {self.source}")
-        return self._cap
-    
+        self._cap = cv2.VideoCapture(self._source)
+        if not self._cap.isOpened():
+            raise RuntimeError(f"Could not open video file: {source}")
+
+        # Cache raw metadata once
+        self._raw_width = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self._raw_height = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self._fps = self._cap.get(cv2.CAP_PROP_FPS)
+        self._frame_count = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fourcc = int(self._cap.get(cv2.CAP_PROP_FOURCC))
+        self._codec = "".join([chr((fourcc >> 8 * i) & 0xFF) for i in range(4)])
+
+    # -- properties ----------------------------------------------------------
+
     @property
-    def info(self) -> MediaInfo:
-        """Get media metadata."""
-        if self._info is None:
-            cap = self._get_capture()
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            duration = frame_count / fps if fps > 0 else 0
-            
-            fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
-            codec = "".join([chr((fourcc >> 8 * i) & 0xFF) for i in range(4)])
-            
-            self._info = MediaInfo(width, height, fps, frame_count, duration, codec)
-        return self._info
-    
+    def fps(self) -> float:
+        return self._fps
+
     @property
-    def frames(self) -> Iterator[np.ndarray]:
-        """Generate frames from the media source."""
-        cap = self._get_capture()
+    def width(self) -> int:
+        """Post-resize width (what the user gets)."""
+        if self._resize_width is not None:
+            return self._resize_width
+        return self._raw_width
+
+    @property
+    def height(self) -> int:
+        """Post-resize height (what the user gets)."""
+        if self._resize_width is not None:
+            return int(self._raw_height * self._resize_width / self._raw_width)
+        return self._raw_height
+
+    @property
+    def frame_count(self) -> int:
+        return self._frame_count
+
+    @property
+    def duration(self) -> float:
+        """Duration in seconds."""
+        if self._fps > 0:
+            return self._frame_count / self._fps
+        return 0.0
+
+    @property
+    def codec(self) -> str:
+        return self._codec
+
+    # -- iteration / seek ----------------------------------------------------
+
+    def __len__(self) -> int:
+        return self._frame_count
+
+    def __iter__(self) -> Iterator[np.ndarray]:
+        """Iterate over frames. Resets to frame 0 on each call (replayable)."""
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         while True:
-            ret, frame = cap.read()
+            ret, frame = self._cap.read()
             if not ret:
                 break
-            
-            # Resize if width specified
-            if self._resize_width:
-                h, w = frame.shape[:2]
-                height = int(h * self._resize_width / w)
-                frame = cv2.resize(frame, (self._resize_width, height))
-            
-            yield frame
-    
-    def __del__(self):
-        """Clean up VideoCapture on destruction."""
+            yield _resize_frame(frame, self._resize_width)
+
+    def seek(self, frame_number: int) -> None:
+        """Jump to a specific frame number."""
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+
+    # -- cleanup -------------------------------------------------------------
+
+    def close(self) -> None:
+        """Release the underlying VideoCapture."""
         if self._cap is not None:
             self._cap.release()
+            self._cap = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def __del__(self):
+        self.close()
+
+    def __repr__(self):
+        return (f"VideoReader({self._source!r}, "
+                f"{self.width}x{self.height}, "
+                f"{self.fps:.2f}fps, {self.frame_count} frames)")
 
 
-# Global writer cache with specs
-_writers: Dict[str, cv2.VideoWriter] = {}
-_writer_specs: Dict[str, MediaInfo] = {}
+class CameraStream:
+    """Webcams and network streams.
 
-def write_frame(output_path: str, frame: np.ndarray, video_info: MediaInfo = None, width: int = None):
-    """Write a single frame to video file with automatic writer management.
-    
-    Automatically manages VideoWriter lifecycle, creating writers as needed and
-    caching them for subsequent frames. Supports optional resizing and uses
-    MP4V codec for broad compatibility. Writers are automatically released
-    on program exit.
-    
     Args:
-        output_path (str): Path to output video file. Should end with .mp4
-                          extension for best compatibility.
-        frame (np.ndarray): Frame to write as BGR numpy array with shape (H, W, 3).
-        video_info (Optional[MediaInfo]): Video metadata containing fps, resolution,
-                                        and other properties. Required on first call
-                                        for each output path, cached afterward.
-        width (Optional[int]): Optional width for resizing output frame.
-                              Maintains aspect ratio. Default is None (no resize).
-                              
-    Raises:
-        ValueError: If video_info is None on first call to a new output path
-        RuntimeError: If VideoWriter fails to open or initialize
-        
+        source: Webcam index (int) or stream URL (str).
+        width: Optional width for aspect-ratio frame resizing.
+
     Example:
-        >>> import cv2
-        >>> import pixelflow as pf
-        >>> 
-        >>> # Get source video info  
-        >>> source = pf.Media("input.mp4")
-        >>> info = source.info
-        >>> 
-        >>> # Write processed frames
-        >>> for frame in source.frames:
-        ...     # Process frame (e.g., add annotations)
-        ...     processed_frame = frame.copy()  # Your processing here
-        ...     pf.write_frame("output.mp4", processed_frame, info)
-        >>> 
-        >>> # Write with resizing
-        >>> for frame in source.frames:
-        ...     pf.write_frame("resized.mp4", frame, info, width=640)
-        >>> 
-        >>> # Multiple output files (each needs video_info on first call)
-        >>> pf.write_frame("version1.mp4", frame1, info)  # First call needs info
-        >>> pf.write_frame("version1.mp4", frame2)        # Subsequent calls use cache
-        >>> pf.write_frame("version2.mp4", frame1, info)  # New file needs info again
-        
-    Notes:
-        - VideoWriter instances are automatically cached and reused per output path
-        - All writers are automatically released on program exit via atexit handler
-        - Uses MP4V codec which provides good compatibility across platforms
-        - Frame resizing maintains aspect ratio when width parameter is provided
-        - Video metadata is cached per output path to avoid repeated specification
-        
-    Performance Notes:
-        - Writer creation has overhead; reusing writers for multiple frames is efficient
-        - Frame resizing is performed before writing, affecting output video dimensions
-        - Large frame buffers may impact memory usage with many concurrent writers
-        
-    See Also:
-        MediaInfo : Container for video metadata
-        Media : Source for obtaining video_info from existing media
+        >>> cam = pf.CameraStream(0, width=640)
+        >>> for frame in cam:
+        ...     if pf.show_frame("Live", frame) == ord('q'):
+        ...         break
+        >>> cam.close()
     """
-    # Resize frame if width specified
-    if width:
-        h, w = frame.shape[:2]
-        height = int(h * width / w)
-        frame = cv2.resize(frame, (width, height))
-    
-    if output_path not in _writers:
-        # Get video_info from parameter or cache
-        if video_info is None:
-            if output_path in _writer_specs:
-                video_info = _writer_specs[output_path]
-            else:
-                raise ValueError(f"First call to write_frame('{output_path}') requires video_info parameter")
-        
-        # Adjust video_info if frame was resized
-        if width:
+
+    def __init__(self, source: Union[int, str], width: Optional[int] = None):
+        self._source = source
+        self._resize_width = width
+        self._cap = cv2.VideoCapture(source)
+        if not self._cap.isOpened():
+            raise RuntimeError(f"Could not open camera/stream: {source}")
+
+    # -- properties ----------------------------------------------------------
+
+    @property
+    def fps(self) -> float:
+        """Best-effort FPS reported by the device/stream."""
+        return self._cap.get(cv2.CAP_PROP_FPS)
+
+    @property
+    def width(self) -> int:
+        if self._resize_width is not None:
+            return self._resize_width
+        return int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+
+    @property
+    def height(self) -> int:
+        raw_w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        raw_h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if self._resize_width is not None and raw_w > 0:
+            return int(raw_h * self._resize_width / raw_w)
+        return raw_h
+
+    @property
+    def is_opened(self) -> bool:
+        return self._cap is not None and self._cap.isOpened()
+
+    # -- read / iterate ------------------------------------------------------
+
+    def read(self) -> Optional[np.ndarray]:
+        """Grab a single frame. Returns None on failure."""
+        ret, frame = self._cap.read()
+        if not ret:
+            return None
+        return _resize_frame(frame, self._resize_width)
+
+    def __iter__(self) -> Iterator[np.ndarray]:
+        """Infinite iteration. Skips dropped frames, stops when stream closes."""
+        while self._cap.isOpened():
+            ret, frame = self._cap.read()
+            if not ret:
+                break
+            yield _resize_frame(frame, self._resize_width)
+
+    # -- cleanup -------------------------------------------------------------
+
+    def close(self) -> None:
+        if self._cap is not None:
+            self._cap.release()
+            self._cap = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def __del__(self):
+        self.close()
+
+    def __repr__(self):
+        return f"CameraStream({self._source!r}, {self.width}x{self.height})"
+
+
+class VideoWriter:
+    """Write frames to a video file.
+
+    Args:
+        output_path: Path to the output video file.
+        fps: Frames per second (required).
+        codec: FourCC codec string. Default ``'mp4v'``.
+        width: Optional width for resize-on-write.
+
+    Example:
+        >>> writer = pf.VideoWriter("output.mp4", fps=30.0)
+        >>> writer.write(frame)
+        >>> writer.close()
+    """
+
+    def __init__(self, output_path: str, fps: float, codec: str = "mp4v",
+                 width: Optional[int] = None):
+        self._output_path = output_path
+        self._fps = fps
+        self._codec = codec
+        self._resize_width = width
+        self._writer: Optional[cv2.VideoWriter] = None
+        self._frames_written = 0
+
+    # -- properties ----------------------------------------------------------
+
+    @property
+    def frames_written(self) -> int:
+        return self._frames_written
+
+    @property
+    def is_opened(self) -> bool:
+        return self._writer is not None and self._writer.isOpened()
+
+    # -- write ---------------------------------------------------------------
+
+    def write(self, frame: np.ndarray) -> None:
+        """Write a frame. Resolution auto-detected from first frame."""
+        frame = _resize_frame(frame, self._resize_width)
+        if self._writer is None:
             h, w = frame.shape[:2]
-            video_info = MediaInfo(w, h, video_info.fps, video_info.frame_count, 
-                                 video_info.duration, video_info.codec)
-        
-        # Cache the specs for future calls
-        _writer_specs[output_path] = video_info
-        
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(
-            output_path, fourcc, video_info.fps, 
-            (video_info.width, video_info.height)
-        )
-        if not writer.isOpened():
-            raise RuntimeError(f"Failed to open video writer for {output_path}")
-        _writers[output_path] = writer
-    
-    _writers[output_path].write(frame)
+            fourcc = cv2.VideoWriter_fourcc(*self._codec)
+            self._writer = cv2.VideoWriter(
+                self._output_path, fourcc, self._fps, (w, h)
+            )
+            if not self._writer.isOpened():
+                raise RuntimeError(
+                    f"Failed to open video writer for {self._output_path}"
+                )
+        self._writer.write(frame)
+        self._frames_written += 1
 
-@atexit.register
-def _cleanup_writers():
-    """Clean up all video writers on exit."""
-    for writer in _writers.values():
-        if writer.isOpened():
-            writer.release()
-    _writers.clear()
-    _writer_specs.clear()
+    # -- cleanup -------------------------------------------------------------
+
+    def close(self) -> None:
+        """Finalize and release the video file."""
+        if self._writer is not None:
+            self._writer.release()
+            self._writer = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def __del__(self):
+        self.close()
+
+    def __repr__(self):
+        return (f"VideoWriter({self._output_path!r}, "
+                f"fps={self._fps}, frames={self._frames_written})")
 
 
-
-
+# ---------------------------------------------------------------------------
 # Display functions
-def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1, width: int = None) -> None:
-    """Display a frame in a window with automatic exit handling and resizing.
-    
-    Shows a frame in an OpenCV window with automatic graceful exit when 'q'
-    is pressed. Supports optional resizing for performance optimization and
-    better display scaling. Automatically handles program termination and
-    window cleanup on exit.
-    
+# ---------------------------------------------------------------------------
+
+def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1,
+               width: Optional[int] = None) -> Optional[int]:
+    """Display a frame in a window.
+
     Args:
-        window_name (str): Name of the display window. Used as identifier
-                          for the OpenCV window.
-        frame (np.ndarray): Frame to display as BGR numpy array with shape (H, W, 3).
-        wait_key (int): Milliseconds to wait for key press. Default is 1.
-                       Use 0 to wait indefinitely until key press.
-        width (Optional[int]): Optional width for display resize. Maintains
-                              aspect ratio. Provides huge performance boost
-                              for large frames. Default is None (no resize).
-                              
-    Raises:
-        SystemExit: Program exits cleanly when 'q' key is pressed
-        
-    Example:
-        >>> import cv2
-        >>> import pixelflow as pf
-        >>> 
-        >>> # Basic frame display
-        >>> image = cv2.imread("image.jpg")
-        >>> pf.show_frame("Preview", image)
-        >>> 
-        >>> # Display with resizing for performance
-        >>> large_frame = cv2.imread("large_image.jpg")  # e.g., 4K image
-        >>> pf.show_frame("Preview", large_frame, width=800)  # Much faster display
-        >>> 
-        >>> # Video playback with frame rate control
-        >>> media = pf.Media("video.mp4")
-        >>> for frame in media.frames:
-        ...     pf.show_frame("Video", frame, wait_key=33)  # ~30 FPS display
-        >>> 
-        >>> # Wait for user input before continuing
-        >>> pf.show_frame("Result", processed_frame, wait_key=0)  # Wait indefinitely
-        
-    Notes:
-        - Pressing 'q' triggers clean program exit with proper window cleanup
-        - Frame resizing is performed only for display; original frame is unchanged
-        - Resizing provides significant performance improvement for large frames
-        - Window names are persistent; reusing names updates the same window
-        - All OpenCV windows are automatically closed on program exit
-        
-    Performance Notes:
-        - Displaying large frames (>1920x1080) without resizing can be slow
-        - Using width parameter can improve display performance by 10x or more
-        - Lower wait_key values result in smoother playback but higher CPU usage
-        
-    See Also:
-        close_display : Manual window cleanup function
-        write_frame : Save frames to video files
+        window_name: Name of the display window.
+        frame: BGR numpy array to display.
+        wait_key: Milliseconds to wait for key press. Default 1.
+        width: Optional display resize width.
+
+    Returns:
+        The key code (int) if a key was pressed, otherwise None.
     """
-    # Resize for display if width specified (performance optimization)
-    if width:
-        h, w = frame.shape[:2]
-        height = int(h * width / w)
-        display_frame = cv2.resize(frame, (width, height))
-    else:
-        display_frame = frame
-    
+    display_frame = _resize_frame(frame, width)
     cv2.imshow(window_name, display_frame)
     key = cv2.waitKey(wait_key) & 0xFF
-    
-    if key == ord('q'):
-        close_display()
-        exit(0)  # Clean program exit
+    if key == 255:
+        return None
+    return key
 
 
-def close_display():
-    """Close all OpenCV display windows.
-    
-    Closes all currently open OpenCV windows and releases associated
-    resources. Useful for manual cleanup or when handling exceptions
-    in display code.
-    
-    Example:
-        >>> import pixelflow as pf
-        >>> import cv2
-        >>> 
-        >>> # Display some frames
-        >>> image = cv2.imread("image.jpg")
-        >>> pf.show_frame("Window1", image)
-        >>> pf.show_frame("Window2", image)
-        >>> 
-        >>> # Manual cleanup
-        >>> pf.close_display()
-        >>> 
-        >>> # Exception handling
-        >>> try:
-        ...     for frame in media.frames:
-        ...         pf.show_frame("Preview", frame)
-        ... except KeyboardInterrupt:
-        ...     pf.close_display()
-        ...     print("Display closed by user")
-        
-    Notes:
-        - Automatically called when 'q' is pressed in show_frame()
-        - Safe to call multiple times; no-op if no windows are open
-        - Does not affect video writers or other non-display resources
-        
-    See Also:
-        show_frame : Display frames with automatic 'q' key handling
-    """
+def close_display() -> None:
+    """Close all OpenCV display windows."""
     cv2.destroyAllWindows()
-
-

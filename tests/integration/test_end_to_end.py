@@ -204,10 +204,10 @@ class TestVideoProcessingPipeline:
 
     def test_video_frame_processing(self, temp_video_path):
         """Test processing video frames."""
-        media = pf.Media(temp_video_path)
+        video = pf.VideoReader(temp_video_path)
 
         processed_count = 0
-        for frame in media.frames:
+        for frame in video:
             # Create mock detections
             detections = pf.detections.Detections()
             detections.add_detection(pf.detections.Detection(
@@ -226,10 +226,10 @@ class TestVideoProcessingPipeline:
 
     def test_video_with_buffer(self, temp_video_path):
         """Test video processing with frame buffering."""
-        media = pf.Media(temp_video_path)
+        video = pf.VideoReader(temp_video_path)
         buffer = pf.Buffer(frames=5)
 
-        for frame in media.frames:
+        for frame in video:
             buffer.append(frame)
 
             if len(buffer) >= 3:
@@ -239,10 +239,10 @@ class TestVideoProcessingPipeline:
 
     def test_video_with_tracking(self, temp_video_path):
         """Test video processing with object tracking."""
-        media = pf.Media(temp_video_path)
+        video = pf.VideoReader(temp_video_path)
 
         frame_count = 0
-        for frame in media.frames:
+        for frame in video:
             # Simulate tracked detections
             detections = pf.detections.Detections()
             detections.add_detection(pf.detections.Detection(
@@ -400,12 +400,12 @@ class TestPerformance:
         """Test video processing speed."""
         import time
 
-        media = pf.Media(temp_video_path)
+        video = pf.VideoReader(temp_video_path)
         timer = pf.TimeTracker()
 
         timer.start("video_processing")
 
-        for frame in media.frames:
+        for frame in video:
             # Mock detection
             dets = pf.detections.Detections()
             dets.add_detection(pf.detections.Detection(

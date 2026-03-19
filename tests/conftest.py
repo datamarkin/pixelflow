@@ -264,14 +264,3 @@ def temp_video_path(tmp_path, sample_image):
     return str(video_path)
 
 
-@pytest.fixture
-def sample_media_info():
-    """Create sample MediaInfo for testing."""
-    return pf.MediaInfo(
-        width=640,
-        height=480,
-        fps=30.0,
-        frame_count=10,
-        duration=10.0 / 30.0,
-        codec='mp4v'
-    )

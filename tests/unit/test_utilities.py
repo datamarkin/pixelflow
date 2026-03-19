@@ -13,93 +13,164 @@ import pixelflow as pf
 
 
 # ============================================================================
-# Media Tests
+# VideoReader Tests
 # ============================================================================
 
-class TestMedia:
-    """Tests for Media class (video/image loading)."""
+class TestVideoReader:
+    """Tests for VideoReader class."""
 
-    def test_media_from_video(self, temp_video_path):
-        """Test loading video file."""
-        media = pf.Media(temp_video_path)
+    def test_video_reader_properties(self, temp_video_path):
+        """Test video metadata properties."""
+        video = pf.VideoReader(temp_video_path)
+        assert video.frame_count == 10
+        assert video.fps == 30.0
+        assert video.width == 640
+        assert video.height == 480
+        assert video.duration == pytest.approx(10 / 30.0)
+        assert len(video) == 10
+        video.close()
 
-        assert media.info.frame_count == 10
-        assert media.info.fps > 0
-        assert media.info.width == 640
-        assert media.info.height == 480
-
-    def test_media_iteration(self, temp_video_path):
+    def test_video_reader_iteration(self, temp_video_path):
         """Test iterating through video frames."""
-        media = pf.Media(temp_video_path)
-
+        video = pf.VideoReader(temp_video_path)
         frame_count = 0
-        for frame in media.frames:
+        for frame in video:
             assert isinstance(frame, np.ndarray)
             assert frame.shape == (480, 640, 3)
             frame_count += 1
-
         assert frame_count == 10
+        video.close()
 
-    def test_media_lazy_loading(self, temp_video_path):
-        """Test that media uses lazy loading."""
-        media = pf.Media(temp_video_path)
+    def test_video_reader_replayable(self, temp_video_path):
+        """Test that iteration resets each time (replayable)."""
+        video = pf.VideoReader(temp_video_path)
+        count1 = sum(1 for _ in video)
+        count2 = sum(1 for _ in video)
+        assert count1 == count2 == 10
+        video.close()
 
-        # Creating Media should not load all frames
-        # Only when iterating should frames be loaded
-        assert media.info.frame_count == 10
+    def test_video_reader_resize(self, temp_video_path):
+        """Test frame resizing."""
+        video = pf.VideoReader(temp_video_path, width=320)
+        assert video.width == 320
+        assert video.height == 240
+        for frame in video:
+            assert frame.shape == (240, 320, 3)
+            break
+        video.close()
 
-    def test_media_from_image(self, temp_image_path):
-        """Test loading single image."""
-        media = pf.Media(temp_image_path)
-
-        # Single image should have 1 frame
-        assert media.info.frame_count == 1
-
-        for frame in media.frames:
+    def test_video_reader_seek(self, temp_video_path):
+        """Test seeking to a specific frame."""
+        video = pf.VideoReader(temp_video_path)
+        video.seek(5)
+        # Read one frame after seek
+        for frame in video:
             assert isinstance(frame, np.ndarray)
             break
+        video.close()
+
+    def test_video_reader_context_manager(self, temp_video_path):
+        """Test context manager usage."""
+        with pf.VideoReader(temp_video_path) as video:
+            assert video.frame_count == 10
+            count = sum(1 for _ in video)
+            assert count == 10
+
+    def test_video_reader_invalid_path(self):
+        """Test with nonexistent file."""
+        with pytest.raises(FileNotFoundError):
+            pf.VideoReader("nonexistent_file.mp4")
+
+    def test_video_reader_codec(self, temp_video_path):
+        """Test codec property."""
+        video = pf.VideoReader(temp_video_path)
+        assert isinstance(video.codec, str)
+        assert len(video.codec) == 4
+        video.close()
 
 
-class TestMediaInfo:
-    """Tests for MediaInfo class."""
+# ============================================================================
+# read_image Tests
+# ============================================================================
 
-    def test_media_info_from_video(self, temp_video_path):
-        """Test getting video metadata."""
-        media = pf.Media(temp_video_path)
-        info = media.info
+class TestReadImage:
+    """Tests for read_image function."""
 
-        assert info.frame_count == 10
-        assert info.fps == 30.0
-        assert info.width == 640
-        assert info.height == 480
+    def test_read_image(self, temp_image_path):
+        """Test loading an image."""
+        image = pf.read_image(temp_image_path)
+        assert isinstance(image, np.ndarray)
+        assert image.shape == (480, 640, 3)
+
+    def test_read_image_resize(self, temp_image_path):
+        """Test loading with resize."""
+        image = pf.read_image(temp_image_path, width=320)
+        assert image.shape[1] == 320
+        assert image.shape[0] == 240
+
+    def test_read_image_invalid_path(self):
+        """Test with nonexistent file."""
+        with pytest.raises(FileNotFoundError):
+            pf.read_image("nonexistent.jpg")
 
 
-class TestMediaHelpers:
-    """Tests for media helper functions."""
+# ============================================================================
+# VideoWriter Tests
+# ============================================================================
 
-    def test_show_frame(self, sample_image):
-        """Test show_frame function."""
-        # Can't actually display in test, but verify it doesn't crash
+class TestVideoWriter:
+    """Tests for VideoWriter class."""
+
+    def test_video_writer_basic(self, tmp_path, sample_image):
+        """Test writing frames to video."""
+        output = str(tmp_path / "output.mp4")
+        writer = pf.VideoWriter(output, fps=30.0)
+        for _ in range(5):
+            writer.write(sample_image)
+        assert writer.frames_written == 5
+        assert writer.is_opened
+        writer.close()
+        assert not writer.is_opened
+        # Verify file exists and is readable
+        video = pf.VideoReader(output)
+        assert video.frame_count == 5
+        video.close()
+
+    def test_video_writer_context_manager(self, tmp_path, sample_image):
+        """Test context manager usage."""
+        output = str(tmp_path / "output_ctx.mp4")
+        with pf.VideoWriter(output, fps=30.0) as writer:
+            writer.write(sample_image)
+            writer.write(sample_image)
+            assert writer.frames_written == 2
+
+    def test_video_writer_resize(self, tmp_path, sample_image):
+        """Test resize-on-write."""
+        output = str(tmp_path / "output_resize.mp4")
+        writer = pf.VideoWriter(output, fps=30.0, width=320)
+        writer.write(sample_image)
+        writer.close()
+        video = pf.VideoReader(output)
+        assert video.width == 320
+        video.close()
+
+
+# ============================================================================
+# show_frame Tests
+# ============================================================================
+
+class TestShowFrame:
+    """Tests for show_frame function."""
+
+    def test_show_frame_returns_none_or_int(self, sample_image):
+        """Test show_frame return type."""
         try:
-            pf.show_frame(sample_image, window_name="test", wait_key=1)
-            # Close window immediately
+            result = pf.show_frame("test", sample_image, wait_key=1)
+            assert result is None or isinstance(result, int)
             pf.close_display()
         except Exception:
             # May fail in headless environment
             pass
-
-    def test_write_frame(self, tmp_path, sample_image):
-        """Test write_frame function."""
-        output_path = tmp_path / "output_frame.jpg"
-
-        pf.write_frame(sample_image, str(output_path))
-
-        # Verify file was written
-        assert output_path.exists()
-
-        # Verify it can be read back
-        loaded = cv2.imread(str(output_path))
-        assert loaded.shape == sample_image.shape
 
 
 # ============================================================================
@@ -460,15 +531,10 @@ class TestUtilityEdgeCases:
             # Expected to fail
             pass
 
-    def test_media_with_invalid_path(self):
-        """Test media loading with invalid path."""
-        try:
-            media = pf.Media("nonexistent_file.mp4")
-            # Should raise error
-            assert False, "Should have raised exception"
-        except (FileNotFoundError, Exception):
-            # Expected to fail
-            pass
+    def test_video_reader_with_invalid_path(self):
+        """Test VideoReader with invalid path."""
+        with pytest.raises(FileNotFoundError):
+            pf.VideoReader("nonexistent_file.mp4")
 
     def test_timer_stop_without_start(self):
         """Test stopping timer that wasn't started."""
