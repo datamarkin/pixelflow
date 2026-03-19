@@ -13,12 +13,12 @@ import pixelflow as pf
 from ultralytics import YOLO
 
 model = YOLO("yolo11n.pt")
-media = pf.Media("traffic.mp4")
+video = pf.VideoReader("traffic.mp4", width=640)
 tracker = pf.tracker.ByteTracker()
 zones = pf.Zones()
 zones.add_zone([(100, 400), (500, 400), (500, 600), (100, 600)], zone_id="entrance")
 
-for frame in media.frames:
+for frame in video:
     detections = pf.detections.from_ultralytics(model.predict(frame))
     detections = tracker.update(detections)
     zones.update(detections)
@@ -27,7 +27,8 @@ for frame in media.frames:
     frame = pf.annotate.label(frame, detections)
     frame = pf.annotate.zones(frame, zones)
 
-    pf.show_frame("Live", frame)
+    if pf.show_frame("Live", frame) == ord('q'):
+        break
 ```
 
 ## Installation
@@ -102,29 +103,32 @@ english_text = detections.filter_by_text_language("en")
 
 ### Media Handling
 
-Unified interface for videos, images, webcams, and streams:
+Purpose-built classes for videos, cameras, and images:
 
 ```python
 import pixelflow as pf
 
-# Video file with automatic resizing
-media = pf.Media("video.mp4", width=640)
-print(media.info)  # MediaInfo(resolution=1920x1080, fps=30.00, frames=900, duration=30.00s)
+# Read a video file
+video = pf.VideoReader("video.mp4", width=640)
+print(f"{video.width}x{video.height}, {video.fps}fps, {len(video)} frames")
 
-for frame in media.frames:  # Lazy loading, memory efficient
-    # Process frame
-    pf.show_frame("Preview", frame)
+for frame in video:       # Replayable — resets on each iteration
+    if pf.show_frame("Preview", frame) == ord('q'):
+        break
 
-# Webcam
-webcam = pf.Media(0)
+# Load a single image
+image = pf.read_image("photo.jpg", width=640)
 
-# Network stream
-stream = pf.Media("rtsp://camera.local/stream")
+# Webcam / network stream
+cam = pf.CameraStream(0, width=640)
+cam = pf.CameraStream("rtsp://camera.local/stream")
 
 # Write processed video
-for frame in pf.Media("input.mp4").frames:
+writer = pf.VideoWriter("output.mp4", fps=video.fps)
+for frame in video:
     processed = process(frame)
-    pf.write_frame("output.mp4", processed, media.info)
+    writer.write(processed)
+writer.close()
 ```
 
 ### Zone-Based Analytics
