@@ -20,6 +20,7 @@ from . import assets
 from .media import (
     VideoReader, CameraStream, VideoWriter,
     read_image, show_frame, close_display,
+    to_pil, from_pil,
 )
 from .zones import Zones
 from .crossings import Crossings
@@ -48,6 +49,8 @@ __all__ = [
     "read_image",
     "show_frame",
     "close_display",
+    "to_pil",
+    "from_pil",
 
     # Spatial analysis
     "zones",
