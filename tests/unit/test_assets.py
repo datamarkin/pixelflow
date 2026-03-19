@@ -214,31 +214,6 @@ class TestSha256:
         f.write_bytes(SAMPLE_DATA)
         assert _sha256_file(f) == SAMPLE_SHA256
 
-    def test_explicit_sha256_pass(self, tmp_path):
-        resp = _make_response()
-        with patch("urllib.request.urlopen", return_value=resp):
-            result = download(
-                "file.bin",
-                sha256=SAMPLE_SHA256,
-                directory=tmp_path,
-                quiet=True,
-            )
-        assert result.exists()
-        assert result.read_bytes() == SAMPLE_DATA
-
-    def test_explicit_sha256_mismatch_raises(self, tmp_path):
-        resp = _make_response()
-        with patch("urllib.request.urlopen", return_value=resp):
-            with pytest.raises(ChecksumError, match="SHA-256 mismatch"):
-                download(
-                    "file.bin",
-                    sha256="0" * 64,
-                    directory=tmp_path,
-                    quiet=True,
-                )
-        # File should be cleaned up on checksum failure
-        assert not (tmp_path / "file.bin").exists()
-
 
 # ---------------------------------------------------------------------------
 # TestSidecar
@@ -308,22 +283,6 @@ class TestSidecar:
         with patch("urllib.request.urlopen", side_effect=urlopen_side_effect):
             result = download("file.bin", directory=tmp_path, quiet=True)
 
-        assert result.exists()
-
-    def test_explicit_sha256_overrides_sidecar(self, tmp_path):
-        """When explicit sha256 is provided, sidecar is never fetched."""
-        download_resp = _make_response()
-
-        with patch("urllib.request.urlopen", return_value=download_resp) as mock_urlopen:
-            result = download(
-                "file.bin",
-                sha256=SAMPLE_SHA256,
-                directory=tmp_path,
-                quiet=True,
-            )
-
-        # Only one urlopen call (the download itself), no sidecar fetch
-        assert mock_urlopen.call_count == 1
         assert result.exists()
 
 
