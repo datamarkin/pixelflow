@@ -40,7 +40,7 @@ def rotate(
     Rotate image around center point.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         angle: Rotation angle in degrees (positive = counter-clockwise)
         center: Rotation center (x, y). If None, uses image center.
         fillcolor: Fill color for areas outside original image. If None, uses edge pixels.
@@ -107,7 +107,7 @@ def flip_horizontal(image: np.ndarray) -> np.ndarray:
     Flip image horizontally (left-right).
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
 
     Returns:
         Horizontally flipped image
@@ -129,7 +129,7 @@ def flip_vertical(image: np.ndarray) -> np.ndarray:
     Flip image vertically (top-bottom).
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
 
     Returns:
         Vertically flipped image
@@ -151,7 +151,7 @@ def crop(image: np.ndarray, bbox: list) -> np.ndarray:
     Crop image to bounding box.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         bbox: Crop region [x1, y1, x2, y2] in pixels
 
     Returns:
@@ -196,7 +196,7 @@ def clahe(
     Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) contrast enhancement.
 
     Args:
-        image: Input image (H, W, 3) BGR format or (H, W) grayscale
+        image: Input image (H, W, 3) RGB format or (H, W) grayscale
         clip_limit: Threshold for contrast limiting (higher = more contrast)
         tile_size: Size of grid for histogram equalization
 
@@ -224,9 +224,9 @@ def clahe(
         return clahe_obj.apply(image)
     else:
         # Color - apply to L channel in LAB space
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
         lab[:, :, 0] = clahe_obj.apply(lab[:, :, 0])
-        return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+        return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
 
 
 def to_grayscale(
@@ -237,7 +237,7 @@ def to_grayscale(
     Convert image to grayscale.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         keep_channels: If True, returns (H, W, 3) with same values in all channels.
                       If False, returns (H, W) single channel.
 
@@ -258,11 +258,11 @@ def to_grayscale(
         gray_3ch = pf.transform.to_grayscale(image, keep_channels=True)
         ```
     """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
     if keep_channels:
         # Stack to 3 channels
-        return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        return cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
     else:
         return gray
 
@@ -275,7 +275,7 @@ def auto_contrast(
     Apply automatic contrast adjustment by stretching histogram.
 
     Args:
-        image: Input image (H, W, 3) BGR format or (H, W) grayscale
+        image: Input image (H, W, 3) RGB format or (H, W) grayscale
         cutoff: Percentage of extreme pixels to ignore (0-100)
 
     Returns:
@@ -342,7 +342,7 @@ def normalize(
     Normalize image for model input using mean and standard deviation.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         mean: Mean value(s) to subtract. Single float or tuple of 3 floats for each channel.
         std: Standard deviation value(s) to divide by. Single float or tuple of 3 floats.
 
@@ -396,7 +396,7 @@ def gamma_correction(
     Apply gamma correction to adjust image brightness.
 
     Args:
-        image: Input image (H, W, 3) BGR format or (H, W) grayscale
+        image: Input image (H, W, 3) RGB format or (H, W) grayscale
         gamma: Gamma value. <1 brightens, >1 darkens, =1 no change.
 
     Returns:
@@ -433,7 +433,7 @@ def standardize(image: np.ndarray) -> np.ndarray:
     Standardize image to zero mean and unit variance.
 
     Args:
-        image: Input image (H, W, 3) BGR format or (H, W) grayscale
+        image: Input image (H, W, 3) RGB format or (H, W) grayscale
 
     Returns:
         Standardized image (float32)
