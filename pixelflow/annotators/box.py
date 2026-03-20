@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 
 
@@ -22,13 +22,13 @@ def box(
     Automatically adapts line thickness based on image dimensions for optimal visibility.
 
     Args:
-        image (np.ndarray): Input image to draw boxes on (BGR format).
+        image (np.ndarray): Input image to draw boxes on (RGB format).
                            Modified in-place with drawn bounding boxes.
         detections (Detections): Detections object containing bounding boxes.
                                 Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
         thickness (Optional[int]): Line thickness for bounding boxes in pixels.
                                   If None, automatically determined based on image size.
-        colors (Optional[List[tuple]]): List of BGR color tuples to override default colors.
+        colors (Optional[List[tuple]]): List of RGB color tuples to override default colors.
                                        Colors are mapped to unique class_ids in order of appearance.
                                        If None, uses default ColorManager colors.
 
@@ -54,7 +54,7 @@ def box(
         >>> annotated = pf.annotators.box(image, detections)
         >>>
         >>> # Override with custom colors for specific classes
-        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
+        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Red, Green, Blue
         >>> annotated = pf.annotators.box(image, detections, colors=custom_colors)
         >>>
         >>> # Use custom thickness for fine control
@@ -80,6 +80,6 @@ def box(
 
         color = _get_color_for_prediction(result, colors)
 
-        cv2.rectangle(image, (x1, y1), (x2, y2), color=color, thickness=thickness)
+        cv2.rectangle(image, (x1, y1), (x2, y2), color=_rgb_to_bgr(color), thickness=thickness)
 
     return image

@@ -22,7 +22,7 @@ def mask(
     lists, with automatic format detection and conversion for seamless integration.
     
     Args:
-        frame (np.ndarray): Input video frame in BGR format (height, width, 3).
+        frame (np.ndarray): Input video frame in RGB format (height, width, 3).
                            Modified in-place with overlaid masks.
         detections (Detections): Detections object containing mask data.
                                 Each detection's masks attribute can contain binary arrays
@@ -30,7 +30,7 @@ def mask(
         opacity (float): Opacity level for blending masks with the frame.
                         Range: [0.0, 1.0]. Default is 0.5 (semi-transparent).
                         Value of 1.0 creates opaque masks, 0.0 makes them invisible.
-        colors (Optional[List[tuple]]): List of BGR color tuples to override default colors.
+        colors (Optional[List[tuple]]): List of RGB color tuples to override default colors.
                                        Colors are mapped to unique class_ids in order of appearance.
                                        If None, uses default ColorManager colors.
         
@@ -57,7 +57,7 @@ def mask(
         >>> annotated = pf.annotators.mask(image, detections)
         >>> 
         >>> # Use custom colors for specific classes
-        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
+        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Red, Green, Blue
         >>> annotated = pf.annotators.mask(image, detections, colors=custom_colors)
         >>> 
         >>> # Create opaque masks for clear segmentation boundaries

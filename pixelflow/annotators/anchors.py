@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 from ..strategies import (
     get_anchor_position, 
@@ -38,7 +38,7 @@ def anchors(
     Supports drawing individual anchor points or multiple points simultaneously.
     
     Args:
-        image (np.ndarray): Input image to draw anchor points on in BGR format.
+        image (np.ndarray): Input image to draw anchor points on in RGB format.
                            Image is modified in-place.
         detections (Detections): Detection results containing bounding boxes.
                                 Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates.
@@ -51,7 +51,7 @@ def anchors(
         thickness (Optional[int]): Thickness of circle outline in pixels.
                                   Use -1 for filled circles.
                                   If None, defaults to -1 (filled).
-        colors (Optional[List[tuple]]): List of BGR color tuples for custom colors.
+        colors (Optional[List[tuple]]): List of RGB color tuples for custom colors.
                                        Colors mapped to unique class_ids in order of appearance.
                                        If None, uses default ColorManager colors.
     
@@ -148,7 +148,7 @@ def anchors(
                 x, y = int(x), int(y)
                 
                 # Draw circle at anchor point
-                cv2.circle(image, (x, y), radius, color, thickness)
+                cv2.circle(image, (x, y), radius, _rgb_to_bgr(color), thickness)
                 
             except Exception:
                 # Skip invalid anchor strategies gracefully

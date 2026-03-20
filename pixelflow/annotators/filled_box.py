@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 
 
@@ -23,7 +23,7 @@ def filled_box(
     dimensions for optimal visibility and uses alpha blending for professional-quality results.
     
     Args:
-        image (np.ndarray): Input image to draw filled boxes on in BGR color format.
+        image (np.ndarray): Input image to draw filled boxes on in RGB color format.
                            Expected shape: (height, width, 3) with uint8 values [0, 255].
         detections (Detections): Detections object containing bounding boxes.
                                Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) 
@@ -33,8 +33,8 @@ def filled_box(
                                  Range: [0.0, 1.0] where 0.0 is fully transparent and 1.0 is opaque.
                                  Values outside this range are automatically clamped.
                                  If None, automatically calculated based on image size (typically 0.3-0.5).
-        colors (Optional[List[tuple]]): List of BGR color tuples to override default colors.
-                                      Each tuple should contain (B, G, R) values in range [0, 255].
+        colors (Optional[List[tuple]]): List of RGB color tuples to override default colors.
+                                      Each tuple should contain (R, G, B) values in range [0, 255].
                                       Colors are mapped to unique class_ids in order of appearance.
                                       If None, uses default ColorManager colors based on class_id.
     
@@ -66,7 +66,7 @@ def filled_box(
         >>> annotated = pf.annotate.filled_box(image, detections, opacity=0.25)
         >>> 
         >>> # Override with custom colors for specific visualization needs
-        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
+        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Red, Green, Blue
         >>> annotated = pf.annotate.filled_box(image, detections, opacity=0.4, colors=custom_colors)
         >>> 
         >>> # High opacity for maximum emphasis in presentations
@@ -110,7 +110,7 @@ def filled_box(
         overlay = image.copy()
         
         # Draw filled rectangle on overlay
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, thickness=cv2.FILLED)
+        cv2.rectangle(overlay, (x1, y1), (x2, y2), _rgb_to_bgr(color), thickness=cv2.FILLED)
         
         # Blend overlay with original image
         cv2.addWeighted(overlay, opacity, image, 1 - opacity, 0, image)

@@ -1,7 +1,7 @@
 from typing import Optional, Tuple, Union
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 
 
 def zones(
@@ -28,7 +28,7 @@ def zones(
     thickness based on image resolution for optimal visibility across different image sizes.
     
     Args:
-        image (np.ndarray): Input image to annotate. Must be 3-channel BGR format.
+        image (np.ndarray): Input image to annotate. Must be 3-channel RGB format.
         zone_manager: ZoneManager instance containing polygon zones with associated metadata.
                      Must have 'zones' attribute containing Zone objects with polygon, color, 
                      name, and count attributes.
@@ -152,13 +152,13 @@ def zones(
         if draw_filled and opacity > 0:
             # Create zone mask
             zone_overlay = image.copy()
-            cv2.fillPoly(zone_overlay, [points], zone.color)
+            cv2.fillPoly(zone_overlay, [points], _rgb_to_bgr(zone.color))
             # Blend with original
             cv2.addWeighted(zone_overlay, opacity, overlay, 1 - opacity, 0, overlay)
         
         # Draw zone border if enabled
         if draw_border:
-            cv2.polylines(overlay, [points], True, zone.color, border_thickness, cv2.LINE_AA)
+            cv2.polylines(overlay, [points], True, _rgb_to_bgr(zone.color), border_thickness, cv2.LINE_AA)
         
         # Prepare text labels
         labels = []
@@ -209,7 +209,7 @@ def zones(
                     
                     # Draw semi-transparent background
                     text_overlay = overlay.copy()
-                    cv2.rectangle(text_overlay, (bg_x1, bg_y1), (bg_x2, bg_y2), text_bg_color, -1)
+                    cv2.rectangle(text_overlay, (bg_x1, bg_y1), (bg_x2, bg_y2), _rgb_to_bgr(text_bg_color), -1)
                     cv2.addWeighted(text_overlay, text_bg_opacity, overlay, 1 - text_bg_opacity, 0, overlay)
                 
                 # Draw text
@@ -219,7 +219,7 @@ def zones(
                     (label_x, label_y),
                     font,
                     font_scale,
-                    text_color,
+                    _rgb_to_bgr(text_color),
                     font_thickness,
                     cv2.LINE_AA
                 )

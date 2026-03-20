@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from ..colors import _get_color_for_prediction
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 
 
 def label(
@@ -29,7 +29,7 @@ def label(
     
     Args:
         image (np.ndarray): Input image to annotate. Must be a valid OpenCV image array
-                           in BGR format with shape (H, W, 3) or (H, W).
+                           in RGB format with shape (H, W, 3) or (H, W).
         detections (Detections): PixelFlow detections object containing bounding box
                                coordinates and optional attributes (class_name, confidence,
                                class_id, tracker_id).
@@ -48,10 +48,10 @@ def label(
                       Range: [0, 50]. Default is 6.
         line_spacing (int): Additional spacing in pixels between lines for multi-line text.
                            Range: [0, 20]. Default is 2.
-        bg_color (Optional[Union[tuple, str]]): Background rectangle color in BGR format.
+        bg_color (Optional[Union[tuple, str]]): Background rectangle color in RGB format.
                                               If None, uses automatic color based on class_id.
-                                              Can be tuple (B, G, R) or color string.
-        text_color (tuple): Text color in BGR format. Default is white (255, 255, 255).
+                                              Can be tuple (R, G, B) or color string.
+        text_color (tuple): Text color in RGB format. Default is white (255, 255, 255).
         
     Returns:
         np.ndarray: Input image with labels drawn directly on it (in-place modification).
@@ -219,7 +219,7 @@ def label(
             image,
             (label_x, label_y),
             (label_x + rect_width, label_y + rect_height),
-            bg_color_final,
+            _rgb_to_bgr(bg_color_final),
             -1
         )
 
@@ -239,7 +239,7 @@ def label(
                     (text_x, text_y),
                     font,
                     font_scale,
-                    text_color,
+                    _rgb_to_bgr(text_color),
                     font_thickness,
                     cv2.LINE_AA
                 )

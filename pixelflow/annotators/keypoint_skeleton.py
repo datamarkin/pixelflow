@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 
 
@@ -50,7 +50,7 @@ def keypoint_skeleton(
     body structure, wing structure, or any connected landmark system.
 
     Args:
-        image (np.ndarray): Input image to draw skeleton on (BGR format).
+        image (np.ndarray): Input image to draw skeleton on (RGB format).
                            Modified in-place with drawn skeleton lines.
         detections (Detections): Detections object containing keypoints.
                                 Each detection may have a 'keypoints' attribute with
@@ -61,7 +61,7 @@ def keypoint_skeleton(
                                                        If None, uses COCO human pose skeleton.
         thickness (Optional[int]): Line thickness for skeleton connections in pixels.
                                   If None, automatically determined based on image size.
-        colors (Optional[List[tuple]]): List of BGR color tuples for custom colors.
+        colors (Optional[List[tuple]]): List of RGB color tuples for custom colors.
                                        Colors mapped to unique class_ids in order.
                                        If None, uses default ColorManager colors.
 
@@ -160,6 +160,6 @@ def keypoint_skeleton(
             end_point = (int(end_kp.x), int(end_kp.y))
 
             # Draw connection line
-            cv2.line(image, start_point, end_point, color, thickness, cv2.LINE_AA)
+            cv2.line(image, start_point, end_point, _rgb_to_bgr(color), thickness, cv2.LINE_AA)
 
     return image

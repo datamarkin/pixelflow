@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 
 
@@ -26,7 +26,7 @@ def grid_overlay(
     Can create filled checkerboard patterns for visual segmentation.
     
     Args:
-        image (np.ndarray): Input image to draw grid overlays on. Must be in BGR format
+        image (np.ndarray): Input image to draw grid overlays on. Must be in RGB format
                            with shape (H, W, 3) and dtype uint8.
         detections (Detections): Detections object containing bounding boxes.
                                 Each detection must have a 'bbox' attribute with (x1, y1, x2, y2) coordinates
@@ -38,7 +38,7 @@ def grid_overlay(
         thickness (Optional[int]): Line thickness for grid lines in pixels.
                                   If None, automatically determined based on image size (typically 1-3).
                                   Range: Must be >= 1. Values > 10 may cause visual overlap.
-        colors (Optional[List[tuple]]): List of BGR color tuples to override default colors.
+        colors (Optional[List[tuple]]): List of RGB color tuples to override default colors.
                                        Each tuple must be 3 integers in range [0, 255].
                                        Colors are mapped to unique class_ids in order of appearance.
                                        If None, uses default ColorManager colors.
@@ -151,8 +151,8 @@ def grid_overlay(
                         cell_x2 = int(x1 + (col + 1) * cell_width)
                         cell_y2 = int(y1 + (row + 1) * cell_height)
                         
-                        cv2.rectangle(overlay, (cell_x1, cell_y1), (cell_x2, cell_y2), 
-                                    color, thickness=cv2.FILLED)
+                        cv2.rectangle(overlay, (cell_x1, cell_y1), (cell_x2, cell_y2),
+                                    _rgb_to_bgr(color), thickness=cv2.FILLED)
             
             # Blend overlay with original image
             cv2.addWeighted(overlay, opacity, image, 1 - opacity, 0, image)
@@ -160,11 +160,11 @@ def grid_overlay(
         # Draw vertical grid lines
         for i in range(1, cols):
             x_pos = int(x1 + (width * i / cols))
-            cv2.line(image, (x_pos, y1), (x_pos, y2), color=color, thickness=thickness)
-        
+            cv2.line(image, (x_pos, y1), (x_pos, y2), color=_rgb_to_bgr(color), thickness=thickness)
+
         # Draw horizontal grid lines
         for i in range(1, rows):
             y_pos = int(y1 + (height * i / rows))
-            cv2.line(image, (x1, y_pos), (x2, y_pos), color=color, thickness=thickness)
+            cv2.line(image, (x1, y_pos), (x2, y_pos), color=_rgb_to_bgr(color), thickness=thickness)
     
     return image

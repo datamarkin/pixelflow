@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import time
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 
 
 def fps_counter(image: np.ndarray, detections: 'Detections', thickness=None):
@@ -32,12 +32,9 @@ def fps_counter(image: np.ndarray, detections: 'Detections', thickness=None):
     else:
         font_scale = 1
     
-    # Import colors locally to avoid circular dependency
-    from .. import colors as color_module
-    colors = color_module.ColorManager()
-    
-    # Draw FPS text
+    # Draw FPS text in green (RGB)
+    fps_color = (0, 255, 0)
     fps_text = f"FPS: {int(fps_counter.fps)}"
-    cv2.putText(image, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, colors.ui('fps'), thickness)
+    cv2.putText(image, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, _rgb_to_bgr(fps_color), thickness)
 
     return image

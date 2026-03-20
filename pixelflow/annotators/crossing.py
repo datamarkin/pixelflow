@@ -1,7 +1,7 @@
 from typing import Optional, Tuple
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 
 
 def crossing(
@@ -29,18 +29,18 @@ def crossing(
     The annotation adapts automatically to image resolution for optimal visibility.
     
     Args:
-        image (np.ndarray): Input BGR image to annotate. Must be a 3-channel NumPy array
+        image (np.ndarray): Input RGB image to annotate. Must be a 3-channel NumPy array
                            with shape (height, width, 3).
         crossing_line: Crossing object from pixelflow.crossings containing line geometry,
                       counts, and color. Must have attributes: start, end, color,
                       in_count, out_count.
         thickness (Optional[int]): Line thickness in pixels. If None, uses adaptive
                                   sizing based on image resolution. Range: [1, ∞].
-        color (Optional[Tuple[int, int, int]]): Line color as BGR tuple (0-255 each).
+        color (Optional[Tuple[int, int, int]]): Line color as RGB tuple (0-255 each).
                                               If None, uses crossing_line.color.
         text_thickness (Optional[int]): Text stroke thickness in pixels. If None,
                                        uses adaptive sizing. Range: [1, ∞].
-        text_color (Optional[Tuple[int, int, int]]): Text color as BGR tuple (0-255 each).
+        text_color (Optional[Tuple[int, int, int]]): Text color as RGB tuple (0-255 each).
                                                    Default is white (255, 255, 255).
         text_scale (Optional[float]): Text scale factor. If None, uses adaptive sizing.
                                      Range: (0, ∞). Default ~0.5.
@@ -145,12 +145,12 @@ def crossing(
     # Draw the crossing line
     start_point = tuple(map(int, crossing_line.start))
     end_point = tuple(map(int, crossing_line.end))
-    cv2.line(image, start_point, end_point, crossing_color, thickness, cv2.LINE_AA)
-    
+    cv2.line(image, start_point, end_point, _rgb_to_bgr(crossing_color), thickness, cv2.LINE_AA)
+
     # Draw end point markers (scale with image size)
     marker_size = max(3, int(params['thickness'] * 2.5))
-    cv2.circle(image, start_point, marker_size, text_color, -1, cv2.LINE_AA)
-    cv2.circle(image, end_point, marker_size, text_color, -1, cv2.LINE_AA)
+    cv2.circle(image, start_point, marker_size, _rgb_to_bgr(text_color), -1, cv2.LINE_AA)
+    cv2.circle(image, end_point, marker_size, _rgb_to_bgr(text_color), -1, cv2.LINE_AA)
     
     # Calculate crossing line center for text placement
     center_x = (crossing_line.start[0] + crossing_line.end[0]) / 2
@@ -190,13 +190,13 @@ def crossing(
             bg_y1 = text_y - text_height - text_padding
             bg_x2 = text_x + text_width + text_padding
             bg_y2 = text_y + text_padding
-            cv2.rectangle(image, (bg_x1, bg_y1), (bg_x2, bg_y2), crossing_color, -1)
-        
+            cv2.rectangle(image, (bg_x1, bg_y1), (bg_x2, bg_y2), _rgb_to_bgr(crossing_color), -1)
+
         # Draw text
         cv2.putText(
             image, text, (text_x, text_y),
             cv2.FONT_HERSHEY_SIMPLEX, text_scale,
-            text_color, text_thickness, cv2.LINE_AA
+            _rgb_to_bgr(text_color), text_thickness, cv2.LINE_AA
         )
     
     return image
@@ -211,7 +211,7 @@ def crossings(image: np.ndarray, crossings_manager) -> np.ndarray:
     information using the crossing() function.
     
     Args:
-        image (np.ndarray): Input BGR image to annotate. Must be a 3-channel NumPy array
+        image (np.ndarray): Input RGB image to annotate. Must be a 3-channel NumPy array
                            with shape (height, width, 3).
         crossings_manager: Crossings manager object containing multiple crossing lines.
                           Must have a 'crossings' attribute that is iterable,

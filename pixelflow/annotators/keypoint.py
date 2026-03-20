@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 
 
@@ -26,7 +26,7 @@ def keypoint(
     point annotations.
 
     Args:
-        image (np.ndarray): Input image to draw keypoints on (BGR format).
+        image (np.ndarray): Input image to draw keypoints on (RGB format).
                            Modified in-place with drawn keypoint markers.
         detections (Detections): Detections object containing keypoints.
                                 Each detection may have a 'keypoints' attribute with
@@ -36,7 +36,7 @@ def keypoint(
         thickness (Optional[int]): Thickness of circle outline in pixels.
                                   Use -1 for filled circles (default).
                                   If None, defaults to -1 (filled).
-        colors (Optional[List[tuple]]): List of BGR color tuples for custom colors.
+        colors (Optional[List[tuple]]): List of RGB color tuples for custom colors.
                                        Colors mapped to unique class_ids in order.
                                        If None, uses default ColorManager colors.
         show_names (bool): If True, draws keypoint names as text labels next to points.
@@ -67,7 +67,7 @@ def keypoint(
         ...     image, detections,
         ...     radius=5,
         ...     thickness=2,
-        ...     colors=[(0, 255, 0)],  # Green
+        ...     colors=[(0, 255, 0)],  # Green (RGB)
         ...     show_names=True
         ... )
         >>>
@@ -113,7 +113,7 @@ def keypoint(
             x, y = int(kp.x), int(kp.y)
 
             # Draw keypoint circle
-            cv2.circle(image, (x, y), radius, color, thickness)
+            cv2.circle(image, (x, y), radius, _rgb_to_bgr(color), thickness)
 
             # Optionally draw keypoint name
             if show_names and kp.name:
@@ -126,7 +126,7 @@ def keypoint(
                     (text_x, text_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.4,
-                    color,
+                    _rgb_to_bgr(color),
                     1,
                     cv2.LINE_AA
                 )

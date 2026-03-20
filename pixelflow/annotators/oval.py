@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 
 
@@ -26,7 +26,7 @@ def oval(
     effects, and ground-based tracking visualizations.
     
     Args:
-        image (np.ndarray): Input image array with shape (H, W, 3) in BGR color format.
+        image (np.ndarray): Input image array with shape (H, W, 3) in RGB color format.
         detections (Detections): PixelFlow detections object containing bounding boxes. 
                                 Each detection must have a `.bbox` attribute with 
                                 (x1, y1, x2, y2) coordinates.
@@ -38,8 +38,8 @@ def oval(
         end_angle (int): Ending angle of the ellipse arc in degrees. 
                         Range: -180 to 360. Default is 235 (bottom-right, creating 
                         bottom arc spanning ~280 degrees).
-        colors (Optional[List[Tuple[int, int, int]]]): List of BGR color tuples 
-                                                      (B, G, R) where each value is 
+        colors (Optional[List[Tuple[int, int, int]]]): List of RGB color tuples
+                                                      (R, G, B) where each value is
                                                       0-255. Colors are mapped to unique 
                                                       class_ids in order of appearance. 
                                                       If None, uses default ColorManager colors.
@@ -117,7 +117,7 @@ def oval(
             angle=0.0,
             startAngle=start_angle,
             endAngle=end_angle,
-            color=color,
+            color=_rgb_to_bgr(color),
             thickness=thickness,
             lineType=cv2.LINE_AA  # Anti-aliased for smooth curves
         )

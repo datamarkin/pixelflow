@@ -5,6 +5,11 @@ Shared utilities for annotator modules.
 import numpy as np
 
 
+def _rgb_to_bgr(color: tuple) -> tuple:
+    """Swap R and B channels for OpenCV drawing functions."""
+    return (color[2], color[1], color[0])
+
+
 # Adaptive sizing cache and configuration
 _adaptive_cache = {}
 ADAPTIVE_SCALE_MULTIPLIER = 1.0  # Users can adjust this globally

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _rgb_to_bgr
 from ..colors import _get_color_for_prediction
 
 
@@ -23,15 +23,15 @@ def polygon(
     color schemes for visual distinction between different object classes.
     
     Args:
-        image (np.ndarray): Input image to draw polygons on. Must be a valid BGR image array.
+        image (np.ndarray): Input image to draw polygons on. Must be a valid RGB image array.
         detections (Detections): Detections object containing segmentation data.
                                 Each detection must have a 'segments' attribute with polygon coordinates.
         thickness (Optional[int]): Line thickness for polygon outlines in pixels.
                                  If None, automatically calculated based on image dimensions.
                                  Range: [1-50]. Default is adaptive (typically 1-6).
-        colors (Optional[List[Tuple[int, int, int]]]): List of BGR color tuples to override default colors.
+        colors (Optional[List[Tuple[int, int, int]]]): List of RGB color tuples to override default colors.
                                                      Colors are cycled through unique class_ids in order of appearance.
-                                                     Each tuple should be (B, G, R) with values [0-255].
+                                                     Each tuple should be (R, G, B) with values [0-255].
                                                      If None, uses default ColorManager colors.
         
     Returns:
@@ -57,7 +57,7 @@ def polygon(
         >>> annotated = pf.annotators.polygon(image, results)
         >>> 
         >>> # Customize line thickness and colors
-        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Blue, Green, Red
+        >>> custom_colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Red, Green, Blue
         >>> annotated = pf.annotators.polygon(image, results, thickness=3, colors=custom_colors)
         >>> 
         >>> # Use adaptive thickness on high-resolution image
@@ -87,6 +87,6 @@ def polygon(
         polygon = np.array(result.segments, dtype=np.int32).reshape((-1, 1, 2))
         # Draw the polygon on the canvas
         color = _get_color_for_prediction(result, colors)
-        cv2.polylines(image, [polygon], isClosed=True, color=color, thickness=thickness)
+        cv2.polylines(image, [polygon], isClosed=True, color=_rgb_to_bgr(color), thickness=thickness)
 
     return image
