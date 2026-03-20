@@ -39,7 +39,7 @@ def _get_adaptive_params(image):
         'margin': max(1, int(base_scale * 3)),
         'text_offset': max(10, int(base_scale * 25)),
         'blur_kernel': max(3, int(base_scale * 25)) | 1,  # ensure odd number
-        'pixel_size': max(2, int(base_scale * 15)),
+        'pixel_size': max(2, int(base_scale * 10)),
         'corner_radius': max(0, int(base_scale * 8)),
         'shadow_offset': max(1, int(base_scale * 3)),
     }
