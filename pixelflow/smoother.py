@@ -50,18 +50,18 @@ def smooth(buffer: 'Buffer', temporal_weight_decay: float = 0.8) -> Detections:
         >>> 
         >>> # Setup video processing with buffer
         >>> model = YOLO("yolo11n.pt")
-        >>> buffer = Buffer(buffer_size=5)  # 2 past + current + 2 future
+        >>> buffer = Buffer(frames=5)  # 2 past + current + 2 future
         >>> cap = cv2.VideoCapture("video.mp4")
-        >>> 
+        >>>
         >>> # Process video frames with smoothing
         >>> while True:
         >>>     ret, frame = cap.read()
         >>>     if not ret: break
-        >>>     
+        >>>
         >>>     # Get raw detections and add to buffer
         >>>     outputs = model.predict(frame)
-        >>>     results = pf.results.from_ultralytics(outputs)
-        >>>     buffer.add_frame(frame, results)
+        >>>     results = pf.detections.from_ultralytics(outputs)
+        >>>     buffer.update(results, frame)
         >>>     
         >>>     # Apply temporal smoothing
         >>>     smoothed = pf.smoother.smooth(buffer)
@@ -88,6 +88,11 @@ def smooth(buffer: 'Buffer', temporal_weight_decay: float = 0.8) -> Detections:
     See Also:
         Buffer : Temporal frame buffer for storing detection history
     """
+    if not 0.1 <= temporal_weight_decay <= 1.0:
+        raise ValueError(
+            f"temporal_weight_decay must be between 0.1 and 1.0, got {temporal_weight_decay}"
+        )
+
     # Always return the current middle frame results
     middle_idx = buffer.buffer_size // 2
     if middle_idx < len(buffer.results_buffer):
@@ -623,5 +628,5 @@ def _interpolate_missing_detection(detections: List[Tuple[str, int, Detection]])
         keypoints=past_detection.keypoints,
         zones=past_detection.zones,
         zone_names=past_detection.zone_names,
-        data={'interpolated': True, 'interpolation_source': 'buffer_smoother'}
+        metadata={'interpolated': True, 'interpolation_source': 'buffer_smoother'}
     )
