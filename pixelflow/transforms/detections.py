@@ -36,7 +36,7 @@ def rotate_detections(
     Rotate image and update detection coordinates.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         detections: Detections to transform (modified in-place)
         angle: Rotation angle in degrees (positive = counter-clockwise)
         center: Rotation center (x, y). If None, uses image center.
@@ -195,7 +195,7 @@ def flip_horizontal_detections(
     Flip image horizontally and update detection coordinates.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         detections: Detections to transform (modified in-place)
         track_metadata: If True, writes transform metadata to detection.metadata
 
@@ -305,7 +305,7 @@ def flip_vertical_detections(
     Flip image vertically and update detection coordinates.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         detections: Detections to transform (modified in-place)
         track_metadata: If True, writes transform metadata to detection.metadata
 
@@ -416,7 +416,7 @@ def crop_detections(
     Crop image to bounding box and update detection coordinates.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         detections: Detections to transform
         bbox: Crop region [x1, y1, x2, y2] in pixels
         track_metadata: If True, writes transform metadata to detection.metadata
@@ -556,7 +556,7 @@ def crop_around_detections(
     Crop image around each detection's bounding box.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         detections: Detections to crop around
         padding: Padding to add around bbox
             - Float: uniform padding as fraction of bbox shorter side
@@ -647,7 +647,7 @@ def rotate_to_align(
     to a target orientation.
 
     Args:
-        image: Input image (H, W, 3) BGR format
+        image: Input image (H, W, 3) RGB format
         detections: Detections containing keypoints (modified in-place)
         point1_name: First keypoint name (e.g., 'p0')
         point2_name: Second keypoint name (e.g., 'p9')

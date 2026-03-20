@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
 
 
@@ -110,7 +110,7 @@ def filled_box(
         overlay = image.copy()
         
         # Draw filled rectangle on overlay
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), _rgb_to_bgr(color), thickness=cv2.FILLED)
+        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, thickness=cv2.FILLED)
         
         # Blend overlay with original image
         cv2.addWeighted(overlay, opacity, image, 1 - opacity, 0, image)

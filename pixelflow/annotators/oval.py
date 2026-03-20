@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
 
 
@@ -117,7 +117,7 @@ def oval(
             angle=0.0,
             startAngle=start_angle,
             endAngle=end_angle,
-            color=_rgb_to_bgr(color),
+            color=color,
             thickness=thickness,
             lineType=cv2.LINE_AA  # Anti-aliased for smooth curves
         )

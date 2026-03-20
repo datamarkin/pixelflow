@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from ..colors import _get_color_for_prediction
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 
 
 def label(
@@ -219,7 +219,7 @@ def label(
             image,
             (label_x, label_y),
             (label_x + rect_width, label_y + rect_height),
-            _rgb_to_bgr(bg_color_final),
+            bg_color_final,
             -1
         )
 
@@ -239,7 +239,7 @@ def label(
                     (text_x, text_y),
                     font,
                     font_scale,
-                    _rgb_to_bgr(text_color),
+                    text_color,
                     font_thickness,
                     cv2.LINE_AA
                 )

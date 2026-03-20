@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
 
 
@@ -113,7 +113,7 @@ def keypoint(
             x, y = int(kp.x), int(kp.y)
 
             # Draw keypoint circle
-            cv2.circle(image, (x, y), radius, _rgb_to_bgr(color), thickness)
+            cv2.circle(image, (x, y), radius, color, thickness)
 
             # Optionally draw keypoint name
             if show_names and kp.name:
@@ -126,7 +126,7 @@ def keypoint(
                     (text_x, text_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.4,
-                    _rgb_to_bgr(color),
+                    color,
                     1,
                     cv2.LINE_AA
                 )

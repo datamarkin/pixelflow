@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
 
 
@@ -152,7 +152,7 @@ def grid_overlay(
                         cell_y2 = int(y1 + (row + 1) * cell_height)
                         
                         cv2.rectangle(overlay, (cell_x1, cell_y1), (cell_x2, cell_y2),
-                                    _rgb_to_bgr(color), thickness=cv2.FILLED)
+                                    color, thickness=cv2.FILLED)
             
             # Blend overlay with original image
             cv2.addWeighted(overlay, opacity, image, 1 - opacity, 0, image)
@@ -160,11 +160,11 @@ def grid_overlay(
         # Draw vertical grid lines
         for i in range(1, cols):
             x_pos = int(x1 + (width * i / cols))
-            cv2.line(image, (x_pos, y1), (x_pos, y2), color=_rgb_to_bgr(color), thickness=thickness)
+            cv2.line(image, (x_pos, y1), (x_pos, y2), color=color, thickness=thickness)
 
         # Draw horizontal grid lines
         for i in range(1, rows):
             y_pos = int(y1 + (height * i / rows))
-            cv2.line(image, (x1, y_pos), (x2, y_pos), color=_rgb_to_bgr(color), thickness=thickness)
+            cv2.line(image, (x1, y_pos), (x2, y_pos), color=color, thickness=thickness)
     
     return image

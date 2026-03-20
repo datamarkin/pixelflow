@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
 
 
@@ -87,6 +87,6 @@ def polygon(
         polygon = np.array(result.segments, dtype=np.int32).reshape((-1, 1, 2))
         # Draw the polygon on the canvas
         color = _get_color_for_prediction(result, colors)
-        cv2.polylines(image, [polygon], isClosed=True, color=_rgb_to_bgr(color), thickness=thickness)
+        cv2.polylines(image, [polygon], isClosed=True, color=color, thickness=thickness)
 
     return image

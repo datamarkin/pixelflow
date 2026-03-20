@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
 
 
@@ -160,6 +160,6 @@ def keypoint_skeleton(
             end_point = (int(end_kp.x), int(end_kp.y))
 
             # Draw connection line
-            cv2.line(image, start_point, end_point, _rgb_to_bgr(color), thickness, cv2.LINE_AA)
+            cv2.line(image, start_point, end_point, color, thickness, cv2.LINE_AA)
 
     return image

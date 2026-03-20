@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params, _rgb_to_bgr
+from .utils import _get_adaptive_params
 from ..colors import _get_color_for_prediction
 from ..strategies import (
     get_anchor_position, 
@@ -148,7 +148,7 @@ def anchors(
                 x, y = int(x), int(y)
                 
                 # Draw circle at anchor point
-                cv2.circle(image, (x, y), radius, _rgb_to_bgr(color), thickness)
+                cv2.circle(image, (x, y), radius, color, thickness)
                 
             except Exception:
                 # Skip invalid anchor strategies gracefully
