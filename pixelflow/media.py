@@ -21,6 +21,7 @@ __all__ = [
     "CameraStream",
     "VideoWriter",
     "read_image",
+    "read_video",
     "display_video",
     "display_image",
     "save_image",
@@ -50,6 +51,19 @@ def _resolve_path(source: str) -> Path:
         raise FileNotFoundError(
             f"File not found locally and download failed: {source}"
         )
+
+
+def read_video(source: str, width: Optional[int] = None) -> "VideoReader":
+    """Open a video file for frame-by-frame reading.
+
+    Args:
+        source: Path to a video file.
+        width: Optional width for aspect-ratio frame resizing.
+
+    Returns:
+        A VideoReader instance.
+    """
+    return VideoReader(source, width=width)
 
 
 def read_image(source: str, width: Optional[int] = None) -> np.ndarray:
