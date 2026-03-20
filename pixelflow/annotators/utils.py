@@ -32,16 +32,16 @@ def _get_adaptive_params(image):
     base_scale = np.sqrt(width * height) / 1000 * ADAPTIVE_SCALE_MULTIPLIER
     
     params = {
-        'thickness': max(1, int(base_scale * 2)),
-        'font_scale': max(0.3, base_scale * 0.5),
-        'font_thickness': max(1, int(base_scale * 1.5)),
-        'padding': max(2, int(base_scale * 5)),
-        'margin': max(1, int(base_scale * 2)),
-        'text_offset': max(10, int(base_scale * 20)),
-        'blur_kernel': max(3, int(base_scale * 15)) | 1,  # ensure odd number
-        'pixel_size': max(2, int(base_scale * 10)),
-        'corner_radius': max(0, int(base_scale * 5)),
-        'shadow_offset': max(1, int(base_scale * 2)),
+        'thickness': max(1, int(base_scale * 3)),
+        'font_scale': max(0.3, base_scale * 0.7),
+        'font_thickness': max(1, int(base_scale * 2.5)),
+        'padding': max(2, int(base_scale * 8)),
+        'margin': max(1, int(base_scale * 3)),
+        'text_offset': max(10, int(base_scale * 25)),
+        'blur_kernel': max(3, int(base_scale * 20)) | 1,  # ensure odd number
+        'pixel_size': max(2, int(base_scale * 15)),
+        'corner_radius': max(0, int(base_scale * 8)),
+        'shadow_offset': max(1, int(base_scale * 3)),
     }
     
     _adaptive_cache[shape_key] = params
