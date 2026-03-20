@@ -8,8 +8,13 @@ frame once the buffer is full, which provides both past and future context for a
 computer vision operations like motion smoothing, temporal interpolation, and trajectory analysis.
 """
 
+from collections import deque
 from typing import Optional, Tuple, List, Union, Any, Dict
+import warnings
+
 import numpy as np
+
+from pixelflow.detections import Detections
 
 
 class Buffer:
@@ -120,11 +125,11 @@ class Buffer:
             raise ValueError("Buffer size must not exceed 1000 frames")
         
         if frames % 2 == 0:
-            print(f"Warning: Buffer size {frames} is even. Consider using odd number for clean middle frame.")
-        
+            warnings.warn(f"Buffer size {frames} is even. Consider using odd number for clean middle frame.")
+
         self.buffer_size = frames
-        self.frame_buffer: List[np.ndarray] = []
-        self.results_buffer: List = []
+        self.frame_buffer: deque = deque(maxlen=frames)
+        self.results_buffer: deque = deque(maxlen=frames)
         self.is_full = False
         self._frame_count = 0
     
@@ -202,16 +207,11 @@ class Buffer:
             - Memory usage: constant after initial fill period
             - Consider frame resolution vs processing speed trade-offs
         """
-        # Add new frame and results to buffers
+        # Add new frame and results to buffers (deque handles maxlen automatically)
         self.frame_buffer.append(frame.copy())
         self.results_buffer.append(results)
         self._frame_count += 1
-        
-        # Maintain buffer size by removing oldest if exceeded
-        if len(self.frame_buffer) > self.buffer_size:
-            self.frame_buffer.pop(0)
-            self.results_buffer.pop(0)
-        
+
         # Check if buffer is full
         if len(self.frame_buffer) >= self.buffer_size:
             self.is_full = True
@@ -221,15 +221,11 @@ class Buffer:
         else:
             # Buffer not full yet, return black frame with empty results
             black_frame = np.zeros_like(frame)
-            # Try to create empty results of same type as input
             try:
-                # Import here to avoid circular dependency
-                from pixelflow.detections import Detections
                 empty_results = Detections()
-            except:
-                # If can't import Detections, return None
+            except Exception:
                 empty_results = None
-            
+
             return empty_results, black_frame
     
     def get_buffer_contents(self) -> Tuple[List[Any], List[np.ndarray]]:
@@ -279,7 +275,7 @@ class Buffer:
             - Buffer state remains unchanged by this operation
             - Useful for debugging temporal processing issues
         """
-        return self.results_buffer.copy(), self.frame_buffer.copy()
+        return list(self.results_buffer), list(self.frame_buffer)
     
     def get_temporal_context(self) -> Optional[Dict[str, Union[List[Any], List[np.ndarray], Any, np.ndarray]]]:
         """
@@ -355,13 +351,16 @@ class Buffer:
         
         middle_idx = self.buffer_size // 2
         
+        frames = list(self.frame_buffer)
+        results = list(self.results_buffer)
+
         return {
-            'past_frames': self.frame_buffer[:middle_idx],
-            'past_results': self.results_buffer[:middle_idx],
-            'current_frame': self.frame_buffer[middle_idx],
-            'current_results': self.results_buffer[middle_idx],
-            'future_frames': self.frame_buffer[middle_idx + 1:],
-            'future_results': self.results_buffer[middle_idx + 1:],
+            'past_frames': frames[:middle_idx],
+            'past_results': results[:middle_idx],
+            'current_frame': frames[middle_idx],
+            'current_results': results[middle_idx],
+            'future_frames': frames[middle_idx + 1:],
+            'future_results': results[middle_idx + 1:],
         }
     
     def reset(self) -> None:
@@ -392,7 +391,7 @@ class Buffer:
             - Memory is freed immediately when buffers are cleared
             - Buffer capacity and configuration remain unchanged
             - All temporal state is lost after reset
-            - Thread-safe operation
+            - Not thread-safe; use external synchronization if needed
         """
         self.frame_buffer.clear()
         self.results_buffer.clear()
