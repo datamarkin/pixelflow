@@ -32,7 +32,7 @@ class TestImageRotation:
 
         # 90 degree rotation should swap dimensions
         # (with potential scaling to fit)
-        assert rotated.shape[2] == 3  # Still BGR
+        assert rotated.shape[2] == 3  # Still RGB
 
     def test_rotate_360_degrees(self, sample_image):
         """Test full rotation returns similar image."""

@@ -18,7 +18,7 @@ import pixelflow as pf
 
 @pytest.fixture
 def blank_image() -> np.ndarray:
-    """Create a blank white 640x480 BGR image."""
+    """Create a blank white 640x480 RGB image."""
     return np.ones((480, 640, 3), dtype=np.uint8) * 255
 
 
@@ -26,16 +26,16 @@ def blank_image() -> np.ndarray:
 def sample_image() -> np.ndarray:
     """Create a sample image with colored rectangles for testing."""
     image = np.ones((480, 640, 3), dtype=np.uint8) * 255
-    # Add some colored rectangles
-    cv2.rectangle(image, (100, 100), (200, 200), (255, 0, 0), -1)  # Blue
-    cv2.rectangle(image, (300, 150), (400, 250), (0, 255, 0), -1)  # Green
-    cv2.rectangle(image, (450, 300), (550, 400), (0, 0, 255), -1)  # Red
+    # Add some colored rectangles using numpy (RGB format)
+    image[100:200, 100:200] = (0, 0, 255)    # Blue
+    image[150:250, 300:400] = (0, 255, 0)     # Green
+    image[300:400, 450:550] = (255, 0, 0)     # Red
     return image
 
 
 @pytest.fixture
 def small_image() -> np.ndarray:
-    """Create a small 100x100 BGR image."""
+    """Create a small 100x100 RGB image."""
     return np.ones((100, 100, 3), dtype=np.uint8) * 128
 
 
@@ -242,7 +242,8 @@ def tracked_detections() -> pf.detections.Detections:
 def temp_image_path(tmp_path, sample_image):
     """Create a temporary image file."""
     image_path = tmp_path / "test_image.jpg"
-    cv2.imwrite(str(image_path), sample_image)
+    # cv2.imwrite expects BGR, convert from RGB
+    cv2.imwrite(str(image_path), cv2.cvtColor(sample_image, cv2.COLOR_RGB2BGR))
     return str(image_path)
 
 
@@ -258,7 +259,8 @@ def temp_video_path(tmp_path, sample_image):
         frame = sample_image.copy()
         cv2.putText(frame, f"Frame {i}", (50, 50),
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
-        out.write(frame)
+        # cv2.VideoWriter expects BGR, convert from RGB
+        out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
 
     out.release()
     return str(video_path)

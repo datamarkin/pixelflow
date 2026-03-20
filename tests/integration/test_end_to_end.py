@@ -165,7 +165,7 @@ class TestTransformPipeline:
 
         # CLAHE for contrast
         if len(processed.shape) == 2:
-            processed = cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
+            processed = cv2.cvtColor(processed, cv2.COLOR_GRAY2RGB)
 
         processed = pf.transform.clahe(processed)
 

@@ -447,11 +447,11 @@ class TestColors:
         assert len(pf.colors.DEFAULT_PALETTE) > 0
 
     def test_palette_colors_are_tuples(self):
-        """Test that palette colors are BGR tuples."""
+        """Test that palette colors are RGB tuples."""
         for color in pf.colors.DEFAULT_PALETTE:
             assert isinstance(color, tuple)
             assert len(color) == 3
-            # Should be valid BGR values
+            # Should be valid RGB values
             assert all(0 <= c <= 255 for c in color)
 
     def test_vibrant_palette_exists(self):

@@ -18,10 +18,10 @@ def create_palette_image(colors, filename, title=""):
     for i, color in enumerate(colors):
         x_start = i * column_width
         x_end = (i + 1) * column_width
-        image[:, x_start:x_end] = color  # BGR format
-    
-    # Save the image
-    cv2.imwrite(filename, image)
+        image[:, x_start:x_end] = color  # RGB format
+
+    # Save the image (cv2.imwrite expects BGR, convert from RGB)
+    cv2.imwrite(filename, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     print(f"Created {filename} with {len(colors)} colors")
 
 def main():

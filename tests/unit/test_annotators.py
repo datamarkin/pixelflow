@@ -48,7 +48,7 @@ class TestBoxAnnotator:
         annotated = pf.annotate.box(
             blank_image.copy(),
             detections,
-            color=(255, 0, 0)  # Blue in BGR
+            color=(255, 0, 0)  # Red in RGB
         )
 
         assert annotated.shape == blank_image.shape
