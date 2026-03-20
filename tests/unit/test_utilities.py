@@ -156,16 +156,16 @@ class TestVideoWriter:
 
 
 # ============================================================================
-# show_frame Tests
+# display_video Tests
 # ============================================================================
 
-class TestShowFrame:
-    """Tests for show_frame function."""
+class TestDisplayVideo:
+    """Tests for display_video function."""
 
-    def test_show_frame_returns_none_or_int(self, sample_image):
-        """Test show_frame return type."""
+    def test_display_video_returns_none_or_int(self, sample_image):
+        """Test display_video return type."""
         try:
-            result = pf.show_frame("test", sample_image, wait_key=1)
+            result = pf.display_video(sample_image, "test", wait_key=1)
             assert result is None or isinstance(result, int)
             pf.close_display()
         except Exception:

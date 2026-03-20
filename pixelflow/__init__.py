@@ -19,7 +19,7 @@ from . import assets
 # Import specific functions for top-level access
 from .media import (
     VideoReader, CameraStream, VideoWriter,
-    read_image, show_frame, close_display,
+    read_image, display_video, display_image, save_image, close_display,
     to_pil, from_pil,
 )
 from .zones import Zones
@@ -47,7 +47,9 @@ __all__ = [
     "CameraStream",
     "VideoWriter",
     "read_image",
-    "show_frame",
+    "display_video",
+    "display_image",
+    "save_image",
     "close_display",
     "to_pil",
     "from_pil",

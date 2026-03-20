@@ -21,7 +21,9 @@ __all__ = [
     "CameraStream",
     "VideoWriter",
     "read_image",
-    "show_frame",
+    "display_video",
+    "display_image",
+    "save_image",
     "close_display",
     "to_pil",
     "from_pil",
@@ -196,7 +198,7 @@ class CameraStream:
     Example:
         >>> cam = pf.CameraStream(0, width=640)
         >>> for frame in cam:
-        ...     if pf.show_frame("Live", frame) == ord('q'):
+        ...     if pf.display_video(frame) == ord('q'):
         ...         break
         >>> cam.close()
     """
@@ -353,13 +355,13 @@ class VideoWriter:
 # Display functions
 # ---------------------------------------------------------------------------
 
-def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1,
-               width: Optional[int] = None) -> Optional[int]:
-    """Display a frame in a window.
+def display_video(frame: np.ndarray, window_name: str = "PixelFlow",
+                  wait_key: int = 1, width: Optional[int] = None) -> Optional[int]:
+    """Display a frame in a video loop (non-blocking).
 
     Args:
-        window_name: Name of the display window.
         frame: RGB numpy array to display.
+        window_name: Name of the display window. Default "PixelFlow".
         wait_key: Milliseconds to wait for key press. Default 1.
         width: Optional display resize width.
 
@@ -374,6 +376,25 @@ def show_frame(window_name: str, frame: np.ndarray, wait_key: int = 1,
     return key
 
 
+def display_image(image: np.ndarray, window_name: str = "PixelFlow",
+                  width: Optional[int] = None) -> int:
+    """Display an image and wait for any key press to close.
+
+    Args:
+        image: RGB numpy array to display.
+        window_name: Name of the display window. Default "PixelFlow".
+        width: Optional display resize width.
+
+    Returns:
+        The key code pressed to dismiss the window.
+    """
+    display = _resize_frame(image, width)
+    cv2.imshow(window_name, cv2.cvtColor(display, cv2.COLOR_RGB2BGR))
+    key = cv2.waitKey(0) & 0xFF
+    cv2.destroyWindow(window_name)
+    return key
+
+
 def close_display() -> None:
     """Close all OpenCV display windows."""
     cv2.destroyAllWindows()
@@ -382,6 +403,21 @@ def close_display() -> None:
 # ---------------------------------------------------------------------------
 # Format conversion helpers
 # ---------------------------------------------------------------------------
+
+def save_image(path: str, image: np.ndarray) -> None:
+    """Save an RGB numpy array to an image file.
+
+    Args:
+        path: Output file path (extension determines format).
+        image: RGB numpy array.
+
+    Raises:
+        RuntimeError: If the write fails.
+    """
+    success = cv2.imwrite(path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    if not success:
+        raise RuntimeError(f"Failed to write image: {path}")
+
 
 def to_pil(image: np.ndarray) -> Image.Image:
     """Convert an RGB numpy array to a PIL Image."""
