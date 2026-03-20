@@ -60,7 +60,7 @@ crossings.add_line(
     end=(375, 480),
     line_id="divider_line",
     name="Field Divider",
-    color=(0, 255, 255),
+    color=(255, 255, 0),
     triggering_anchor="center",
     minimum_crossing_threshold=1
 )
@@ -87,16 +87,18 @@ while True:
         continue
 
 
-    # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # Convert to RGB for pixelflow; keep BGR copy for Detectron2
+    bgr_frame = frame
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_count += 1
     
     if process_every_n_frames > 1 and frame_count % process_every_n_frames != 0:
-        cv2.imshow('Detectron2 + PixelFlow Demo', frame)
+        cv2.imshow('Detectron2 + PixelFlow Demo', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
         continue
     
-    outputs = predictor(frame)
+    outputs = predictor(bgr_frame)
     results = from_detectron2(outputs)
     
     if class_names:
@@ -172,8 +174,8 @@ while True:
         cv2.putText(frame, text, (10, y_offset + i * 25),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1, cv2.LINE_AA)
     
-    cv2.imshow('Detectron2 + PixelFlow Demo', frame)
-    
+    cv2.imshow('Detectron2 + PixelFlow Demo', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 

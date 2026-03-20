@@ -37,7 +37,7 @@ def mock_detector(image: np.ndarray, confidence=0.25) -> Detections:
     results = Detections()
     
     # Convert to grayscale for detection
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     
     # Find bright regions (simulate object detection)
     _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
@@ -171,7 +171,7 @@ def main():
     # Load or create test image
     if image_path and Path(image_path).exists():
         print(f"Loading image from: {image_path}")
-        image = cv2.imread(image_path)
+        image = pf.read_image(image_path)
         if image is None:
             print(f"Error: Could not load image from {image_path}")
             return
@@ -179,7 +179,7 @@ def main():
         print("Creating synthetic test image...")
         image = create_test_image(22012, 15034)
         # Save test image for reference
-        cv2.imwrite("test_image.jpg", image)
+        cv2.imwrite("test_image.jpg", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         print("Saved test image as 'test_image.jpg'")
     
     print(f"Image dimensions: {image.shape[1]}x{image.shape[0]} (WxH)")
@@ -270,10 +270,10 @@ def main():
         cv2.putText(grid_vis, str(slice_id), (x1+5, y1+20), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
     
-    # Save results
-    cv2.imwrite("regular_inference.jpg", regular_vis)
-    cv2.imwrite("sliced_inference.jpg", sliced_vis)
-    cv2.imwrite("slice_grid.jpg", grid_vis)
+    # Save results (convert RGB→BGR for OpenCV file output)
+    cv2.imwrite("regular_inference.jpg", cv2.cvtColor(regular_vis, cv2.COLOR_RGB2BGR))
+    cv2.imwrite("sliced_inference.jpg", cv2.cvtColor(sliced_vis, cv2.COLOR_RGB2BGR))
+    cv2.imwrite("slice_grid.jpg", cv2.cvtColor(grid_vis, cv2.COLOR_RGB2BGR))
     
     print(f"\nResults saved:")
     print(f"  regular_inference.jpg - Regular inference results")

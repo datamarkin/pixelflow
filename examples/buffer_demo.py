@@ -65,9 +65,13 @@ while True:
         continue
 
     frame_count += 1
-    
-    # Run inference on current frame
-    outputs = predictor(frame)
+
+    # Convert to RGB for pixelflow; keep BGR copy for Detectron2
+    bgr_frame = frame
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Run inference on current frame (Detectron2 expects BGR)
+    outputs = predictor(bgr_frame)
     results = from_detectron2(outputs)
     
     if class_names:
@@ -118,7 +122,7 @@ while True:
     for i, text in enumerate(info_text):
         # Highlight buffer status
         if i == 1:
-            color = (0, 255, 255) if buffer.is_full else (0, 165, 255)
+            color = (255, 255, 0) if buffer.is_full else (255, 165, 0)
         elif i == 2:
             color = (0, 255, 0)
         else:
@@ -126,7 +130,7 @@ while True:
         cv2.putText(frame, text, (10, y_offset + i * 25),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1, cv2.LINE_AA)
     
-    cv2.imshow('Detectron2 + Buffer Demo', frame)
+    cv2.imshow('Detectron2 + Buffer Demo', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
