@@ -1099,7 +1099,10 @@ def from_datamarkin_csv(group: Any, height: int, width: int):
     return detections_obj
 
 
-def from_supervision(supervision_detections: Any) -> "Detections":
+def from_supervision(
+    supervision_detections: Any,
+    class_names: Optional[Union[List[str], Dict[int, str]]] = None,
+) -> "Detections":
     """
     Convert supervision library's Detections to a unified PixelFlow Detections object.
 
@@ -1111,6 +1114,10 @@ def from_supervision(supervision_detections: Any) -> "Detections":
         supervision_detections: sv.Detections instance from supervision library.
                                Expected to have attributes: xyxy (n,4), confidence (n,),
                                class_id (n,), mask (optional list of masks).
+        class_names: Optional mapping from class IDs to human-readable names.
+                     Can be a Dict[int, str] (e.g. pf.COCO_CLASSES) or a List[str]
+                     where the index corresponds to class_id. If None, class_name
+                     defaults to str(class_id) when class_id is available.
 
     Returns:
         Detections: PixelFlow Detections container with converted Detection objects.
@@ -1131,14 +1138,12 @@ def from_supervision(supervision_detections: Any) -> "Detections":
         >>> image = Image.open("image.jpg")
         >>> sv_detections = model.predict(image, threshold=0.5)
         >>>
-        >>> # Convert to PixelFlow format for unified processing
-        >>> pf_detections = pf.detections.from_supervision(sv_detections)
+        >>> # Convert with COCO class names
+        >>> pf_detections = pf.detections.from_supervision(sv_detections, class_names=pf.COCO_CLASSES)
         >>>
-        >>> # Access detection data with filtering
-        >>> print(f"Detected {len(pf_detections)} objects")
-        >>> high_conf = pf_detections.filter_by_confidence(0.7)
-        >>> for det in high_conf:
-        ...     print(f"  Class {det.class_id}: {det.confidence:.2f}")
+        >>> # Labels now show "person: 0.87" instead of "Object: 0.87"
+        >>> for det in pf_detections:
+        ...     print(f"  {det.class_name}: {det.confidence:.2f}")
 
     Notes:
         - Supervision's xyxy is shape (n,4) numpy array → converted to list for bbox
@@ -1172,10 +1177,24 @@ def from_supervision(supervision_detections: Any) -> "Detections":
     mask = getattr(supervision_detections, 'mask', None)  # Optional, list of masks or None
 
     for i in range(len(xyxy)):
+        cid = int(class_id[i]) if class_id is not None else None
+
+        # Resolve class_name from class_names mapping
+        if cid is not None and class_names is not None:
+            if isinstance(class_names, dict):
+                class_name = class_names.get(cid, str(cid))
+            else:
+                class_name = class_names[cid] if cid < len(class_names) else str(cid)
+        elif cid is not None:
+            class_name = str(cid)
+        else:
+            class_name = None
+
         detection = Detection(
             bbox=xyxy[i].tolist(),  # Convert [x1,y1,x2,y2] numpy array to list
             confidence=float(confidence[i]) if confidence is not None else None,
-            class_id=int(class_id[i]) if class_id is not None else None,
+            class_id=cid,
+            class_name=class_name,
         )
 
         # Handle masks if present - store as list of mask arrays
@@ -1187,7 +1206,10 @@ def from_supervision(supervision_detections: Any) -> "Detections":
     return detections_obj
 
 
-def from_rfdetr(supervision_detections: Any) -> "Detections":
+def from_rfdetr(
+    supervision_detections: Any,
+    class_names: Optional[Union[List[str], Dict[int, str]]] = None,
+) -> "Detections":
     """
     Convert RF-DETR output to a unified PixelFlow Detections object.
 
@@ -1199,6 +1221,10 @@ def from_rfdetr(supervision_detections: Any) -> "Detections":
         supervision_detections: RF-DETR output (sv.Detections from supervision).
                                Expected to have attributes: xyxy (n,4),
                                confidence (n,), class_id (n,), mask (optional).
+        class_names: Optional mapping from class IDs to human-readable names.
+                     Can be a Dict[int, str] (e.g. pf.COCO_CLASSES) or a List[str]
+                     where the index corresponds to class_id. If None, class_name
+                     defaults to str(class_id) when class_id is available.
 
     Returns:
         Detections: PixelFlow Detections container with converted Detection objects.
@@ -1213,8 +1239,8 @@ def from_rfdetr(supervision_detections: Any) -> "Detections":
         >>> image = Image.open("image.jpg")
         >>> rfdetr_output = model.predict(image, threshold=0.5)
         >>>
-        >>> # Convert using the RF-DETR specific alias (more discoverable)
-        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output)
+        >>> # Convert with COCO class names for meaningful labels
+        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output, class_names=pf.COCO_CLASSES)
         >>> print(f"Detected {len(pf_detections)} objects")
 
     Notes:
@@ -1226,4 +1252,4 @@ def from_rfdetr(supervision_detections: Any) -> "Detections":
         from_supervision : Convert any supervision library Detections to PixelFlow
     """
     # Delegate to from_supervision for actual conversion
-    return from_supervision(supervision_detections)
+    return from_supervision(supervision_detections, class_names=class_names)
