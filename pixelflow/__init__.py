@@ -15,10 +15,11 @@ from . import smoother
 from . import timer
 from . import tracker
 from . import assets
+from .classes import COCO_CLASSES
 
 # Import specific functions for top-level access
 from .media import (
-    VideoReader, CameraStream, VideoWriter,
+    DisplayExit, VideoReader, CameraStream, VideoWriter,
     read_image, read_video, display_video, display_image, save_image,
     close_display, to_pil, from_pil,
 )
@@ -43,6 +44,7 @@ __all__ = [
 
     # Media handling
     "media",
+    "DisplayExit",
     "VideoReader",
     "CameraStream",
     "VideoWriter",
@@ -73,6 +75,9 @@ __all__ = [
     "timer",
     "TimeTracker",
     "tracker",
+
+    # Constants
+    "COCO_CLASSES",
 
     # Metadata
     "__version__",

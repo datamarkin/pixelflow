@@ -16,7 +16,13 @@ from PIL import Image
 
 from pixelflow import assets
 
+class DisplayExit(Exception):
+    """Raised when the quit key is pressed during display."""
+    pass
+
+
 __all__ = [
+    "DisplayExit",
     "VideoReader",
     "CameraStream",
     "VideoWriter",
@@ -370,7 +376,8 @@ class VideoWriter:
 # ---------------------------------------------------------------------------
 
 def display_video(frame: np.ndarray, window_name: str = "PixelFlow",
-                  wait_key: int = 1, width: Optional[int] = None) -> Optional[int]:
+                  wait_key: int = 1, width: Optional[int] = None,
+                  quit_key: Optional[int] = ord('q')) -> Optional[int]:
     """Display a frame in a video loop (non-blocking).
 
     Args:
@@ -378,15 +385,23 @@ def display_video(frame: np.ndarray, window_name: str = "PixelFlow",
         window_name: Name of the display window. Default "PixelFlow".
         wait_key: Milliseconds to wait for key press. Default 1.
         width: Optional display resize width.
+        quit_key: Key code that triggers DisplayExit. Default ``ord('q')``.
+            Set to ``None`` to disable auto-quit.
 
     Returns:
         The key code (int) if a key was pressed, otherwise None.
+
+    Raises:
+        DisplayExit: When the quit key is pressed.
     """
     display_frame = _resize_frame(frame, width)
     cv2.imshow(window_name, cv2.cvtColor(display_frame, cv2.COLOR_RGB2BGR))
     key = cv2.waitKey(wait_key) & 0xFF
     if key == 255:
         return None
+    if quit_key is not None and key == quit_key:
+        cv2.destroyWindow(window_name)
+        raise DisplayExit()
     return key
 
 
