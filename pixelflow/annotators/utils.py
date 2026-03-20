@@ -33,12 +33,12 @@ def _get_adaptive_params(image):
     
     params = {
         'thickness': max(1, int(base_scale * 3)),
-        'font_scale': max(0.3, base_scale * 0.7),
+        'font_scale': max(0.3, base_scale * 0.6),
         'font_thickness': max(1, int(base_scale * 2.5)),
         'padding': max(2, int(base_scale * 8)),
         'margin': max(1, int(base_scale * 3)),
         'text_offset': max(10, int(base_scale * 25)),
-        'blur_kernel': max(3, int(base_scale * 20)) | 1,  # ensure odd number
+        'blur_kernel': max(3, int(base_scale * 25)) | 1,  # ensure odd number
         'pixel_size': max(2, int(base_scale * 15)),
         'corner_radius': max(0, int(base_scale * 8)),
         'shadow_offset': max(1, int(base_scale * 3)),
