@@ -228,14 +228,15 @@ class TestVideoProcessingPipeline:
         """Test video processing with frame buffering."""
         video = pf.VideoReader(temp_video_path)
         buffer = pf.Buffer(frames=5)
+        results = pf.detections.Detections()
 
         for frame in video:
-            buffer.append(frame)
+            buffer.update(results, frame)
 
-            if len(buffer) >= 3:
+            if buffer.current_size >= 3:
                 # Process with temporal context
-                frames = buffer.get_frames()
-                assert len(frames) >= 3
+                all_results, all_frames = buffer.get_buffer_contents()
+                assert len(all_frames) >= 3
 
     def test_video_with_tracking(self, temp_video_path):
         """Test video processing with object tracking."""
