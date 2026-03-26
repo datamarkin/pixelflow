@@ -6,17 +6,20 @@ Uses only stdlib — no external dependencies.
 Usage:
     import pixelflow as pf
 
-    # Downloads to ./dog.jpg
+    # Downloads from https://dtmfiles.com/pixelflow/dog.jpg
+    # Saves to ./dtmfiles/pixelflow/dog.jpg
     path = pf.assets.download("dog.jpg")
 
-    # Downloads to ./images/dog.jpg
+    # Downloads from https://dtmfiles.com/xxx/dog.jpg
+    # Saves to ./dtmfiles/xxx/dog.jpg (preserves path structure)
+    path = pf.assets.download("xxx/dog.jpg")
+
+    # Downloads from https://dtmfiles.com/images/dog.jpg
+    # Saves to ./dtmfiles/images/dog.jpg
     path = pf.assets.download("images/dog.jpg")
 
-    # Downloads to a specific directory
-    path = pf.assets.download("dog.jpg", directory="assets/")
-
-    # Downloads to the standard cache dir
-    path = pf.assets.download("dog.jpg", directory=pf.assets.get_cache_dir())
+    # Full URL - used directly, saves to ./dtmfiles/
+    path = pf.assets.download("https://example.com/models/model.pth")
 """
 
 import hashlib
@@ -35,7 +38,8 @@ __all__ = ["download", "get_cache_dir", "clear_cache",
            "DownloadError", "ChecksumError"]
 
 _LIBRARY_NAME = "pixelflow"
-_DEFAULT_BASE_URL = f"https://dtmfiles.com/{_LIBRARY_NAME}"
+_DEFAULT_BASE_URL = "https://dtmfiles.com"
+_DTMFILES_DIR = "dtmfiles"
 _CHUNK_SIZE = 65536  # 64 KB
 _SIDECAR_MAX_BYTES = 1024
 
@@ -99,6 +103,21 @@ def _parse_sha256_line(text: str) -> Optional[str]:
         except ValueError:
             return None
     return None
+
+
+def _construct_url(path: str) -> str:
+    """Construct full URL from relative path.
+
+    If path contains '/', use as-is. Otherwise prepend 'pixelflow/'.
+
+    Examples:
+        "dog.jpg" → "https://dtmfiles.com/pixelflow/dog.jpg"
+        "xxx/dog.jpg" → "https://dtmfiles.com/xxx/dog.jpg"
+    """
+    if "/" in path:
+        return f"{_DEFAULT_BASE_URL}/{path}"
+    else:
+        return f"{_DEFAULT_BASE_URL}/pixelflow/{path}"
 
 
 def _fetch_server_sha256(url: str) -> Optional[str]:
@@ -239,17 +258,25 @@ def download(
 ) -> Path:
     """Download a file and return the local Path.
 
-    By default, files are saved to the current working directory, preserving
-    the relative path structure. For example, ``download("images/dog.jpg")``
-    creates ``./images/dog.jpg``.
+    Files are saved under ``./dtmfiles/`` preserving path structure.
 
-    Full URLs (starting with http:// or https://) are used directly, and only
-    the filename is extracted for the local save location. For example:
-    ``download("https://example.com/model.pth")`` saves as ``./model.pth``.
+    URL construction:
+    - Simple filename (e.g., ``"dog.jpg"``) downloads from
+      ``https://dtmfiles.com/pixelflow/dog.jpg``
+    - Path with slash (e.g., ``"xxx/dog.jpg"``) downloads from
+      ``https://dtmfiles.com/xxx/dog.jpg``
+    - Full URLs are used directly
+
+    Examples:
+        ```python
+        download("dog.jpg")                    # → ./dtmfiles/pixelflow/dog.jpg
+        download("xxx/dog.jpg")                # → ./dtmfiles/xxx/dog.jpg
+        download("https://example.com/file.zip")  # → ./dtmfiles/file.zip
+        ```
 
     Args:
-        path: Remote path relative to the base URL (e.g. ``"dog.jpg"``), or a
-            full URL starting with http:// or https://.
+        path: Remote path relative to dtmfiles.com (e.g. ``"dog.jpg"`` or
+            ``"xxx/dog.jpg"``), or a full URL starting with http:// or https://.
         directory: Where to save the file. Defaults to the current working
             directory. Use :func:`get_cache_dir` for the standard cache
             location.
@@ -273,10 +300,15 @@ def download(
     if path.startswith(("http://", "https://")):
         url = path
         filename = Path(urlparse(path).path).name
-        local_path = dest_dir / filename
+        local_path = dest_dir / _DTMFILES_DIR / filename
     else:
-        url = f"{_DEFAULT_BASE_URL.rstrip('/')}/{path}"
-        local_path = dest_dir / path
+        url = _construct_url(path)
+        # Local path mirrors URL structure after dtmfiles.com/
+        # e.g., "dog.jpg" → pixelflow/dog.jpg, "xxx/dog.jpg" → xxx/dog.jpg
+        if "/" in path:
+            local_path = dest_dir / _DTMFILES_DIR / path
+        else:
+            local_path = dest_dir / _DTMFILES_DIR / "pixelflow" / path
 
     # File exists and no force — return immediately (no hash check)
     if local_path.exists() and not force:
