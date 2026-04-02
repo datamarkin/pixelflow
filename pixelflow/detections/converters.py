@@ -23,7 +23,8 @@ __all__ = [
     "from_datamarkin_csv",
     "from_supervision",
     "from_rfdetr",
-    "from_falcon_perception"
+    "from_falcon_perception",
+    "from_efficienttam"
 ]
 
 # COCO pose keypoint names (17 keypoints)
@@ -629,15 +630,68 @@ def from_transformers(transformers_results: Any):
     raise NotImplementedError("from_transformers converter not yet implemented")
 
 
-def from_sam(sam_results: Any):
-    """Convert Segment Anything Model (SAM) results to a Detections object.
+def from_efficienttam(masks, scores):
+    """Convert EfficientTAM/SAM image predictor output to a Detections object.
 
-    Not yet implemented.
+    Args:
+        masks: Binary masks, shape (C, H, W), dtype bool or uint8.
+               Can be numpy ndarray or torch Tensor.
+        scores: Quality scores, shape (C,), values in [0, 1].
+               Can be numpy ndarray or torch Tensor.
 
-    Raises:
-        NotImplementedError: Always.
+    Returns:
+        Detections: One Detection per candidate mask with confidence and bbox
+                    derived from mask extent. class_id and class_name are None.
     """
-    raise NotImplementedError("from_sam converter not yet implemented")
+    from .detections import Detections, Detection
+
+    detections_obj = Detections()
+
+    if hasattr(masks, 'cpu'):
+        masks = masks.cpu().numpy()
+    if hasattr(scores, 'cpu'):
+        scores = scores.cpu().numpy()
+
+    masks = np.asarray(masks)
+    scores = np.asarray(scores)
+
+    if masks.shape[0] == 0:
+        return detections_obj
+
+    for i in range(masks.shape[0]):
+        mask = masks[i].astype(bool)
+
+        rows = np.any(mask, axis=1)
+        cols = np.any(mask, axis=0)
+
+        if not rows.any():
+            continue
+
+        y1, y2 = int(np.where(rows)[0][0]), int(np.where(rows)[0][-1])
+        x1, x2 = int(np.where(cols)[0][0]), int(np.where(cols)[0][-1])
+
+        detections_obj.add_detection(Detection(
+            bbox=[x1, y1, x2, y2],
+            masks=[mask],
+            confidence=float(scores[i]),
+        ))
+
+    return detections_obj
+
+
+def from_sam(masks, scores):
+    """Convert SAM image predictor output to a Detections object.
+
+    Alias for from_efficienttam(). SAM returns identical (masks, scores, logits) format.
+
+    Args:
+        masks: Binary masks, shape (C, H, W). Can be numpy ndarray or torch Tensor.
+        scores: Quality scores, shape (C,). Can be numpy ndarray or torch Tensor.
+
+    Returns:
+        Detections: One Detection per candidate mask.
+    """
+    return from_efficienttam(masks, scores)
 
 
 def from_datamarkin_csv(group: Any, height: int, width: int):
