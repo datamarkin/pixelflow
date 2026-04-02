@@ -22,7 +22,8 @@ __all__ = [
     "from_sam",
     "from_datamarkin_csv",
     "from_supervision",
-    "from_rfdetr"
+    "from_rfdetr",
+    "from_falcon_perception"
 ]
 
 # COCO pose keypoint names (17 keypoints)
@@ -1253,3 +1254,247 @@ def from_rfdetr(
     """
     # Delegate to from_supervision for actual conversion
     return from_supervision(supervision_detections, class_names=class_names)
+
+
+def _decode_rle(rle: Dict[str, Any]) -> np.ndarray:
+    """Decode a COCO RLE dict to a boolean H×W numpy array.
+
+    Args:
+        rle (Dict[str, Any]): COCO RLE dictionary with 'counts' and 'size' keys.
+
+    Returns:
+        np.ndarray: Boolean mask array of shape (H, W).
+
+    Raises:
+        ImportError: If pycocotools is not installed.
+    """
+    try:
+        from pycocotools import mask as coco_mask
+    except ImportError:
+        raise ImportError(
+            "pycocotools is required to decode COCO RLE masks from falcon-perception. "
+            "Install it with: pip install pycocotools"
+        )
+    decoded = coco_mask.decode(rle)  # uint8, shape (H, W), Fortran-order
+    return decoded.astype(bool)
+
+
+def from_falcon_perception(
+    output: Any,
+    image_size: Optional[tuple] = None,
+    label: Optional[str] = None,
+) -> "Detections":
+    """
+    Convert Falcon Perception model output to a unified Detections object.
+
+    Converts output from the falcon-perception open-vocabulary vision model
+    (https://github.com/tiiuae/falcon-perception) run locally via
+    PagedInferenceEngine. Also accepts the serialized dict format produced by
+    falcon-perception's built-in FastAPI server (dict with a 'masks' key).
+    Handles bounding box conversion from normalized center-format to pixel XYXY,
+    and optionally decodes COCO RLE segmentation masks using pycocotools.
+
+    Args:
+        output (Any): Falcon Perception output. Either:
+                      - AuxOutput object with 'bboxes_raw' attribute (local engine), or
+                      - Dict with 'masks' key (falcon-perception FastAPI server output).
+        image_size (tuple, optional): Image dimensions as (width, height) in pixels.
+                                      Required when output is a local AuxOutput object
+                                      because bboxes are normalized to [0, 1].
+                                      Ignored for dict format (dimensions embedded
+                                      in 'image_width'/'image_height' fields).
+                                      Default is None.
+        label (str, optional): Class label to assign to all detections when using
+                               local AuxOutput format (which carries no per-detection
+                               labels). Pass the same query string you gave the model,
+                               e.g. "cat". Unused for dict format (labels come from
+                               each mask entry). Default is None.
+
+    Returns:
+        Detections: Unified Detections object containing all detected objects with
+                   XYXY bounding boxes, optional boolean binary masks, class names
+                   from labels or the label parameter, and free-form metadata.
+                   Empty Detections if no detections are present in the output.
+
+    Raises:
+        ValueError: If output format is unrecognized (not dict with 'masks' key
+                   and not object with 'bboxes_raw' attribute).
+        ValueError: If output is local AuxOutput and image_size is not provided.
+        ValueError: If bboxes_raw has odd length (malformed interleaved pairs).
+        ImportError: If COCO RLE masks are present but pycocotools is not installed.
+
+    Example:
+        >>> import pixelflow as pf
+        >>> from PIL import Image
+        >>> from falcon_perception import load_and_prepare_model, build_prompt_for_task
+        >>> from falcon_perception.paged_inference import PagedInferenceEngine
+        >>>
+        >>> # Load model locally
+        >>> model, tokenizer, args = load_and_prepare_model("perception", backend="torch")
+        >>> engine = PagedInferenceEngine(model, tokenizer, args)
+        >>>
+        >>> image = Image.open("photo.jpg")
+        >>>
+        >>> # Detection only (bboxes)
+        >>> prompt = build_prompt_for_task(query="cat", task="detection")
+        >>> output = engine.generate(image=image, prompt=prompt, max_tokens=1024)
+        >>> detections = pf.detections.from_falcon_perception(
+        ...     output,
+        ...     image_size=(image.width, image.height),
+        ...     label="cat"
+        ... )
+        >>> for det in detections:
+        ...     print(f"BBox: {det.bbox}")
+        >>>
+        >>> # Segmentation (bboxes + masks, requires pycocotools)
+        >>> prompt = build_prompt_for_task(query="cat", task="segmentation")
+        >>> output = engine.generate(image=image, prompt=prompt, max_tokens=1024)
+        >>> detections = pf.detections.from_falcon_perception(
+        ...     output,
+        ...     image_size=(image.width, image.height),
+        ...     label="cat"
+        ... )
+        >>> for det in detections:
+        ...     print(f"BBox: {det.bbox}, Mask shape: {det.masks[0].shape if det.masks else None}")
+
+    Notes:
+        - API format bboxes are already in XYXY pixel coordinates; no conversion needed.
+        - Raw format bboxes are normalized [0, 1] in cxcywh and converted to pixel XYXY.
+        - Confidence scores are not provided by either format; stored as None.
+        - Class IDs for API format are assigned sequentially (0, 1, ...) by first
+          appearance of each unique label in the response.
+        - Class ID for raw format is 0 when label is provided, None otherwise.
+        - COCO RLE masks are decoded to boolean H×W numpy arrays identical in format
+          to Detectron2 and YOLO binary masks. Decoding is skipped (masks=None) if
+          no rle field is present or if it is None.
+        - Metadata per detection includes source, model name, query text, and (for
+          API format) the inference ID and per-detection color hint.
+
+    See Also:
+        from_detectron2 : Convert Detectron2 instance segmentation results.
+        from_ultralytics : Convert Ultralytics YOLO results including masks.
+        from_supervision : Convert supervision library Detections.
+    """
+    from .detections import Detections, Detection
+
+    detections_obj = Detections()
+
+    # Format detection
+    is_api_format = isinstance(output, dict) and "masks" in output
+    is_raw_format = not is_api_format and hasattr(output, "bboxes_raw")
+
+    if not is_api_format and not is_raw_format:
+        raise ValueError(
+            "Unrecognized falcon-perception output format. "
+            "Expected either a dict with a 'masks' key (API server response) "
+            "or an object with a 'bboxes_raw' attribute (raw AuxOutput)."
+        )
+
+    # API dict format
+    if is_api_format:
+        mask_entries = output.get("masks", [])
+
+        if not mask_entries:
+            return detections_obj
+
+        # Build label-to-sequential-int mapping for consistent class_id assignment
+        # (matches from_florence2 pattern for open-vocabulary models)
+        label_to_id: Dict[str, int] = {}
+        for entry in mask_entries:
+            lbl = entry.get("label", "")
+            if lbl not in label_to_id:
+                label_to_id[lbl] = len(label_to_id)
+
+        response_model = output.get("model", "falcon-perception")
+        response_query = output.get("query", None)
+        response_id = output.get("id", None)
+
+        for entry in mask_entries:
+            lbl = entry.get("label", "")
+            class_id = label_to_id.get(lbl, 0)
+
+            raw_bbox = entry.get("bbox", None)
+            bbox = list(raw_bbox) if raw_bbox is not None else None
+
+            masks = None
+            rle = entry.get("rle", None)
+            if rle is not None:
+                masks = [_decode_rle(rle)]
+
+            detection = Detection(
+                bbox=bbox,
+                masks=masks,
+                class_id=class_id,
+                class_name=lbl if lbl else None,
+                confidence=None,
+                metadata={
+                    "source": "falcon-perception-api",
+                    "model": response_model,
+                    "query": response_query,
+                    "inference_id": response_id,
+                    "color": entry.get("color", None),
+                },
+            )
+            detections_obj.add_detection(detection)
+
+        return detections_obj
+
+    # Raw AuxOutput format
+    if image_size is None:
+        raise ValueError(
+            "image_size=(width, height) is required when output is a raw AuxOutput "
+            "object, because bounding boxes are in normalized coordinates."
+        )
+
+    bboxes_raw = getattr(output, "bboxes_raw", None)
+    masks_rle = getattr(output, "masks_rle", None)
+    output_text = getattr(output, "text", None)
+
+    if not bboxes_raw:
+        return detections_obj
+
+    if len(bboxes_raw) % 2 != 0:
+        raise ValueError(
+            f"bboxes_raw has odd length ({len(bboxes_raw)}); "
+            "expected interleaved {{x,y}} center and {{h,w}} size dicts."
+        )
+
+    img_w, img_h = image_size
+    num_detections = len(bboxes_raw) // 2
+    class_id = 0 if label is not None else None
+
+    for i in range(num_detections):
+        center = bboxes_raw[2 * i]      # {"x": cx, "y": cy}  normalized
+        size   = bboxes_raw[2 * i + 1]  # {"h": h,  "w": w}   normalized
+
+        cx = center.get("x", 0.0)
+        cy = center.get("y", 0.0)
+        bw = size.get("w", 0.0)
+        bh = size.get("h", 0.0)
+
+        # Convert normalized cxcywh → pixel xyxy
+        x1 = (cx - bw / 2) * img_w
+        y1 = (cy - bh / 2) * img_h
+        x2 = (cx + bw / 2) * img_w
+        y2 = (cy + bh / 2) * img_h
+
+        masks = None
+        if masks_rle is not None and i < len(masks_rle):
+            rle = masks_rle[i]
+            if rle is not None:
+                masks = [_decode_rle(rle)]
+
+        detection = Detection(
+            bbox=[x1, y1, x2, y2],
+            masks=masks,
+            class_id=class_id,
+            class_name=label,
+            confidence=None,
+            metadata={
+                "source": "falcon-perception-raw",
+                "query_text": output_text,
+            },
+        )
+        detections_obj.add_detection(detection)
+
+    return detections_obj

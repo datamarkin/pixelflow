@@ -15,7 +15,8 @@ from .converters import (
     from_sam,
     from_datamarkin_csv,
     from_supervision,
-    from_rfdetr
+    from_rfdetr,
+    from_falcon_perception
 )
 
 # Import filter functions (now public API)
@@ -53,6 +54,7 @@ __all__ = [
     'from_datamarkin_csv',
     'from_supervision',
     'from_rfdetr',
+    'from_falcon_perception',
 
     # Filter functions
     'filter_by_confidence',
