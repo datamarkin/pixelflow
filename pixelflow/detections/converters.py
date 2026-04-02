@@ -36,75 +36,22 @@ COCO_KEYPOINT_NAMES = [
 
 
 def from_datamarkin(api_response: Dict[str, Any]):
-    """
-    Convert Datamarkin API response to a unified Detections object.
-
-    Processes detection results from Datamarkin's cloud-based object detection API,
-    extracting bounding boxes, segmentation masks, keypoints, class labels, and
-    confidence scores into PixelFlow's standardized format for further processing.
+    """Convert Datamarkin API response to a Detections object.
 
     Args:
-        api_response (Dict[str, Any]): Datamarkin API response dictionary containing
-                                      nested 'predictions' -> 'objects' structure
-                                      with detection data. Each object should have
-                                      'bbox', 'mask', 'keypoints', 'class', and
-                                      'bbox_score' fields.
+        api_response: Dict with 'predictions' -> 'objects' structure from the Datamarkin API.
 
     Returns:
-        Detections: Unified Detections object containing all detected objects with
-                   standardized XYXY bounding boxes, polygon masks, keypoint data,
-                   and confidence scores. Empty Detections object if no predictions.
-
-    Raises:
-        KeyError: If required API response structure is missing or malformed
-        TypeError: If bbox coordinates cannot be converted to numeric format
-        ValueError: If confidence scores are outside valid range [0.0, 1.0]
+        Detections: Bounding boxes, polygon masks, keypoints, class names, and confidence scores.
 
     Example:
         >>> import pixelflow as pf
-        >>> import requests
-        >>>
-        >>> # Call Datamarkin API for object detection
-        >>> response = requests.post(
-        ...     "https://api.datamarkin.com/detect",
-        ...     files={"image": open("image.jpg", "rb")}
-        ... )
-        >>> api_response = response.json()  # Raw API output
-        >>> detections = pf.detections.from_datamarkin(api_response)  # Convert to PixelFlow format
-        >>>
-        >>> # Basic usage - access detection data
-        >>> for detection in detections.detections:
-        ...     print(f"Class: {detection.class_id}, Confidence: {detection.confidence:.2f}")
-        >>>
-        >>> # Advanced usage - filter by confidence
-        >>> high_conf_detections = [d for d in detections.detections if d.confidence > 0.8]
-        >>> print(f"High confidence detections: {len(high_conf_detections)}")
-        >>>
-        >>> # Process masks and keypoints
-        >>> for detection in detections.detections:
-        ...     if detection.masks:
-        ...         print(f"Object has {len(detection.masks)} mask regions")
-        ...     if detection.keypoints:
-        ...         print(f"Object has {len(detection.keypoints)} keypoints")
-        >>>
-        >>> # Empty response handling
-        >>> empty_response = {"predictions": {"objects": []}}
-        >>> empty_detections = pf.detections.from_datamarkin(empty_response)
-        >>> print(f"Empty result: {len(empty_detections.detections)} objects")
+        >>> detections = pf.detections.from_datamarkin(api_response)
+        >>> for det in detections:
+        ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
     Notes:
-        - Bounding boxes are expected in XYXY format from the API
-        - Mask data is stored as polygon coordinates in nested list format
-        - Keypoints are converted from API format (name, point, probability) to PixelFlow KeyPoint objects
-        - API 'probability' field is converted to 'visibility' in KeyPoint (values > 0 = visible)
-        - Class names are stored in class_name field (API doesn't provide numeric class_id)
-        - Missing or null confidence scores are preserved as None values
-        - Function gracefully handles missing optional fields (mask, keypoints)
-
-    Performance Notes:
-        - Efficient single-pass processing of API response structure
-        - Minimal data copying for large mask or keypoint arrays
-        - No validation overhead for well-formed API responses
+        - Keypoint probability > 0 is converted to visibility=True.
     """
     from .detections import Detections, Detection, KeyPoint
 
@@ -159,124 +106,34 @@ def from_florence2(
     task_prompt: str,
     image_size: Union[tuple, None] = None
 ):
-    """
-    Convert Florence-2 model results to a unified Detections object.
-
-    Processes detection results from Microsoft's Florence-2 vision foundation model,
-    extracting bounding boxes, segmentation polygons, OCR text with quad boxes, and
-    labels into PixelFlow's standardized format. Supports all Florence-2 vision tasks
-    including object detection, grounding, segmentation, and OCR with regions.
+    """Convert Florence-2 model output to a Detections object.
 
     Args:
-        parsed_result (Dict[str, Any]): Parsed output from Florence-2 processor.
-                                        Must be dictionary with task prompt as key
-                                        containing nested data with 'bboxes', 'labels',
-                                        'polygons', or 'quad_boxes' depending on task.
-        task_prompt (str): Florence-2 task identifier used for prediction. Examples:
-                          '<OD>' (object detection), '<CAPTION_TO_PHRASE_GROUNDING>',
-                          '<REFERRING_EXPRESSION_SEGMENTATION>', '<OCR_WITH_REGION>'.
-                          Must match a key in parsed_result dictionary.
-        image_size (tuple, optional): Image dimensions as (width, height) tuple for
-                                     coordinate normalization. If None, assumes
-                                     coordinates are already in absolute pixels.
-                                     Default is None.
+        parsed_result: Dict from processor.post_process_generation(). Task prompt is the top-level key.
+        task_prompt: Florence-2 task string, e.g. '<OD>', '<REFERRING_EXPRESSION_SEGMENTATION>'.
+        image_size: Image dimensions as (width, height). Default is None.
 
     Returns:
-        Detections: Unified Detections object containing detected objects with
-                   standardized XYXY bounding boxes, polygon masks for segmentation
-                   tasks, OCR data with quad boxes, and sequential class IDs for
-                   consistent color mapping. Empty Detections if no objects found.
+        Detections: Bounding boxes, polygon segments, OCR data, and sequential class IDs.
 
     Raises:
-        ValueError: If task_prompt not found in parsed_result, or if task is text-only
-                   (pure caption/OCR without regions), or if required data fields are
-                   missing for the specified task type.
-        KeyError: If expected nested dictionary keys are missing from parsed_result
-        TypeError: If coordinate values cannot be converted to numeric format
+        ValueError: If task_prompt is not in parsed_result, is a text-only task, or the data
+                   fields don't match any supported format.
 
     Example:
-        >>> import torch
         >>> import pixelflow as pf
-        >>> from transformers import AutoProcessor, AutoModelForCausalLM
-        >>> from PIL import Image
-        >>>
-        >>> # Load Florence-2 model
-        >>> model = AutoModelForCausalLM.from_pretrained(
-        ...     "microsoft/Florence-2-large",
-        ...     trust_remote_code=True
-        ... )
-        >>> processor = AutoProcessor.from_pretrained(
-        ...     "microsoft/Florence-2-large",
-        ...     trust_remote_code=True
-        ... )
-        >>>
-        >>> # Object detection task
-        >>> image = Image.open("image.jpg")
         >>> task = "<OD>"
-        >>> inputs = processor(text=task, images=image, return_tensors="pt")
-        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
-        >>> parsed = processor.post_process_generation(
-        ...     outputs,
-        ...     task=task,
-        ...     image_size=(image.width, image.height)
-        ... )
-        >>> # parsed format: {'<OD>': {'bboxes': [[x1,y1,x2,y2],...], 'labels': ['car','person',...]}}
-        >>> detections = pf.detections.from_florence2(
-        ...     parsed[task],
-        ...     task_prompt=task,
-        ...     image_size=(image.width, image.height)
-        ... )
-        >>> for det in detections.detections:
-        ...     print(f"Class: {det.class_name}, BBox: {det.bbox}")
-        >>>
-        >>> # Grounding task (phrase → bounding boxes)
-        >>> task = "<CAPTION_TO_PHRASE_GROUNDING>"
-        >>> prompt = "A green car and a person with red shirt"
-        >>> inputs = processor(text=prompt, images=image, return_tensors="pt")
-        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
-        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(image.width, image.height))
-        >>> detections = pf.detections.from_florence2(parsed[task], task_prompt=task)
-        >>> # Each detection has bbox + class_name from grounded phrase
-        >>>
-        >>> # Segmentation task (referring expression → mask)
-        >>> task = "<REFERRING_EXPRESSION_SEGMENTATION>"
-        >>> prompt = "the red car"
-        >>> inputs = processor(text=prompt, images=image, return_tensors="pt")
-        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
-        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(image.width, image.height))
-        >>> detections = pf.detections.from_florence2(parsed[task], task_prompt=task)
-        >>> for det in detections.detections:
-        ...     if det.masks:
-        ...         print(f"Polygon mask with {len(det.masks[0])} points")
-        >>>
-        >>> # OCR with region detection
-        >>> task = "<OCR_WITH_REGION>"
-        >>> inputs = processor(text=task, images=document_image, return_tensors="pt")
-        >>> outputs = model.generate(**inputs, max_new_tokens=1024)
-        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(document_image.width, document_image.height))
-        >>> detections = pf.detections.from_florence2(parsed[task], task_prompt=task)
-        >>> for det in detections.detections:
-        ...     print(f"Text: {det.ocr_data.text}, Quad: {det.segments}")
+        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(w, h))
+        >>> detections = pf.detections.from_florence2(parsed, task_prompt=task)
+        >>> for det in detections:
+        ...     print(f"{det.class_name}: {det.bbox}")
 
     Notes:
-        - Florence-2 output format: {task_prompt: {'bboxes': [...], 'labels': [...]}}
-        - Detection tasks (<OD>, <DENSE_REGION_CAPTION>, etc.) provide bboxes + labels
-        - Segmentation tasks provide triple-nested polygons: [[[x1,y1,x2,y2,...]]]
-        - OCR tasks provide quad_boxes (8 values): [x1,y1,x2,y2,x3,y3,x4,y4]
-        - Text-only tasks (<CAPTION>, <MORE_DETAILED_CAPTION>, <OCR>) raise ValueError
-        - Sequential class_ids (0,1,2,...) assigned for consistent color mapping
-        - Confidence defaults to 1.0 if scores not provided in parsed_result
-        - All coordinates assumed to be in absolute pixels (no normalization needed)
-
-    Performance Notes:
-        - Efficient single-pass processing of Florence-2 output dictionary
-        - Minimal data copying for bboxes, polygons, and quad coordinates
-        - O(n) complexity where n is number of detected objects
-        - Lazy polygon processing deferred until mask data actually accessed
-
-    See Also:
-        from_detectron2 : Convert Detectron2 results to PixelFlow format
-        from_ultralytics : Convert YOLO results to PixelFlow format
+        - Supported tasks: <OD>, <CAPTION_TO_PHRASE_GROUNDING>, <DENSE_REGION_CAPTION>,
+          <REFERRING_EXPRESSION_SEGMENTATION>, <OCR_WITH_REGION>.
+        - Text-only tasks (<CAPTION>, <OCR>, etc.) raise ValueError.
+        - Sequential class_ids (0, 1, 2, ...) assigned for consistent color mapping.
+        - Confidence defaults to 1.0 when not provided.
     """
     from .detections import Detections, Detection, OCRData
 
@@ -442,99 +299,26 @@ def from_florence2(
 
 
 def from_detectron2(detectron2_results: Dict[str, Any], class_names: Optional[List[str]] = None):
-    """
-    Convert Detectron2 inference results to a unified Detections object.
-    
-    Extracts bounding boxes, confidence scores, class IDs, segmentation masks, 
-    and keypoints from Detectron2's instances format and standardizes them 
-    into PixelFlow's Detection objects. Handles automatic tensor-to-numpy conversion 
-    and CPU transfer for efficient processing.
-    
+    """Convert Detectron2 inference results to a Detections object.
+
     Args:
-        detectron2_results (Dict[str, Any]): Detectron2 inference results dictionary
-                                           containing 'instances' key with prediction
-                                           data including pred_boxes, scores,
-                                           pred_classes, pred_masks, and pred_keypoints.
-                                           Results should be from DefaultPredictor output.
-        class_names (Optional[List[str]]): List of class names indexed by class ID.
-                                          If provided, Detection objects will include
-                                          class_name attribute. Obtain from MetadataCatalog:
-                                          `MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).thing_classes`
+        detectron2_results: Output dict from DefaultPredictor with an 'instances' key.
+        class_names: List of class names indexed by class ID. Default is None.
 
     Returns:
-        Detections: Unified Detections object with all detected instances converted
-                   to standardized format. Contains XYXY bounding boxes as lists,
-                   boolean numpy array masks, integer class IDs, and float confidences.
-                   Returns empty Detections if no instances found.
-    
-    Raises:
-        KeyError: If required 'instances' key is missing from detectron2_results
-        AttributeError: If instances object lacks expected prediction attributes
-        RuntimeError: If tensor operations fail during CPU transfer
-        ValueError: If bounding box or confidence data contains invalid values
-        
+        Detections: Bounding boxes, boolean masks, class IDs, and confidence scores.
+
     Example:
-        >>> import cv2
         >>> import pixelflow as pf
-        >>> from detectron2 import model_zoo
-        >>> from detectron2.engine import DefaultPredictor
-        >>> from detectron2.config import get_cfg
-        >>> from detectron2.data import MetadataCatalog
-        >>>
-        >>> # Setup Detectron2 object detection model
-        >>> cfg = get_cfg()
-        >>> cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
-        >>> cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
-        >>> predictor = DefaultPredictor(cfg)
-        >>>
-        >>> # Get class names from metadata
-        >>> class_names = MetadataCatalog.get(cfg.DATASETS.TRAIN[0]).thing_classes
-        >>>
-        >>> image = cv2.imread("path/to/image.jpg")
-        >>> outputs = predictor(image)  # Raw Detectron2 output
+        >>> outputs = predictor(image)
         >>> detections = pf.detections.from_detectron2(outputs, class_names=class_names)
-        >>>
-        >>> # Access detection data with class names
-        >>> for detection in detections.detections:
-        ...     print(f"Class: {detection.class_name}, Confidence: {detection.confidence:.2f}")
-        >>> 
-        >>> # Advanced usage - segmentation model with masks
-        >>> cfg.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml"))
-        >>> cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")
-        >>> seg_predictor = DefaultPredictor(cfg)
-        >>> outputs = seg_predictor(image)
-        >>> detections = pf.detections.from_detectron2(outputs)
-        >>> for detection in detections.detections:
-        ...     if detection.masks:
-        ...         print(f"Object has mask with shape: {detection.masks[0].shape}")
-        >>> 
-        >>> # Process keypoint detection results
-        >>> cfg.merge_from_file(model_zoo.get_config_file("COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x.yaml"))
-        >>> cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x.yaml")
-        >>> kpt_predictor = DefaultPredictor(cfg)
-        >>> outputs = kpt_predictor(image)
-        >>> detections = pf.detections.from_detectron2(outputs)
-        >>> 
-        >>> # Empty result handling
-        >>> empty_image = np.zeros((100, 100, 3), dtype=np.uint8)
-        >>> empty_outputs = predictor(empty_image)
-        >>> empty_detections = pf.detections.from_detectron2(empty_outputs)
-        >>> print(f"No detections: {len(empty_detections.detections)} objects")
-    
+        >>> for det in detections:
+        ...     print(f"{det.class_name}: {det.confidence:.2f}")
+
     Notes:
-        - All tensor data is automatically moved to CPU before numpy conversion
-        - Bounding boxes maintain XYXY format from Detectron2 (no coordinate transformation)
-        - Segmentation masks are converted to boolean arrays for memory efficiency
-        - Class IDs are converted to integers for consistency with other frameworks
-        - Confidence scores are converted to float type for standardization
-        - Keypoint data structure is preserved but PixelFlow KeyPoint conversion pending
-        - Function handles missing prediction attributes gracefully (returns None)
-        
-    Performance Notes:
-        - Efficient batch tensor operations minimize GPU-CPU transfer overhead
-        - Single CPU transfer per tensor type reduces memory allocation
-        - Boolean mask conversion optimized for large segmentation masks
-        - Zero-copy numpy operations where possible for large datasets
+        - All tensors are moved to CPU automatically before conversion.
+        - Segmentation masks are converted to boolean arrays.
+        - Keypoint conversion is not yet implemented.
     """
     from .detections import Detections, Detection
     
@@ -616,97 +400,27 @@ def from_detectron2(detectron2_results: Dict[str, Any], class_names: Optional[Li
 
 
 def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
-    """
-    Convert Ultralytics YOLO results to a unified Detections object.
-    
-    Supports both detection and segmentation models, handling bounding boxes,
-    confidence scores, class IDs, segmentation masks, and tracker IDs.
-    Automatically processes letterbox padding removal and mask resizing to
-    original image dimensions with precise coordinate transformation.
-    
+    """Convert Ultralytics YOLO results to a Detections object.
+
     Args:
-        ultralytics_results (Union[Any, List[Any]]): YOLO results from Ultralytics
-                                                    library prediction or tracking.
-                                                    Can be single Result object or
-                                                    list containing one Result object.
-                                                    Must have boxes attribute with
-                                                    detection data.
-        
+        ultralytics_results: Single Result or list[Result] from model.predict() or model.track().
+
     Returns:
-        Detections: Unified Detections object containing all detected objects with
-                   standardized XYXY bounding boxes, boolean binary masks resized
-                   to original image dimensions, polygon segments as integer coordinates,
-                   and tracker IDs if available. Empty Detections if no boxes found.
-    
-    Raises:
-        AttributeError: If results object lacks required boxes or data attributes
-        IndexError: If results list is empty or malformed
-        ValueError: If bounding box coordinates or confidence scores are invalid
-        RuntimeError: If tensor operations fail during CPU transfer
-        
+        Detections: Bounding boxes, binary masks, polygon segments, and tracker IDs when available.
+
     Example:
-        >>> import cv2
         >>> import pixelflow as pf
         >>> from ultralytics import YOLO
-        >>> 
-        >>> # Basic object detection
         >>> model = YOLO("yolo11n.pt")
-        >>> image = cv2.imread("path/to/image.jpg")
-        >>> outputs = model.predict(image)  # Raw YOLO output
-        >>> detections = pf.detections.from_ultralytics(outputs)  # Convert to PixelFlow format
-        >>> 
-        >>> # Access detection data with class names
-        >>> for detection in detections.detections:
-        ...     print(f"Class: {detection.class_name}, Confidence: {detection.confidence:.2f}")
-        ...     print(f"BBox: {detection.bbox}")
-        >>> 
-        >>> # Advanced usage - segmentation model with masks
-        >>> seg_model = YOLO("yolo11n-seg.pt")
-        >>> outputs = seg_model.predict(image, save_crop=False)
+        >>> outputs = model.predict(image)
         >>> detections = pf.detections.from_ultralytics(outputs)
-        >>> for detection in detections.detections:
-        ...     if detection.masks:
-        ...         mask_shape = detection.masks[0].shape
-        ...         print(f"Object mask: {mask_shape} pixels")
-        ...     if detection.segments:
-        ...         poly_points = len(detection.segments)
-        ...         print(f"Polygon: {poly_points} points")
-        >>> 
-        >>> # Object tracking with persistent IDs
-        >>> outputs = model.track(image, tracker="bytetrack.yaml", persist=True)
-        >>> detections = pf.detections.from_ultralytics(outputs)
-        >>> for detection in detections.detections:
-        ...     if detection.tracker_id is not None:
-        ...         print(f"Tracked object {detection.tracker_id}: {detection.class_name}")
-        >>> 
-        >>> # Batch processing multiple images
-        >>> image_paths = ["img1.jpg", "img2.jpg", "img3.jpg"]
-        >>> for img_path in image_paths:
-        ...     img = cv2.imread(img_path)
-        ...     outputs = model.predict(img, verbose=False)
-        ...     detections = pf.detections.from_ultralytics(outputs)
-        ...     print(f"{img_path}: {len(detections.detections)} objects")
-    
+        >>> for det in detections:
+        ...     print(f"{det.class_name}: {det.confidence:.2f}, bbox={det.bbox}")
+
     Notes:
-        - Automatically handles single Result or list[Result] input formats
-        - Bounding boxes maintain XYXY format from YOLO predictions
-        - Class names are extracted from model.names dictionary when available
-        - Binary masks are precisely resized using letterbox padding calculations
-        - Polygon segments stored as integer coordinate lists for efficiency
-        - Tracker IDs preserved from model.track() calls with persist=True
-        - Original YOLO masks stored in _ultralytics_masks for advanced use cases
-        - Gracefully handles empty results with no detections
-        
-    Performance Notes:
-        - Efficient batch tensor operations minimize CPU/GPU memory transfers
-        - Single numpy conversion per detection component reduces allocation overhead
-        - Letterbox padding calculations optimized for common YOLO input sizes
-        - OpenCV resize operations use nearest neighbor for boolean mask precision
-        - Zero-copy operations where possible for large segmentation masks
-        
-    See Also:
-        from_detectron2 : Convert Detectron2 results to PixelFlow format
-        from_datamarkin : Convert cloud API results to PixelFlow format
+        - tracker_id is set when using model.track() with persist=True.
+        - Classification models produce a single detection with top-5 predictions in metadata.
+        - Binary masks are resized to original image dimensions with letterbox padding removed.
     """
     from .detections import Detections, Detection, KeyPoint
 
@@ -905,166 +619,49 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
 
 
 def from_transformers(transformers_results: Any):
-    """
-    Convert Transformers library results to a unified Detections object.
-    
-    Placeholder function for future integration with Hugging Face Transformers
-    object detection and segmentation models. Will support DETR, RT-DETR, and
-    other transformer-based detection architectures.
-    
-    Args:
-        transformers_results (Any): Results from Transformers library object
-                                   detection models. Expected format includes
-                                   boxes, labels, and scores tensors.
-        
-    Returns:
-        Detections: Empty Detections object. Full implementation pending.
-    
+    """Convert Hugging Face Transformers object detection results to a Detections object.
+
+    Not yet implemented.
+
     Raises:
-        NotImplementedError: This function is not yet implemented
-        
-    Example:
-        >>> import pixelflow as pf
-        >>> # Future usage with Transformers models
-        >>> # from transformers import AutoImageProcessor, AutoModelForObjectDetection
-        >>> # processor = AutoImageProcessor.from_pretrained("facebook/detr-resnet-50")
-        >>> # model = AutoModelForObjectDetection.from_pretrained("facebook/detr-resnet-50")
-        >>> # outputs = model(**processor(image, return_tensors="pt"))  # Raw output
-        >>> # detections = pf.detections.from_transformers(outputs)  # Convert to PixelFlow
-        >>> print("Function not yet implemented")
-    
-    Notes:
-        - Implementation will support DETR, RT-DETR, and YOLO-transformer models
-        - Will handle transformer-specific output formats and attention mechanisms
-        - Planned support for both detection and segmentation transformer models
-        - Integration with Transformers AutoModel pipeline architecture
+        NotImplementedError: Always.
     """
     raise NotImplementedError("from_transformers converter not yet implemented")
 
 
 def from_sam(sam_results: Any):
-    """
-    Convert Segment Anything Model (SAM) results to a unified Detections object.
-    
-    Placeholder function for integration with Meta's Segment Anything Model (SAM)
-    for interactive and automatic segmentation tasks. Will support prompt-based
-    segmentation with point, box, and text prompts.
-    
-    Args:
-        sam_results (Any): Results from SAM model inference including masks,
-                          iou_predictions, and low_res_logits from SamPredictor
-                          or SamAutomaticMaskGenerator output.
-        
-    Returns:
-        Detections: Empty Detections object. Full implementation pending.
-    
+    """Convert Segment Anything Model (SAM) results to a Detections object.
+
+    Not yet implemented.
+
     Raises:
-        NotImplementedError: This function is not yet implemented
-        
-    Example:
-        >>> import pixelflow as pf
-        >>> # Future usage with SAM models
-        >>> # from segment_anything import SamPredictor, sam_model_registry
-        >>> # sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h.pth")
-        >>> # predictor = SamPredictor(sam)
-        >>> # predictor.set_image(image)
-        >>> # masks, scores, logits = predictor.predict(point_coords=input_point)  # Raw output
-        >>> # detections = pf.detections.from_sam({"masks": masks, "scores": scores})  # Convert to PixelFlow
-        >>> print("Function not yet implemented")
-    
-    Notes:
-        - Implementation will support both SamPredictor and SamAutomaticMaskGenerator
-        - Will handle multi-mask outputs with IoU quality scores
-        - Planned support for prompt-based and automatic segmentation workflows
-        - Integration with different SAM model variants (ViT-B, ViT-L, ViT-H)
-        - Will convert high-quality masks to PixelFlow Detection format
+        NotImplementedError: Always.
     """
     raise NotImplementedError("from_sam converter not yet implemented")
 
 
 def from_datamarkin_csv(group: Any, height: int, width: int):
-    """
-    Convert CSV data from Datamarkin format to a unified Detections object.
-    
-    Processes normalized coordinates from CSV annotation format and converts them to pixel
-    coordinates using the provided image dimensions. Handles both bounding box rectangles
-    and segmentation polygon data with automatic coordinate denormalization and validation.
-    
+    """Convert normalized CSV annotation data from Datamarkin format to a Detections object.
+
     Args:
-        group (Any): Pandas DataFrame or DataFrame group containing CSV rows with
-                    required columns 'xmin', 'ymin', 'xmax', 'ymax', 'segmentation',
-                    'class', and optional 'confidence'. All coordinate values must
-                    be normalized floats in range [0.0, 1.0].
-        height (int): Image height in pixels for coordinate denormalization.
-                     Must be positive integer representing actual image height.
-        width (int): Image width in pixels for coordinate denormalization.
-                    Must be positive integer representing actual image width.
-        
+        group: Pandas DataFrame (or groupby group) with columns: xmin, ymin, xmax, ymax,
+               segmentation, class, confidence. Coordinates must be normalized [0, 1].
+        height: Image height in pixels for denormalization.
+        width: Image width in pixels for denormalization.
+
     Returns:
-        Detections: Unified Detections object with pixel coordinates converted from
-                   normalized values. Contains XYXY bounding boxes as integers,
-                   polygon masks as lists of (x, y) tuples, and preserved class labels.
-                   Empty Detections if group contains no rows.
-    
-    Raises:
-        KeyError: If required CSV columns are missing from the DataFrame
-        ValueError: If coordinate values are outside [0.0, 1.0] normalized range
-        TypeError: If height/width are not integers or coordinates not numeric
-        SyntaxError: If segmentation string cannot be parsed as valid Python list
-        
+        Detections: Pixel-coordinate bounding boxes, polygon masks, and class labels.
+
     Example:
         >>> import pandas as pd
         >>> import pixelflow as pf
-        >>> 
-        >>> # Load CSV annotations with normalized coordinates
-        >>> df = pd.read_csv("datamarkin_annotations.csv")
-        >>> # CSV format: image,xmin,ymin,xmax,ymax,segmentation,class,confidence
-        >>> # Example row: img1.jpg,0.1,0.2,0.8,0.9,"[0.1,0.2,0.8,0.2,0.8,0.9,0.1,0.9]",person,0.95
-        >>> detections = pf.detections.from_datamarkin_csv(df, height=480, width=640)  # Convert to PixelFlow format
-        >>> 
-        >>> # Basic usage - process single image annotations
-        >>> for detection in detections.detections:
-        ...     print(f"Class: {detection.class_id}, Confidence: {detection.confidence}")
-        ...     print(f"BBox: {detection.bbox}")  # Pixel coordinates
-        >>> 
-        >>> # Advanced usage - batch process multiple images
-        >>> for image_name, group in df.groupby('image'):
-        ...     img_detections = pf.detections.from_datamarkin_csv(group, height=1080, width=1920)
-        ...     print(f"Image {image_name}: {len(img_detections.detections)} annotations")
-        ...     for detection in img_detections.detections:
-        ...         if detection.masks:
-        ...             poly_points = len(detection.masks[0])
-        ...             print(f"  Polygon with {poly_points} points")
-        >>> 
-        >>> # Handle missing confidence scores
-        >>> df_no_conf = df.drop('confidence', axis=1)
-        >>> detections = pf.detections.from_datamarkin_csv(df_no_conf, height=720, width=1280)
-        >>> for detection in detections.detections:
-        ...     conf_str = "Unknown" if detection.confidence is None else f"{detection.confidence:.2f}"
-        ...     print(f"Detection confidence: {conf_str}")
-        >>> 
-        >>> # Validate coordinate ranges
-        >>> valid_coords = df[(df['xmin'] >= 0) & (df['xmax'] <= 1) & 
-        ...                  (df['ymin'] >= 0) & (df['ymax'] <= 1)]
-        >>> detections = pf.detections.from_datamarkin_csv(valid_coords, height=600, width=800)
-    
+        >>> df = pd.read_csv("annotations.csv")
+        >>> for image_name, group in df.groupby("image"):
+        ...     detections = pf.detections.from_datamarkin_csv(group, height=480, width=640)
+
     Notes:
-        - All input coordinates must be normalized floats in range [0.0, 1.0]
-        - Bounding boxes are converted to integer pixel coordinates using XYXY format
-        - Segmentation strings are parsed using ast.literal_eval for safe evaluation
-        - Polygon coordinates are stored as (x, y) tuples for geometric operations
-        - Missing confidence values default to None and are handled gracefully
-        - Class labels are preserved as strings without modification
-        - Function performs coordinate validation during denormalization process
-        
-    Performance Notes:
-        - Efficient vectorized operations for coordinate transformation
-        - Minimal string parsing overhead using ast.literal_eval
-        - Single-pass iteration through DataFrame rows
-        - Memory-efficient tuple creation for polygon coordinates
-        
-    See Also:
-        from_datamarkin : Convert Datamarkin API responses to PixelFlow format
+        - Input coordinates are assumed to be normalized floats in [0, 1].
+        - Segmentation strings are parsed with ast.literal_eval.
     """
     from .detections import Detections, Detection
 
@@ -1104,57 +701,27 @@ def from_supervision(
     supervision_detections: Any,
     class_names: Optional[Union[List[str], Dict[int, str]]] = None,
 ) -> "Detections":
-    """
-    Convert supervision library's Detections to a unified PixelFlow Detections object.
-
-    Processes detection results from the supervision library (used by RF-DETR and other
-    models), extracting bounding boxes, segmentation masks, class IDs, and confidence
-    scores into PixelFlow's standardized format for downstream processing and visualization.
+    """Convert supervision library sv.Detections to a PixelFlow Detections object.
 
     Args:
-        supervision_detections: sv.Detections instance from supervision library.
-                               Expected to have attributes: xyxy (n,4), confidence (n,),
-                               class_id (n,), mask (optional list of masks).
-        class_names: Optional mapping from class IDs to human-readable names.
-                     Can be a Dict[int, str] (e.g. pf.COCO_CLASSES) or a List[str]
-                     where the index corresponds to class_id. If None, class_name
-                     defaults to str(class_id) when class_id is available.
+        supervision_detections: sv.Detections with xyxy, confidence, class_id, mask attributes.
+        class_names: Dict[int, str] or List[str] mapping class IDs to names. Default is None.
 
     Returns:
-        Detections: PixelFlow Detections container with converted Detection objects.
-                   Empty Detections if input has no detections.
+        Detections: Bounding boxes, optional masks, class IDs, and confidence scores.
 
     Raises:
-        AttributeError: If supervision_detections lacks required attributes (xyxy)
-        ValueError: If xyxy array is malformed or empty
+        AttributeError: If supervision_detections lacks the required xyxy attribute.
 
     Example:
-        >>> import supervision as sv
         >>> import pixelflow as pf
-        >>> from rfdetr import RFDETRMedium
-        >>> from PIL import Image
-        >>>
-        >>> # Load and run RF-DETR model (returns sv.Detections)
-        >>> model = RFDETRMedium()
-        >>> image = Image.open("image.jpg")
-        >>> sv_detections = model.predict(image, threshold=0.5)
-        >>>
-        >>> # Convert with COCO class names
-        >>> pf_detections = pf.detections.from_supervision(sv_detections, class_names=pf.COCO_CLASSES)
-        >>>
-        >>> # Labels now show "person: 0.87" instead of "Object: 0.87"
-        >>> for det in pf_detections:
-        ...     print(f"  {det.class_name}: {det.confidence:.2f}")
+        >>> detections = pf.detections.from_supervision(sv_detections, class_names=pf.COCO_CLASSES)
+        >>> for det in detections:
+        ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
     Notes:
-        - Supervision's xyxy is shape (n,4) numpy array → converted to list for bbox
-        - Optional fields (confidence, class_id, mask) may be None → handled gracefully
-        - Masks are stored as list elements if present in supervision detections
-        - RF-DETR returns class_ids matching COCO classes (0-79)
-
-    See Also:
-        from_ultralytics : Convert Ultralytics YOLO results to PixelFlow format
-        from_detectron2 : Convert Detectron2 results to PixelFlow format
+        - class_names accepts both Dict[int, str] and List[str].
+        - confidence, class_id, and mask are optional; missing fields are stored as None.
     """
     from .detections import Detections, Detection
 
@@ -1248,9 +815,6 @@ def from_rfdetr(
         - This is an alias for from_supervision()
         - RF-DETR returns supervision library's sv.Detections format
         - Use this function name if you're working with RF-DETR specifically
-
-    See Also:
-        from_supervision : Convert any supervision library Detections to PixelFlow
     """
     # Delegate to from_supervision for actual conversion
     return from_supervision(supervision_detections, class_names=class_names)
@@ -1284,42 +848,22 @@ def from_falcon_perception(
     image_size: Optional[tuple] = None,
     label: Optional[str] = None,
 ) -> "Detections":
-    """
-    Convert Falcon Perception model output to a unified Detections object.
-
-    Converts output from the falcon-perception open-vocabulary vision model
-    (https://github.com/tiiuae/falcon-perception) run locally via
-    PagedInferenceEngine. Also accepts the serialized dict format produced by
-    falcon-perception's built-in FastAPI server (dict with a 'masks' key).
-    Handles bounding box conversion from normalized center-format to pixel XYXY,
-    and optionally decodes COCO RLE segmentation masks using pycocotools.
+    """Convert Falcon Perception model output to a Detections object.
 
     Args:
-        output (Any): Falcon Perception output. Either:
-                      - AuxOutput object with 'bboxes_raw' attribute (local engine), or
-                      - Dict with 'masks' key (falcon-perception FastAPI server output).
-        image_size (tuple, optional): Image dimensions as (width, height) in pixels.
-                                      Required when output is a local AuxOutput object
-                                      because bboxes are normalized to [0, 1].
-                                      Ignored for dict format (dimensions embedded
-                                      in 'image_width'/'image_height' fields).
-                                      Default is None.
-        label (str, optional): Class label to assign to all detections when using
-                               local AuxOutput format (which carries no per-detection
-                               labels). Pass the same query string you gave the model,
-                               e.g. "cat". Unused for dict format (labels come from
-                               each mask entry). Default is None.
+        output: AuxOutput object with 'bboxes_raw' attribute (local engine), or dict
+                with 'masks' key (falcon-perception FastAPI server output).
+        image_size: Image dimensions as (width, height). Required for local AuxOutput
+                   (bboxes are normalized); ignored for dict format. Default is None.
+        label: Class label for all detections when using local AuxOutput format.
+               Pass the query string you gave the model, e.g. "cat". Default is None.
 
     Returns:
-        Detections: Unified Detections object containing all detected objects with
-                   XYXY bounding boxes, optional boolean binary masks, class names
-                   from labels or the label parameter, and free-form metadata.
-                   Empty Detections if no detections are present in the output.
+        Detections: Bounding boxes, optional boolean masks, class names, and metadata.
 
     Raises:
-        ValueError: If output format is unrecognized (not dict with 'masks' key
-                   and not object with 'bboxes_raw' attribute).
-        ValueError: If output is local AuxOutput and image_size is not provided.
+        ValueError: If output format is unrecognized.
+        ValueError: If output is AuxOutput and image_size is not provided.
         ValueError: If bboxes_raw has odd length (malformed interleaved pairs).
         ImportError: If COCO RLE masks are present but pycocotools is not installed.
 
@@ -1329,51 +873,25 @@ def from_falcon_perception(
         >>> from falcon_perception import load_and_prepare_model, build_prompt_for_task
         >>> from falcon_perception.paged_inference import PagedInferenceEngine
         >>>
-        >>> # Load model locally
         >>> model, tokenizer, args = load_and_prepare_model("perception", backend="torch")
         >>> engine = PagedInferenceEngine(model, tokenizer, args)
-        >>>
         >>> image = Image.open("photo.jpg")
-        >>>
-        >>> # Detection only (bboxes)
         >>> prompt = build_prompt_for_task(query="cat", task="detection")
         >>> output = engine.generate(image=image, prompt=prompt, max_tokens=1024)
         >>> detections = pf.detections.from_falcon_perception(
-        ...     output,
-        ...     image_size=(image.width, image.height),
-        ...     label="cat"
+        ...     output, image_size=(image.width, image.height), label="cat"
         ... )
         >>> for det in detections:
-        ...     print(f"BBox: {det.bbox}")
-        >>>
-        >>> # Segmentation (bboxes + masks, requires pycocotools)
-        >>> prompt = build_prompt_for_task(query="cat", task="segmentation")
-        >>> output = engine.generate(image=image, prompt=prompt, max_tokens=1024)
-        >>> detections = pf.detections.from_falcon_perception(
-        ...     output,
-        ...     image_size=(image.width, image.height),
-        ...     label="cat"
-        ... )
-        >>> for det in detections:
-        ...     print(f"BBox: {det.bbox}, Mask shape: {det.masks[0].shape if det.masks else None}")
+        ...     print(f"{det.class_name}: {det.bbox}")
 
     Notes:
-        - API format bboxes are already in XYXY pixel coordinates; no conversion needed.
-        - Raw format bboxes are normalized [0, 1] in cxcywh and converted to pixel XYXY.
+        - Format auto-detected: AuxOutput has .bboxes_raw; dict format has 'masks' key.
+        - AuxOutput bboxes are normalized cxcywh, converted to pixel xyxy using image_size.
+        - Dict format bboxes are already pixel xyxy; image_size is ignored.
         - Confidence scores are not provided by either format; stored as None.
-        - Class IDs for API format are assigned sequentially (0, 1, ...) by first
-          appearance of each unique label in the response.
-        - Class ID for raw format is 0 when label is provided, None otherwise.
-        - COCO RLE masks are decoded to boolean H×W numpy arrays identical in format
-          to Detectron2 and YOLO binary masks. Decoding is skipped (masks=None) if
-          no rle field is present or if it is None.
-        - Metadata per detection includes source, model name, query text, and (for
-          API format) the inference ID and per-detection color hint.
-
-    See Also:
-        from_detectron2 : Convert Detectron2 instance segmentation results.
-        from_ultralytics : Convert Ultralytics YOLO results including masks.
-        from_supervision : Convert supervision library Detections.
+        - Class IDs for dict format assigned sequentially by label first-appearance.
+        - COCO RLE masks decoded to boolean H×W arrays (same format as Detectron2/YOLO).
+          Requires pycocotools: pip install pycocotools. Skipped if rle is None.
     """
     from .detections import Detections, Detection
 
