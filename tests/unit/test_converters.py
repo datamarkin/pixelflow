@@ -314,24 +314,53 @@ class TestPaddleOCRConverter:
 # ============================================================================
 
 class TestSAMConverter:
-    """Tests for from_sam (Segment Anything Model) converter."""
+    """Tests for from_sam / from_efficienttam converters."""
 
     def test_from_sam_basic(self):
-        """Test basic SAM conversion with masks."""
-        # Mock SAM output
-        sam_output = {
-            'masks': np.array([
-                np.ones((100, 100), dtype=bool),
-                np.zeros((100, 100), dtype=bool)
-            ]),
-            'scores': np.array([0.95, 0.87])
-        }
+        """Test basic SAM conversion with masks and scores."""
+        masks = np.array([
+            np.ones((100, 100), dtype=bool),
+            np.zeros((100, 100), dtype=bool)
+        ])
+        scores = np.array([0.95, 0.87])
 
-        detections = pf.detections.from_sam(sam_output)
+        detections = pf.detections.from_sam(masks, scores)
 
-        assert len(detections) == 2
+        assert len(detections) == 1  # second mask is empty, skipped
         assert detections[0].masks is not None
         assert detections[0].confidence == 0.95
+        assert detections[0].bbox == [0, 0, 99, 99]
+
+    def test_from_efficienttam_basic(self):
+        """Test EfficientTAM conversion with multiple masks."""
+        masks = np.zeros((3, 50, 80), dtype=bool)
+        masks[0, 10:30, 20:60] = True
+        masks[1, 5:15, 0:10] = True
+        scores = np.array([0.92, 0.85, 0.73])
+
+        detections = pf.detections.from_efficienttam(masks, scores)
+
+        assert len(detections) == 2  # third mask is empty
+        assert detections[0].confidence == 0.92
+        assert detections[0].bbox == [20, 10, 59, 29]
+        assert detections[1].confidence == 0.85
+        assert detections[1].bbox == [0, 5, 9, 14]
+
+    def test_from_efficienttam_empty(self):
+        """Test EfficientTAM with no masks."""
+        masks = np.zeros((0, 100, 100), dtype=bool)
+        scores = np.zeros(0)
+
+        detections = pf.detections.from_efficienttam(masks, scores)
+        assert len(detections) == 0
+
+    def test_from_efficienttam_mask_is_bool(self):
+        """Test that output masks are boolean."""
+        masks = np.ones((1, 50, 50), dtype=np.uint8)
+        scores = np.array([0.9])
+
+        detections = pf.detections.from_efficienttam(masks, scores)
+        assert detections[0].masks[0].dtype == bool
 
 
 # ============================================================================
