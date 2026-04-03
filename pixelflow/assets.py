@@ -211,12 +211,22 @@ def _download_file(
             return
 
         except urllib.error.HTTPError as e:
-            # Don't retry 404s
-            if e.code == 404:
+            # Don't retry client errors (4xx)
+            if 400 <= e.code < 500:
                 _cleanup_tmp(tmp)
                 raise DownloadError(
-                    f"File not found: {url} (HTTP 404)"
+                    f"Download failed: {url} (HTTP {e.code})"
                 ) from e
+
+            # Don't retry server errors that return HTML error pages
+            content_type = e.headers.get("Content-Type", "") if e.headers else ""
+            if "text/html" in content_type:
+                _cleanup_tmp(tmp)
+                raise DownloadError(
+                    f"Download failed: {url} "
+                    f"(server returned HTTP {e.code} with HTML error page)"
+                ) from e
+
             last_error = e
         except (urllib.error.URLError, OSError) as e:
             last_error = e
