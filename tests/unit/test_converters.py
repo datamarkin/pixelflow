@@ -609,3 +609,65 @@ class TestConverterEdgeCases:
         """Test converters with empty input."""
         detections = pf.detections.from_datamarkin([])
         assert len(detections) == 0
+
+
+# ============================================================================
+# Falcon Perception Converter Tests
+# ============================================================================
+
+class MockAuxOutput:
+    def __init__(self, bboxes_raw, masks_rle=None, text=None):
+        self.bboxes_raw = bboxes_raw
+        self.masks_rle = masks_rle
+        self.text = text
+
+
+class TestFalconPerceptionConverter:
+    """Test from_falcon_perception converter."""
+
+    def test_even_length_returns_correct_detections(self):
+        """Even-length bboxes_raw produces correct detections."""
+        output = MockAuxOutput(bboxes_raw=[
+            {"x": 0.5, "y": 0.5},
+            {"h": 0.2, "w": 0.4},
+        ])
+        detections = pf.detections.from_falcon_perception(
+            output, image_size=(100, 100), label="cat"
+        )
+        assert len(detections) == 1
+        bbox = detections[0].bbox
+        # normalized cxcywh (0.5,0.5,0.4,0.2) on 100x100 → pixel xyxy
+        assert bbox[0] == pytest.approx(30.0)
+        assert bbox[1] == pytest.approx(40.0)
+        assert bbox[2] == pytest.approx(70.0)
+        assert bbox[3] == pytest.approx(60.0)
+
+    def test_odd_length_warns_and_drops_last_entry(self):
+        """Odd-length bboxes_raw warns and drops the trailing entry."""
+        output = MockAuxOutput(bboxes_raw=[
+            {"x": 0.5, "y": 0.5},
+            {"h": 0.2, "w": 0.4},
+            {"x": 0.3, "y": 0.3},  # incomplete — no size dict
+        ])
+        with pytest.warns(UserWarning, match="odd length"):
+            detections = pf.detections.from_falcon_perception(
+                output, image_size=(100, 100), label="cat"
+            )
+        assert len(detections) == 1
+
+    def test_empty_bboxes_raw_returns_zero_detections(self):
+        """Empty bboxes_raw returns 0 detections without warning."""
+        output = MockAuxOutput(bboxes_raw=[])
+        detections = pf.detections.from_falcon_perception(
+            output, image_size=(100, 100), label="cat"
+        )
+        assert len(detections) == 0
+
+    def test_single_entry_warns_and_returns_zero_detections(self):
+        """Single entry (just center, no size) warns and returns 0 detections."""
+        output = MockAuxOutput(bboxes_raw=[{"x": 0.5, "y": 0.5}])
+        with pytest.warns(UserWarning, match="odd length"):
+            detections = pf.detections.from_falcon_perception(
+                output, image_size=(100, 100), label="cat"
+            )
+        assert len(detections) == 0

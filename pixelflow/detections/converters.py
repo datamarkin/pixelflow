@@ -10,6 +10,7 @@ for downstream processing, visualization, and analysis workflows.
 
 import ast
 import cv2
+import warnings
 import numpy as np
 from typing import (List, Dict, Any, Union, Optional)
 
@@ -874,6 +875,16 @@ def from_rfdetr(
     return from_supervision(supervision_detections, class_names=class_names)
 
 
+def _resize_mask(mask: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Resize a boolean mask to (height, width) using nearest-neighbor interpolation."""
+    if mask.shape[:2] == (height, width):
+        return mask
+    return cv2.resize(
+        mask.astype(np.uint8), (width, height),
+        interpolation=cv2.INTER_NEAREST,
+    ).astype(bool)
+
+
 def _decode_rle(rle: Dict[str, Any]) -> np.ndarray:
     """Decode a COCO RLE dict to a boolean H×W numpy array.
 
@@ -908,7 +919,8 @@ def from_falcon_perception(
         output: AuxOutput object with 'bboxes_raw' attribute (local engine), or dict
                 with 'masks' key (falcon-perception FastAPI server output).
         image_size: Image dimensions as (width, height). Required for local AuxOutput
-                   (bboxes are normalized); ignored for dict format. Default is None.
+                   (bboxes are normalized). For dict format, used to resize masks
+                   if provided. Default is None.
         label: Class label for all detections when using local AuxOutput format.
                Pass the query string you gave the model, e.g. "cat". Default is None.
 
@@ -918,8 +930,10 @@ def from_falcon_perception(
     Raises:
         ValueError: If output format is unrecognized.
         ValueError: If output is AuxOutput and image_size is not provided.
-        ValueError: If bboxes_raw has odd length (malformed interleaved pairs).
         ImportError: If COCO RLE masks are present but pycocotools is not installed.
+
+    Warns:
+        UserWarning: If bboxes_raw has odd length; last incomplete entry is dropped.
 
     Example:
         >>> import pixelflow as pf
@@ -980,6 +994,8 @@ def from_falcon_perception(
         response_model = output.get("model", "falcon-perception")
         response_query = output.get("query", None)
         response_id = output.get("id", None)
+        if image_size is not None:
+            api_w, api_h = image_size
 
         for entry in mask_entries:
             lbl = entry.get("label", "")
@@ -991,7 +1007,10 @@ def from_falcon_perception(
             masks = None
             rle = entry.get("rle", None)
             if rle is not None:
-                masks = [_decode_rle(rle)]
+                mask = _decode_rle(rle)
+                if image_size is not None:
+                    mask = _resize_mask(mask, api_w, api_h)
+                masks = [mask]
 
             detection = Detection(
                 bbox=bbox,
@@ -1026,10 +1045,11 @@ def from_falcon_perception(
         return detections_obj
 
     if len(bboxes_raw) % 2 != 0:
-        raise ValueError(
+        warnings.warn(
             f"bboxes_raw has odd length ({len(bboxes_raw)}); "
-            "expected interleaved {{x,y}} center and {{h,w}} size dicts."
+            "dropping last incomplete entry (likely truncated generation)."
         )
+        bboxes_raw = bboxes_raw[:-1]
 
     img_w, img_h = image_size
     num_detections = len(bboxes_raw) // 2
@@ -1054,7 +1074,7 @@ def from_falcon_perception(
         if masks_rle is not None and i < len(masks_rle):
             rle = masks_rle[i]
             if rle is not None:
-                masks = [_decode_rle(rle)]
+                masks = [_resize_mask(_decode_rle(rle), img_w, img_h)]
 
         detection = Detection(
             bbox=[x1, y1, x2, y2],
