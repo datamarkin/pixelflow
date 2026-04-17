@@ -28,13 +28,44 @@ __all__ = [
     "from_efficienttam"
 ]
 
-# COCO pose keypoint names (17 keypoints)
-COCO_KEYPOINT_NAMES = [
-    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
-    "left_wrist", "right_wrist", "left_hip", "right_hip",
-    "left_knee", "right_knee", "left_ankle", "right_ankle"
-]
+from ..classes import COCO_LABELS
+
+# Derive COCO keypoint names from COCO_LABELS for internal fallback
+_COCO_KEYPOINT_NAMES = [kp["name"] for kp in COCO_LABELS[0]["keypoints"]]
+
+
+def _get_label_info(labels, class_id):
+    """Extract class name and keypoint names from various label formats.
+
+    Supports:
+        List[str]      — ["person", "car"] — index = class_id
+        Dict[int, str] — {0: "person", 1: "car"} — key = class_id
+        List[dict]     — [{"id": 0, "name": "person", "keypoints": [...]}] — search by "id" field
+
+    Returns:
+        tuple: (class_name, kp_names) where kp_names is List[str] or None.
+    """
+    if labels is None or class_id is None:
+        return None, None
+
+    # Rich label format: List[dict] with "id"/"name" keys
+    if isinstance(labels, list) and labels and isinstance(labels[0], dict):
+        for label in labels:
+            if label["id"] == class_id:
+                name = label["name"]
+                kp_names = [kp["name"] for kp in label.get("keypoints", [])] or None
+                return name, kp_names
+        return None, None
+
+    # Dict format: {int: str}
+    if isinstance(labels, dict):
+        return labels.get(class_id), None
+
+    # Simple list format: ["person", "car"]
+    if isinstance(labels, list) and class_id < len(labels):
+        return labels[class_id], None
+
+    return None, None
 
 
 def from_datamarkin(api_response: Dict[str, Any]):
@@ -300,29 +331,33 @@ def from_florence2(
     return detections_obj
 
 
-def from_detectron2(detectron2_results: Dict[str, Any], class_names: Optional[List[str]] = None):
+def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
     """Convert Detectron2 inference results to a Detections object.
 
     Args:
         detectron2_results: Output dict from DefaultPredictor with an 'instances' key.
-        class_names: List of class names indexed by class ID. Default is None.
+        labels: Optional label definitions for class name and keypoint name resolution.
+            Accepts three formats:
+            - List[str]: ["person", "car"] — index = class_id
+            - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
+            - List[dict]: [{"id": 0, "name": "person", "keypoints": [...]}] — rich format
 
     Returns:
-        Detections: Bounding boxes, boolean masks, class IDs, and confidence scores.
+        Detections: Bounding boxes, boolean masks, keypoints, class IDs, and confidence scores.
 
     Example:
         >>> import pixelflow as pf
         >>> outputs = predictor(image)
-        >>> detections = pf.detections.from_detectron2(outputs, class_names=class_names)
+        >>> detections = pf.detections.from_detectron2(outputs, labels=pf.COCO_LABELS)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
     Notes:
         - All tensors are moved to CPU automatically before conversion.
         - Segmentation masks are converted to boolean arrays.
-        - Keypoint conversion is not yet implemented.
+        - Keypoints are converted to KeyPoint objects with names from labels.
     """
-    from .detections import Detections, Detection
+    from .detections import Detections, Detection, KeyPoint
     
     detections_obj = Detections()
     
@@ -364,25 +399,27 @@ def from_detectron2(detectron2_results: Dict[str, Any], class_names: Optional[Li
         # Extract class ID
         class_id = int(classes[i]) if classes is not None else None
 
-        # Extract class name from provided class_names list
-        class_name = None
-        if class_names is not None and class_id is not None:
-            if class_id < len(class_names):
-                class_name = class_names[class_id]
+        # Extract class name and keypoint names from labels
+        class_name, kp_names = _get_label_info(labels, class_id)
 
         # Handle segmentation masks
         mask = None
         if masks is not None:
             mask_data = masks[i].astype(bool)
             mask = mask_data
-        
+
         # Handle keypoints if available
         kpts = None
         if keypoints is not None:
-            # Detectron2 keypoints are in format (x, y, visibility) 
-            kpt_data = keypoints[i]
-            # Convert to PixelFlow KeyPoint format if needed
-            # This would need to be implemented based on your KeyPoint class
+            kpt_data = keypoints[i]  # shape (K, 3): x, y, visibility_score
+            names = kp_names or _COCO_KEYPOINT_NAMES
+            kpts = []
+            for idx, kpt in enumerate(kpt_data):
+                name = names[idx] if idx < len(names) else f"keypoint_{idx}"
+                kpts.append(KeyPoint(
+                    x=int(kpt[0]), y=int(kpt[1]),
+                    name=name, visibility=float(kpt[2]) > 0
+                ))
         
         # Create a Detection object
         detection = Detection(
@@ -401,11 +438,17 @@ def from_detectron2(detectron2_results: Dict[str, Any], class_names: Optional[Li
     return detections_obj
 
 
-def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
+def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
     """Convert Ultralytics YOLO results to a Detections object.
 
     Args:
         ultralytics_results: Single Result or list[Result] from model.predict() or model.track().
+        labels: Optional label definitions to override model class/keypoint names.
+            Accepts three formats:
+            - List[str]: ["person", "car"] — index = class_id
+            - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
+            - List[dict]: [{"id": 0, "name": "person", "keypoints": [...]}] — rich format
+            When provided, overrides result.names for class names and COCO keypoint names.
 
     Returns:
         Detections: Bounding boxes, binary masks, polygon segments, and tracker IDs when available.
@@ -524,9 +567,11 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
         confidence = float(confidences[i])
         class_id = int(class_ids[i])
         
-        # Extract class name from result if available
+        # Extract class name — labels overrides result.names when provided
         class_name = None
-        if hasattr(result, 'names') and result.names:
+        if labels is not None:
+            class_name, _ = _get_label_info(labels, class_id)
+        elif hasattr(result, 'names') and result.names:
             if class_id in result.names:
                 class_name = result.names[class_id]
         
@@ -583,12 +628,18 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]]):
         if has_keypoints and keypoints_data is not None:
             kpts = keypoints_data[i]  # Shape: [17, 3] for detection i
 
+            # Determine keypoint names from labels or fall back to COCO
+            kpt_names = None
+            if labels is not None:
+                _, kpt_names = _get_label_info(labels, class_id)
+            if kpt_names is None:
+                kpt_names = _COCO_KEYPOINT_NAMES
+
             keypoints_list = []
             for kpt_idx, kpt in enumerate(kpts):
                 x, y, conf = kpt[0], kpt[1], kpt[2]
-                # Use visibility threshold (conf > 0.5 means visible)
                 visibility = conf > 0.5
-                name = COCO_KEYPOINT_NAMES[kpt_idx] if kpt_idx < len(COCO_KEYPOINT_NAMES) else f"keypoint_{kpt_idx}"
+                name = kpt_names[kpt_idx] if kpt_idx < len(kpt_names) else f"keypoint_{kpt_idx}"
 
                 keypoint = KeyPoint(
                     x=int(x),
@@ -754,13 +805,17 @@ def from_datamarkin_csv(group: Any, height: int, width: int):
 
 def from_supervision(
     supervision_detections: Any,
-    class_names: Optional[Union[List[str], Dict[int, str]]] = None,
+    labels=None,
 ) -> "Detections":
     """Convert supervision library sv.Detections to a PixelFlow Detections object.
 
     Args:
         supervision_detections: sv.Detections with xyxy, confidence, class_id, mask attributes.
-        class_names: Dict[int, str] or List[str] mapping class IDs to names. Default is None.
+        labels: Optional label definitions for class name resolution.
+            Accepts three formats:
+            - List[str]: ["person", "car"] — index = class_id
+            - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
+            - List[dict]: [{"id": 0, "name": "person"}] — rich format
 
     Returns:
         Detections: Bounding boxes, optional masks, class IDs, and confidence scores.
@@ -770,12 +825,12 @@ def from_supervision(
 
     Example:
         >>> import pixelflow as pf
-        >>> detections = pf.detections.from_supervision(sv_detections, class_names=pf.COCO_CLASSES)
+        >>> detections = pf.detections.from_supervision(sv_detections, labels=pf.COCO_LABELS)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
     Notes:
-        - class_names accepts both Dict[int, str] and List[str].
+        - labels accepts List[str], Dict[int, str], or List[dict] (rich Datamarkin format).
         - confidence, class_id, and mask are optional; missing fields are stored as None.
     """
     from .detections import Detections, Detection
@@ -802,16 +857,10 @@ def from_supervision(
     for i in range(len(xyxy)):
         cid = int(class_id[i]) if class_id is not None else None
 
-        # Resolve class_name from class_names mapping
-        if cid is not None and class_names is not None:
-            if isinstance(class_names, dict):
-                class_name = class_names.get(cid, str(cid))
-            else:
-                class_name = class_names[cid] if cid < len(class_names) else str(cid)
-        elif cid is not None:
+        # Resolve class_name from labels
+        class_name, _ = _get_label_info(labels, cid)
+        if class_name is None and cid is not None:
             class_name = str(cid)
-        else:
-            class_name = None
 
         detection = Detection(
             bbox=xyxy[i].tolist(),  # Convert [x1,y1,x2,y2] numpy array to list
@@ -831,7 +880,7 @@ def from_supervision(
 
 def from_rfdetr(
     supervision_detections: Any,
-    class_names: Optional[Union[List[str], Dict[int, str]]] = None,
+    labels=None,
 ) -> "Detections":
     """
     Convert RF-DETR output to a unified PixelFlow Detections object.
@@ -844,10 +893,11 @@ def from_rfdetr(
         supervision_detections: RF-DETR output (sv.Detections from supervision).
                                Expected to have attributes: xyxy (n,4),
                                confidence (n,), class_id (n,), mask (optional).
-        class_names: Optional mapping from class IDs to human-readable names.
-                     Can be a Dict[int, str] (e.g. pf.COCO_CLASSES) or a List[str]
-                     where the index corresponds to class_id. If None, class_name
-                     defaults to str(class_id) when class_id is available.
+        labels: Optional label definitions for class name resolution.
+            Accepts three formats:
+            - List[str]: ["person", "car"] — index = class_id
+            - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
+            - List[dict]: [{"id": 0, "name": "person"}] — rich format
 
     Returns:
         Detections: PixelFlow Detections container with converted Detection objects.
@@ -862,8 +912,8 @@ def from_rfdetr(
         >>> image = Image.open("image.jpg")
         >>> rfdetr_output = model.predict(image, threshold=0.5)
         >>>
-        >>> # Convert with COCO class names for meaningful labels
-        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output, class_names=pf.COCO_CLASSES)
+        >>> # Convert with COCO labels for meaningful names
+        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output, labels=pf.COCO_LABELS)
         >>> print(f"Detected {len(pf_detections)} objects")
 
     Notes:
@@ -872,7 +922,7 @@ def from_rfdetr(
         - Use this function name if you're working with RF-DETR specifically
     """
     # Delegate to from_supervision for actual conversion
-    return from_supervision(supervision_detections, class_names=class_names)
+    return from_supervision(supervision_detections, labels=labels)
 
 
 def _resize_mask(mask: np.ndarray, width: int, height: int) -> np.ndarray:
