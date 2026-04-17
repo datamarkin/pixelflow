@@ -17,16 +17,32 @@ import pixelflow as pf
 @pytest.fixture
 def mock_ultralytics_result():
     """Create mock Ultralytics YOLO result."""
+    class MockTensor:
+        def __init__(self, data):
+            self._data = np.array(data)
+        def cpu(self):
+            return self
+        def numpy(self):
+            return self._data
+
     class MockBox:
         def __init__(self):
-            self.xyxy = np.array([[100, 100, 200, 200], [300, 150, 400, 280]])
-            self.conf = np.array([0.95, 0.87])
-            self.cls = np.array([0, 2])
+            # data format: [x1, y1, x2, y2, conf, class_id]
+            self.data = MockTensor([
+                [100, 100, 200, 200, 0.95, 0],
+                [300, 150, 400, 280, 0.87, 2],
+            ])
+            self.id = None
+        def __len__(self):
+            return 2
 
     class MockResult:
         def __init__(self):
             self.boxes = MockBox()
             self.names = {0: "person", 2: "car"}
+            self.probs = None
+            self.masks = None
+            self.keypoints = None
 
     return [MockResult()]
 
@@ -34,15 +50,33 @@ def mock_ultralytics_result():
 @pytest.fixture
 def mock_detectron2_output():
     """Create mock Detectron2 output."""
-    return {
-        "instances": type('obj', (object,), {
-            "pred_boxes": type('obj', (object,), {
-                "tensor": np.array([[100, 100, 200, 200], [300, 150, 400, 280]])
-            })(),
-            "scores": np.array([0.95, 0.87]),
-            "pred_classes": np.array([0, 2])
-        })()
-    }
+    class MockTensor:
+        def __init__(self, data):
+            self._data = np.array(data)
+        def numpy(self):
+            return self._data
+
+    class MockBoxes:
+        def __init__(self, data):
+            self.tensor = MockTensor(data)
+
+    class MockInstances:
+        def __init__(self):
+            self.pred_boxes = MockBoxes([[100, 100, 200, 200], [300, 150, 400, 280]])
+            self.scores = MockTensor([0.95, 0.87])
+            self.pred_classes = MockTensor([0, 2])
+            self._fields = {"pred_boxes", "scores", "pred_classes"}
+
+        def to(self, device):
+            return self
+
+        def has(self, field):
+            return field in self._fields
+
+        def __len__(self):
+            return 2
+
+    return {"instances": MockInstances()}
 
 
 @pytest.fixture
@@ -123,17 +157,35 @@ class TestUltralyticsConverter:
         """Test conversion with empty results."""
         class MockBox:
             def __init__(self):
-                self.xyxy = np.array([])
-                self.conf = np.array([])
-                self.cls = np.array([])
+                pass
+            def __len__(self):
+                return 0
 
         class MockResult:
             def __init__(self):
                 self.boxes = MockBox()
                 self.names = {}
+                self.probs = None
 
         detections = pf.detections.from_ultralytics([MockResult()])
         assert len(detections) == 0
+
+    def test_from_ultralytics_with_labels(self, mock_ultralytics_result):
+        """Test that labels parameter overrides result.names."""
+        labels = {0: "human", 2: "vehicle"}
+        detections = pf.detections.from_ultralytics(mock_ultralytics_result, labels=labels)
+        assert detections[0].class_name == "human"
+        assert detections[1].class_name == "vehicle"
+
+    def test_from_ultralytics_with_rich_labels(self, mock_ultralytics_result):
+        """Test ultralytics conversion with rich Datamarkin format labels."""
+        labels = [
+            {"id": 0, "name": "person"},
+            {"id": 2, "name": "car"},
+        ]
+        detections = pf.detections.from_ultralytics(mock_ultralytics_result, labels=labels)
+        assert detections[0].class_name == "person"
+        assert detections[1].class_name == "car"
 
 
 # ============================================================================
@@ -151,16 +203,144 @@ class TestDetectron2Converter:
         assert detections[0].confidence == 0.95
         assert detections[0].class_id == 0
 
-    def test_from_detectron2_with_class_names(self, mock_detectron2_output):
-        """Test Detectron2 conversion with class name mapping."""
-        class_names = {0: "person", 2: "car"}
+    def test_from_detectron2_with_labels_dict(self, mock_detectron2_output):
+        """Test Detectron2 conversion with Dict[int, str] labels."""
+        labels = {0: "person", 2: "car"}
         detections = pf.detections.from_detectron2(
-            mock_detectron2_output,
-            class_names=class_names
+            mock_detectron2_output, labels=labels
         )
-
         assert detections[0].class_name == "person"
         assert detections[1].class_name == "car"
+
+    def test_from_detectron2_with_labels_list(self, mock_detectron2_output):
+        """Test Detectron2 conversion with List[str] labels."""
+        labels = ["person", "bicycle", "car"]
+        detections = pf.detections.from_detectron2(
+            mock_detectron2_output, labels=labels
+        )
+        assert detections[0].class_name == "person"
+        assert detections[1].class_name == "car"
+
+    def test_from_detectron2_with_rich_labels(self, mock_detectron2_output):
+        """Test Detectron2 conversion with rich Datamarkin format labels."""
+        labels = [
+            {"id": 0, "name": "person", "keypoints": [{"id": 0, "name": "nose"}]},
+            {"id": 2, "name": "car"},
+        ]
+        detections = pf.detections.from_detectron2(
+            mock_detectron2_output, labels=labels
+        )
+        assert detections[0].class_name == "person"
+        assert detections[1].class_name == "car"
+
+    def test_from_detectron2_with_keypoints(self):
+        """Test Detectron2 keypoint conversion to KeyPoint objects."""
+        class MockTensor:
+            def __init__(self, data):
+                self._data = np.array(data)
+            def numpy(self):
+                return self._data
+
+        class MockBoxes:
+            def __init__(self, data):
+                self.tensor = MockTensor(data)
+
+        class MockInstances:
+            def __init__(self):
+                self.pred_boxes = MockBoxes([[100, 100, 200, 200]])
+                self.scores = MockTensor([0.95])
+                self.pred_classes = MockTensor([0])
+                # 3 keypoints: (x, y, visibility)
+                self.pred_keypoints = MockTensor([[[150, 120, 2.0], [140, 115, 1.0], [160, 115, 0.0]]])
+                self._fields = {"pred_boxes", "scores", "pred_classes", "pred_keypoints"}
+
+            def to(self, device):
+                return self
+            def has(self, field):
+                return field in self._fields
+            def __len__(self):
+                return 1
+
+        labels = [{"id": 0, "name": "person", "keypoints": [
+            {"id": 0, "name": "nose"},
+            {"id": 1, "name": "left_eye"},
+            {"id": 2, "name": "right_eye"},
+        ]}]
+
+        detections = pf.detections.from_detectron2(
+            {"instances": MockInstances()}, labels=labels
+        )
+        assert len(detections) == 1
+        assert detections[0].keypoints is not None
+        assert len(detections[0].keypoints) == 3
+        assert detections[0].keypoints[0].name == "nose"
+        assert detections[0].keypoints[0].x == 150
+        assert detections[0].keypoints[0].visibility is True  # 2.0 > 0
+        assert detections[0].keypoints[1].name == "left_eye"
+        assert detections[0].keypoints[1].visibility is True  # 1.0 > 0
+        assert detections[0].keypoints[2].name == "right_eye"
+        assert detections[0].keypoints[2].visibility is False  # 0.0 > 0 = False
+
+
+# ============================================================================
+# _get_label_info Helper Tests
+# ============================================================================
+
+class TestGetLabelInfo:
+    """Tests for _get_label_info helper function."""
+
+    def test_list_format(self):
+        from pixelflow.detections.converters import _get_label_info
+        name, kp_names = _get_label_info(["person", "car", "dog"], 1)
+        assert name == "car"
+        assert kp_names is None
+
+    def test_dict_format(self):
+        from pixelflow.detections.converters import _get_label_info
+        name, kp_names = _get_label_info({0: "person", 5: "car"}, 5)
+        assert name == "car"
+        assert kp_names is None
+
+    def test_dict_nonsequential_keys(self):
+        from pixelflow.detections.converters import _get_label_info
+        name, kp_names = _get_label_info({0: "person", 91: "banana"}, 91)
+        assert name == "banana"
+
+    def test_rich_format(self):
+        from pixelflow.detections.converters import _get_label_info
+        labels = [{"id": 0, "name": "person", "keypoints": [{"id": 0, "name": "nose"}]}]
+        name, kp_names = _get_label_info(labels, 0)
+        assert name == "person"
+        assert kp_names == ["nose"]
+
+    def test_rich_format_no_keypoints(self):
+        from pixelflow.detections.converters import _get_label_info
+        labels = [{"id": 1, "name": "bicycle"}]
+        name, kp_names = _get_label_info(labels, 1)
+        assert name == "bicycle"
+        assert kp_names is None
+
+    def test_missing_id_returns_none(self):
+        from pixelflow.detections.converters import _get_label_info
+        name, kp_names = _get_label_info(["person", "car"], 99)
+        assert name is None
+        assert kp_names is None
+
+    def test_none_labels(self):
+        from pixelflow.detections.converters import _get_label_info
+        name, kp_names = _get_label_info(None, 0)
+        assert name is None
+        assert kp_names is None
+
+    def test_none_class_id(self):
+        from pixelflow.detections.converters import _get_label_info
+        name, kp_names = _get_label_info(["person"], None)
+        assert name is None
+
+    def test_empty_list(self):
+        from pixelflow.detections.converters import _get_label_info
+        name, kp_names = _get_label_info([], 0)
+        assert name is None
 
 
 # ============================================================================
