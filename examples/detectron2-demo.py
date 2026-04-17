@@ -33,7 +33,7 @@ print("Creating predictor...")
 predictor = DefaultPredictor(cfg)
 
 metadata = MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
-class_names = metadata.get("thing_classes", None)
+labels = metadata.get("thing_classes", None)
 
 tracker = ByteTracker(
     track_activation_threshold=0.25,
@@ -99,12 +99,7 @@ while True:
         continue
     
     outputs = predictor(bgr_frame)
-    results = from_detectron2(outputs)
-    
-    if class_names:
-        for pred in results.detections:
-            if pred.class_id is not None and pred.class_id < len(class_names):
-                pred.class_name = class_names[pred.class_id]
+    results = from_detectron2(outputs, labels=labels)
     
     results = tracker.update(results)
     results = zones.update(results)

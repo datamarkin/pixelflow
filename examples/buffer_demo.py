@@ -33,7 +33,7 @@ print("Creating predictor...")
 predictor = DefaultPredictor(cfg)
 
 metadata = MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
-class_names = metadata.get("thing_classes", None)
+labels = metadata.get("thing_classes", None)
 
 # Initialize Buffer with 5 frames
 # This will give us 2 past frames, 1 current, 2 future frames
@@ -72,12 +72,7 @@ while True:
 
     # Run inference on current frame (Detectron2 expects BGR)
     outputs = predictor(bgr_frame)
-    results = from_detectron2(outputs)
-    
-    if class_names:
-        for pred in results.detections:
-            if pred.class_id is not None and pred.class_id < len(class_names):
-                pred.class_name = class_names[pred.class_id]
+    results = from_detectron2(outputs, labels=labels)
     
     # Buffer the frame and results
     # Returns middle frame/results once buffer is full
