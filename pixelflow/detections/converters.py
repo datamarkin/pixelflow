@@ -18,6 +18,7 @@ __all__ = [
     "from_datamarkin",
     "from_florence2",
     "from_detectron2",
+    "from_mayaku",
     "from_ultralytics",
     "from_transformers",
     "from_sam",
@@ -433,6 +434,117 @@ def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
         )
 
         # Add the detection to the Detections object
+        detections_obj.add_detection(detection)
+
+    return detections_obj
+
+
+def from_mayaku(mayaku_instances, labels=None):
+    """Convert Mayaku inference results to a Detections object.
+
+    Mayaku is a clean Detectron2 reimplementation: same `Instances`
+    container, same field names (`pred_boxes`, `scores`, `pred_classes`,
+    `pred_masks`, `pred_keypoints`), same xyxy absolute box format, same
+    `(N, H, W)` boolean mask layout after postprocess, same `(N, K, 3)`
+    keypoint layout with `(x, y, score)` columns. The only divergence
+    that matters here: Mayaku's `Predictor.__call__` returns the
+    `Instances` directly, whereas Detectron2's `DefaultPredictor` wraps
+    it in a `{"instances": ...}` dict.
+
+    Args:
+        mayaku_instances: The `Instances` returned by Mayaku's
+            `Predictor.__call__` (NOT a dict). If you have a wrapper
+            that mimics D2's dict shape, pass `wrapper["instances"]`.
+        labels: Optional label definitions for class name and keypoint
+            name resolution. Accepts the same three formats as
+            `from_detectron2`:
+            - List[str]: ["person", "car"] — index = class_id
+            - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
+            - List[dict]: [{"id": 0, "name": "person", "keypoints": [...]}]
+
+    Returns:
+        Detections: Bounding boxes, boolean masks, keypoints, class IDs,
+        and confidence scores in PixelFlow's unified format.
+
+    Example:
+        >>> import pixelflow as pf
+        >>> from mayaku.inference import Predictor
+        >>> from mayaku.utils.image import read_image
+        >>> instances = predictor(read_image("photo.jpg"))   # mayaku is RGB-native
+        >>> detections = pf.detections.from_mayaku(instances, labels=pf.COCO_LABELS)
+        >>> for det in detections:
+        ...     print(f"{det.class_name}: {det.confidence:.2f}")
+
+    Notes:
+        - Mayaku expects RGB input. Reading via `cv2.imread` gives BGR
+          and silently degrades detection quality — use
+          `mayaku.utils.image.read_image` or swap channels manually.
+        - All tensors are moved to CPU automatically before conversion.
+        - Mayaku auto-runs `detector_postprocess` so coordinates and
+          masks are already in original image space.
+    """
+    from .detections import Detections, Detection, KeyPoint
+
+    detections_obj = Detections()
+
+    # Mayaku's Predictor returns Instances directly — no dict unwrap.
+    instances = mayaku_instances.to("cpu")
+
+    if len(instances) == 0:
+        return detections_obj
+
+    # Bounding boxes — XYXY absolute pixel coords (same as D2).
+    boxes = instances.pred_boxes.tensor.numpy() if instances.has("pred_boxes") else None
+
+    # Confidence scores — float ∈ [0, 1].
+    scores = instances.scores.numpy() if instances.has("scores") else None
+
+    # Class IDs — int64, 0-indexed.
+    classes = instances.pred_classes.numpy() if instances.has("pred_classes") else None
+
+    # Segmentation masks — (N, H, W) bool after postprocess.
+    masks = None
+    if instances.has("pred_masks"):
+        masks = instances.pred_masks.numpy()
+
+    # Keypoints — (N, K, 3) with (x, y, score) columns.
+    keypoints = None
+    if instances.has("pred_keypoints"):
+        keypoints = instances.pred_keypoints.numpy()
+
+    for i in range(len(instances)):
+        bbox = boxes[i].tolist() if boxes is not None else None
+        confidence = float(scores[i]) if scores is not None else None
+        class_id = int(classes[i]) if classes is not None else None
+
+        class_name, kp_names = _get_label_info(labels, class_id)
+
+        mask = None
+        if masks is not None:
+            mask = masks[i].astype(bool)
+
+        kpts = None
+        if keypoints is not None:
+            kpt_data = keypoints[i]  # shape (K, 3): x, y, score
+            names = kp_names or _COCO_KEYPOINT_NAMES
+            kpts = []
+            for idx, kpt in enumerate(kpt_data):
+                name = names[idx] if idx < len(names) else f"keypoint_{idx}"
+                kpts.append(KeyPoint(
+                    x=int(kpt[0]), y=int(kpt[1]),
+                    name=name, visibility=float(kpt[2]) > 0
+                ))
+
+        detection = Detection(
+            bbox=bbox,
+            masks=[mask] if mask is not None else None,
+            segments=None,
+            keypoints=kpts,
+            class_id=class_id,
+            class_name=class_name,
+            confidence=confidence
+        )
+
         detections_obj.add_detection(detection)
 
     return detections_obj
