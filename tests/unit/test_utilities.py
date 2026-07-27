@@ -198,72 +198,82 @@ class TestDisplayVideo:
 # ============================================================================
 
 class TestBuffer:
-    """Tests for Buffer class (frame buffering)."""
+    """Tests for Buffer — a rolling window that returns the delayed middle frame."""
 
     def test_buffer_creation(self):
-        """Test creating buffer."""
+        """A fresh buffer holds nothing and has a delay of frames // 2."""
         buffer = pf.Buffer(frames=5)
 
-        assert buffer.size == 5
-        assert len(buffer) == 0
+        assert buffer.current_size == 0
+        assert buffer.frames_processed == 0
+        assert buffer.delay == 2
 
-    def test_buffer_append(self, sample_image):
-        """Test appending frames to buffer."""
+    def test_buffer_fills_to_capacity(self, sample_image):
+        """update() accumulates until capacity, then holds steady."""
         buffer = pf.Buffer(frames=3)
 
-        buffer.append(sample_image)
-        assert len(buffer) == 1
+        buffer.update("r0", sample_image)
+        assert buffer.current_size == 1
 
-        buffer.append(sample_image)
-        buffer.append(sample_image)
-        assert len(buffer) == 3
+        buffer.update("r1", sample_image)
+        buffer.update("r2", sample_image)
+        assert buffer.current_size == 3
 
-    def test_buffer_overflow(self, sample_image):
-        """Test buffer behavior when exceeding size."""
+        # Beyond capacity the oldest entries are evicted.
+        buffer.update("r3", sample_image)
+        assert buffer.current_size == 3
+        assert buffer.frames_processed == 4
+
+    def test_buffer_returns_delayed_middle_frame(self, sample_image):
+        """Once full, update() returns the middle (delayed) entry."""
         buffer = pf.Buffer(frames=3)
 
-        # Add 5 frames to buffer of size 3
-        for i in range(5):
-            buffer.append(sample_image)
+        buffer.update("r0", sample_image)
+        buffer.update("r1", sample_image)
+        results, frame = buffer.update("r2", sample_image)
 
-        # Should only keep last 3
-        assert len(buffer) == 3
+        # With 3 frames buffered, the middle one is r1.
+        assert results == "r1"
+        assert isinstance(frame, np.ndarray)
 
-    def test_buffer_get_frames(self, sample_image):
-        """Test retrieving frames from buffer."""
+    def test_buffer_get_buffer_contents(self, sample_image):
+        """get_buffer_contents returns copies of both buffers."""
         buffer = pf.Buffer(frames=5)
 
         for i in range(3):
-            buffer.append(sample_image)
+            buffer.update(f"r{i}", sample_image)
 
-        frames = buffer.get_frames()
+        results, frames = buffer.get_buffer_contents()
+        assert results == ["r0", "r1", "r2"]
         assert len(frames) == 3
         assert all(isinstance(f, np.ndarray) for f in frames)
 
-    def test_buffer_clear(self, sample_image):
-        """Test clearing buffer."""
+    def test_buffer_temporal_context_requires_full_buffer(self, sample_image):
+        """Temporal context is only available once the buffer is full."""
+        buffer = pf.Buffer(frames=3)
+
+        buffer.update("r0", sample_image)
+        assert buffer.get_temporal_context() is None
+
+        buffer.update("r1", sample_image)
+        buffer.update("r2", sample_image)
+
+        context = buffer.get_temporal_context()
+        assert context is not None
+        assert context["current_results"] == "r1"
+        assert context["past_results"] == ["r0"]
+        assert context["future_results"] == ["r2"]
+
+    def test_buffer_reset(self, sample_image):
+        """reset() empties the buffer and the processed counter."""
         buffer = pf.Buffer(frames=5)
 
-        buffer.append(sample_image)
-        buffer.append(sample_image)
+        buffer.update("r0", sample_image)
+        buffer.update("r1", sample_image)
 
-        buffer.clear()
-        assert len(buffer) == 0
-
-    def test_buffer_indexing(self, sample_image):
-        """Test accessing buffer by index."""
-        buffer = pf.Buffer(frames=5)
-
-        buffer.append(sample_image)
-        buffer.append(sample_image)
-
-        # Get most recent frame
-        frame = buffer[-1]
-        assert isinstance(frame, np.ndarray)
-
-        # Get oldest frame
-        oldest = buffer[0]
-        assert isinstance(oldest, np.ndarray)
+        buffer.reset()
+        assert buffer.current_size == 0
+        assert buffer.frames_processed == 0
 
 
 # ============================================================================
@@ -273,48 +283,52 @@ class TestBuffer:
 class TestSlicedInference:
     """Tests for SlicedInference (large image processing)."""
 
-    def test_slicer_creation(self, sample_image):
-        """Test creating SlicedInference."""
+    def test_slicer_creation(self):
+        """Slice geometry is configured on the slicer, not bound to an image."""
         slicer = pf.SlicedInference(
-            image=sample_image,
-            slice_size=(320, 320),
-            overlap=0.2
+            slice_height=320,
+            slice_width=320,
+            overlap_ratio_h=0.2,
+            overlap_ratio_w=0.2
         )
 
-        assert slicer.slice_size == (320, 320)
-        assert slicer.overlap == 0.2
+        assert slicer.slice_height == 320
+        assert slicer.slice_width == 320
+        assert slicer.overlap_ratio_h == 0.2
 
     def test_slicer_generates_slices(self, sample_image):
-        """Test that slicer generates image slices."""
+        """generate_slices() tiles the frame from its dimensions."""
         slicer = pf.SlicedInference(
-            image=sample_image,
-            slice_size=(320, 320),
-            overlap=0.2
+            slice_height=320,
+            slice_width=320,
+            overlap_ratio_h=0.2,
+            overlap_ratio_w=0.2
         )
 
-        slices = list(slicer.get_slices())
+        slices = slicer.generate_slices(
+            image_height=sample_image.shape[0],
+            image_width=sample_image.shape[1]
+        )
 
-        # Should have multiple slices for 640x480 image
+        # Should have multiple slices for a 640x480 image
         assert len(slices) >= 4
 
     def test_slicer_slice_properties(self, sample_image):
-        """Test properties of generated slices."""
-        slicer = pf.SlicedInference(
-            image=sample_image,
-            slice_size=(320, 320)
-        )
+        """Each slice is within bounds and no larger than the slice size."""
+        slicer = pf.SlicedInference(slice_height=320, slice_width=320)
 
-        for slice_img, x_offset, y_offset in slicer.get_slices():
-            # Each slice should be correct size (or smaller at edges)
-            assert slice_img.shape[0] <= 320
-            assert slice_img.shape[1] <= 320
-            # Offsets should be non-negative
-            assert x_offset >= 0
-            assert y_offset >= 0
+        h, w = sample_image.shape[:2]
+        for x1, y1, x2, y2, slice_id in slicer.generate_slices(h, w):
+            assert 0 <= x1 < x2 <= w
+            assert 0 <= y1 < y2 <= h
+            assert (x2 - x1) <= 320
+            assert (y2 - y1) <= 320
+            assert isinstance(slice_id, int)
 
     def test_auto_slice_size(self, sample_image):
-        """Test automatic slice size calculation."""
-        slice_size = pf.auto_slice_size(sample_image)
+        """auto_slice_size takes explicit height/width, not an image."""
+        h, w = sample_image.shape[:2]
+        slice_size = pf.auto_slice_size(image_height=h, image_width=w)
 
         # Should return reasonable slice size
         assert isinstance(slice_size, tuple)
@@ -328,49 +342,46 @@ class TestSlicedInference:
 # ============================================================================
 
 class TestSmoother:
-    """Tests for trajectory smoothing functions."""
+    """Tests for smooth() — temporal detection smoothing over a Buffer."""
 
-    def test_smooth_basic(self):
-        """Test basic trajectory smoothing."""
-        # Create noisy trajectory
-        trajectory = np.array([
-            [100, 100],
-            [102, 98],
-            [105, 103],
-            [107, 97],
-            [110, 101]
-        ], dtype=np.float32)
+    @staticmethod
+    def _dets(bbox, tracker_id=1):
+        dets = pf.detections.Detections()
+        dets.add_detection(pf.detections.Detection(
+            bbox=bbox, class_id=0, confidence=0.9, tracker_id=tracker_id
+        ))
+        return dets
 
-        smoothed = pf.smooth(trajectory, window_size=3)
+    def test_smooth_returns_raw_until_buffer_fills(self, sample_image):
+        """Without full temporal context, smooth() passes results through."""
+        buffer = pf.Buffer(frames=3)
+        buffer.update(self._dets([100, 100, 200, 200]), sample_image)
 
-        assert smoothed.shape == trajectory.shape
-        # Smoothed should be close to original but less noisy
-        assert isinstance(smoothed, np.ndarray)
+        result = pf.smooth(buffer)
 
-    def test_smooth_with_different_window_sizes(self):
-        """Test smoothing with various window sizes."""
-        trajectory = np.random.rand(20, 2) * 100
+        assert isinstance(result, pf.detections.Detections)
 
-        smoothed_small = pf.smooth(trajectory, window_size=3)
-        smoothed_large = pf.smooth(trajectory, window_size=7)
+    def test_smooth_averages_jitter_across_frames(self, sample_image):
+        """A jittery box is pulled toward its temporal neighbours."""
+        buffer = pf.Buffer(frames=3)
+        buffer.update(self._dets([100, 100, 200, 200]), sample_image)
+        buffer.update(self._dets([140, 100, 240, 200]), sample_image)  # jitter
+        buffer.update(self._dets([100, 100, 200, 200]), sample_image)
 
-        # Larger window should produce smoother result
-        assert smoothed_small.shape == smoothed_large.shape
+        smoothed = pf.smooth(buffer)
 
-    def test_smooth_preserves_endpoints(self):
-        """Test that smoothing preserves start and end points."""
-        trajectory = np.array([
-            [0, 0],
-            [10, 10],
-            [20, 15],
-            [30, 30]
-        ], dtype=np.float32)
+        assert len(smoothed) == 1
+        # The middle frame's x1 of 140 is pulled back toward the 100s.
+        assert smoothed[0].bbox[0] < 140
+        assert smoothed[0].tracker_id == 1
 
-        smoothed = pf.smooth(trajectory, window_size=3)
+    def test_smooth_rejects_out_of_range_decay(self, sample_image):
+        """temporal_weight_decay is validated to [0.1, 1.0]."""
+        buffer = pf.Buffer(frames=3)
+        buffer.update(self._dets([100, 100, 200, 200]), sample_image)
 
-        # Endpoints should be preserved or very close
-        # (depending on smoothing method)
-        assert smoothed.shape == trajectory.shape
+        with pytest.raises(ValueError):
+            pf.smooth(buffer, temporal_weight_decay=1.5)
 
 
 # ============================================================================
@@ -378,7 +389,16 @@ class TestSmoother:
 # ============================================================================
 
 class TestTimer:
-    """Tests for TimeTracker utility."""
+    """Tests for TimeTracker — per-tracker_id duration accounting."""
+
+    @staticmethod
+    def _dets(tracker_ids):
+        dets = pf.detections.Detections()
+        for tid in tracker_ids:
+            dets.add_detection(pf.detections.Detection(
+                bbox=[100, 100, 200, 200], class_id=0, confidence=0.9, tracker_id=tid
+            ))
+        return dets
 
     def test_timer_creation(self):
         """Test creating TimeTracker."""
@@ -386,72 +406,45 @@ class TestTimer:
 
         assert timer is not None
 
-    def test_timer_start_stop(self):
-        """Test basic start/stop timing."""
+    def test_update_stamps_timing_fields(self):
+        """update() populates total_time and first_seen_time in-place."""
         timer = pf.TimeTracker()
 
-        timer.start("operation1")
-        time.sleep(0.01)  # Sleep 10ms
-        timer.stop("operation1")
+        dets = timer.update(self._dets([1, 2]))
 
-        elapsed = timer.get_time("operation1")
-        assert elapsed > 0.0
-        assert elapsed >= 0.01  # At least 10ms
+        for det in dets:
+            assert det.first_seen_time is not None
+            assert det.total_time >= 0.0
 
-    def test_timer_multiple_operations(self):
-        """Test timing multiple operations."""
+    def test_total_time_accumulates_across_frames(self):
+        """A tracker seen again later reports a larger total_time."""
         timer = pf.TimeTracker()
 
-        timer.start("op1")
-        time.sleep(0.01)
-        timer.stop("op1")
-
-        timer.start("op2")
+        timer.update(self._dets([1]))
         time.sleep(0.02)
-        timer.stop("op2")
+        dets = timer.update(self._dets([1]))
 
-        assert timer.get_time("op1") < timer.get_time("op2")
+        assert dets[0].total_time > 0.0
 
-    def test_timer_get_all_times(self):
-        """Test getting all timed operations."""
+    def test_get_tracker_stats(self):
+        """Per-tracker stats are queryable after an update."""
         timer = pf.TimeTracker()
+        timer.update(self._dets([7]))
 
-        timer.start("op1")
-        timer.stop("op1")
+        stats = timer.get_tracker_stats(7)
 
-        timer.start("op2")
-        timer.stop("op2")
+        assert isinstance(stats, dict)
 
-        all_times = timer.get_all_times()
-
-        assert "op1" in all_times
-        assert "op2" in all_times
-
-    def test_timer_reset(self):
-        """Test resetting timer."""
+    def test_reset_clears_tracking_state(self):
+        """reset() drops accumulated per-tracker state."""
         timer = pf.TimeTracker()
-
-        timer.start("op1")
-        timer.stop("op1")
+        timer.update(self._dets([1]))
 
         timer.reset()
 
-        all_times = timer.get_all_times()
-        assert len(all_times) == 0
-
-    def test_timer_context_manager(self):
-        """Test timer as context manager (if supported)."""
-        timer = pf.TimeTracker()
-
-        try:
-            with timer.time("operation"):
-                time.sleep(0.01)
-
-            elapsed = timer.get_time("operation")
-            assert elapsed >= 0.01
-        except AttributeError:
-            # May not support context manager
-            pass
+        # After a reset the tracker is unknown again, so it restarts at ~0.
+        dets = timer.update(self._dets([1]))
+        assert dets[0].total_time == pytest.approx(0.0, abs=0.5)
 
 
 # ============================================================================
@@ -570,12 +563,10 @@ class TestUtilityEdgeCases:
 
     def test_slicer_with_slice_larger_than_image(self, small_image):
         """Test slicer with slice size larger than image."""
-        slicer = pf.SlicedInference(
-            image=small_image,
-            slice_size=(500, 500)
-        )
+        slicer = pf.SlicedInference(slice_height=500, slice_width=500)
 
-        slices = list(slicer.get_slices())
+        h, w = small_image.shape[:2]
+        slices = slicer.generate_slices(image_height=h, image_width=w)
 
         # Should still return at least one slice (the whole image)
         assert len(slices) >= 1
