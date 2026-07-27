@@ -3,6 +3,9 @@ Detection-Aware Transformations.
 
 Functions that transform both images and detections together, keeping coordinates synchronized.
 All functions return (image, detections) tuple except crop_around_detections.
+
+Transforms are non-destructive: the Detections passed in is never modified, and
+the returned Detections is an independent deep copy.
 """
 
 import cv2
@@ -90,7 +93,9 @@ def rotate_detections(
     rotation_matrix[0, 2] += (new_w / 2) - center[0]
     rotation_matrix[1, 2] += (new_h / 2) - center[1]
 
-    # Transform detections in-place using rotation matrix
+    # Work on a copy so the caller's Detections are never mutated.
+    detections = detections.copy()
+
     for detection in detections:
         # Transform bbox
         if detection.bbox is not None:
@@ -231,7 +236,9 @@ def flip_horizontal_detections(
     # Flip image using image.py function
     flipped_img = image_transforms.flip_horizontal(image)
 
-    # Transform detections in-place
+    # Work on a copy so the caller's Detections are never mutated.
+    detections = detections.copy()
+
     for detection in detections:
         # Transform bbox
         if detection.bbox is not None:
@@ -341,7 +348,9 @@ def flip_vertical_detections(
     # Flip image using image.py function
     flipped_img = image_transforms.flip_vertical(image)
 
-    # Transform detections in-place
+    # Work on a copy so the caller's Detections are never mutated.
+    detections = detections.copy()
+
     for detection in detections:
         # Transform bbox
         if detection.bbox is not None:
@@ -769,9 +778,11 @@ def update_bbox_from_keypoints(
         - Operates on ALL detections in the container
         - Skips detections without keypoints
         - If keypoint_names specified but not found, detection is skipped
-        - Detections are modified IN-PLACE for performance
-        - Use detections.copy() if you need to preserve the original
+        - Returns a new Detections; the input is left unmodified
     """
+    # Work on a copy so the caller's Detections are never mutated.
+    detections = detections.copy()
+
     for detection in detections:
         # Skip if no keypoints
         if detection.keypoints is None or len(detection.keypoints) == 0:
@@ -854,9 +865,11 @@ def add_padding(
     Note:
         - Operates on ALL detections in the container
         - Padding can extend bbox beyond image boundaries
-        - Detections are modified IN-PLACE for performance
-        - Use detections.copy() if you need to preserve the original
+        - Returns a new Detections; the input is left unmodified
     """
+    # Work on a copy so the caller's Detections are never mutated.
+    detections = detections.copy()
+
     for detection in detections:
         if detection.bbox is None:
             # No bbox, skip this detection
