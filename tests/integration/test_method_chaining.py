@@ -72,95 +72,6 @@ class TestFilterChaining:
         assert len(result) == 0
 
 
-# ============================================================================
-# OCR Filter Chaining Tests
-# ============================================================================
-
-@pytest.mark.integration
-class TestOCRFilterChaining:
-    """Tests for chaining OCR-specific filters."""
-
-    def test_ocr_filter_chain(self):
-        """Test chaining OCR filters."""
-        # Create OCR detections
-        detections = pf.detections.Detections()
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 100, 300, 150],
-            text="Invoice #12345",
-            text_confidence=0.95,
-            text_language="en",
-            text_level="line",
-            text_order=1
-        ))
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 160, 250, 200],
-            text="total amount",
-            text_confidence=0.65,
-            text_language="en",
-            text_level="word",
-            text_order=2
-        ))
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 210, 280, 250],
-            text="Subtotal",
-            text_confidence=0.88,
-            text_language="es",
-            text_level="word",
-            text_order=3
-        ))
-
-        # Chain OCR filters
-        result = (detections
-                 .filter_by_text_confidence(0.8)
-                 .filter_by_text_language("en")
-                 .filter_by_text_contains("Invoice"))
-
-        assert len(result) == 1
-        assert result[0].text == "Invoice #12345"
-
-    def test_ocr_sort_and_filter_chain(self):
-        """Test combining sorting and filtering for OCR."""
-        detections = pf.detections.Detections()
-
-        # Add out of order
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 200, 200, 240],
-            text="Third",
-            text_order=3,
-            text_confidence=0.9
-        ))
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 100, 200, 140],
-            text="First",
-            text_order=1,
-            text_confidence=0.95
-        ))
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 150, 200, 190],
-            text="Second",
-            text_order=2,
-            text_confidence=0.7
-        ))
-
-        # Filter then sort
-        result = (detections
-                 .filter_by_text_confidence(0.85)
-                 .sort_by_text_order())
-
-        assert len(result) == 2
-        assert result[0].text == "First"
-        assert result[1].text == "Third"
-
-
-# ============================================================================
-# Tracking Filter Chaining Tests
-# ============================================================================
-
 @pytest.mark.integration
 class TestTrackingFilterChaining:
     """Tests for chaining tracking-related filters."""
@@ -294,14 +205,6 @@ class TestSerialization:
             assert "name" in kp
             assert "visibility" in kp
 
-    def test_ocr_detection_serialization(self, sample_ocr_detection):
-        """Test serialization of OCR detection."""
-        data = sample_ocr_detection.to_dict()
-
-        assert "text" in data
-        assert "text_confidence" in data
-        assert "text_language" in data
-        assert "text_level" in data
 
     def test_full_pipeline_with_serialization(self, sample_detections):
         """Test processing pipeline with serialization."""
@@ -404,53 +307,6 @@ class TestComplexWorkflows:
         assert annotated.shape == img.shape
         assert isinstance(json.loads(results), list)
 
-    def test_ocr_extraction_workflow(self):
-        """Test complete OCR extraction workflow."""
-        # Create OCR detections
-        detections = pf.detections.Detections()
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 50, 300, 90],
-            text="Document Title",
-            text_confidence=0.95,
-            text_level="line",
-            text_order=1
-        ))
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 100, 250, 140],
-            text="Section 1",
-            text_confidence=0.88,
-            text_level="line",
-            text_order=2
-        ))
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 150, 350, 190],
-            text="Some content here",
-            text_confidence=0.92,
-            text_level="line",
-            text_order=3
-        ))
-
-        # Process chain
-        processed = (detections
-                    .filter_by_text_confidence(0.85)
-                    .sort_by_text_order())
-
-        # Extract text in order
-        document_text = '\n'.join([d.text for d in processed if d.text])
-
-        # Serialize
-        results = processed.to_json()
-
-        assert "Document Title" in document_text
-        assert isinstance(json.loads(results), list)
-
-
-# ============================================================================
-# Edge Case Workflows
-# ============================================================================
 
 @pytest.mark.integration
 class TestEdgeCaseWorkflows:

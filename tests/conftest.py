@@ -187,27 +187,6 @@ def sample_zones() -> pf.Zones:
     return zones
 
 
-# ============================================================================
-# OCR Fixtures
-# ============================================================================
-
-@pytest.fixture
-def sample_ocr_detection() -> pf.detections.Detection:
-    """Create a detection with OCR data."""
-    return pf.detections.Detection(
-        bbox=[100, 100, 300, 150],
-        confidence=0.95,
-        text="Sample Text",
-        text_confidence=0.92,
-        text_language="en",
-        text_level="word"
-    )
-
-
-# ============================================================================
-# Tracking Fixtures
-# ============================================================================
-
 @pytest.fixture
 def tracked_detections() -> pf.detections.Detections:
     """Create detections with tracking IDs."""

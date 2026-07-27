@@ -99,24 +99,6 @@ class TestDetection:
         assert len(det.keypoints) == 5
         assert det.keypoints[0].name == "nose"
 
-    def test_detection_with_ocr_fields(self):
-        """Test detection with OCR-specific fields."""
-        ocr_data = pf.detections.OCRData(
-            text="Sample Text",
-            confidence=0.92,
-            language="en",
-            level="word",
-            order=1
-        )
-        det = pf.detections.Detection(
-            bbox=[100, 100, 300, 150],
-            ocr_data=ocr_data
-        )
-        assert det.ocr_data.text == "Sample Text"
-        assert det.ocr_data.confidence == 0.92
-        assert det.ocr_data.language == "en"
-        assert det.ocr_data.level == "word"
-        assert det.ocr_data.order == 1
 
     def test_detection_with_tracking(self):
         """Test detection with tracking information."""

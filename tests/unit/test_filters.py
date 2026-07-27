@@ -2,7 +2,7 @@
 Unit tests for pixelflow.detections.filters module.
 
 Tests all filter methods attached to the Detections class including
-confidence, class, size, zone, tracking, and OCR filters.
+confidence, class, size, position, zone, and tracking filters.
 """
 
 import pytest
@@ -306,121 +306,6 @@ class TestDuplicateFilters:
         filtered = detections.filter_overlapping(iou_threshold=0.3)
         # Should remove overlapping detections
         assert len(filtered) <= 2
-
-
-# ============================================================================
-# OCR Filters
-# ============================================================================
-
-class TestOCRFilters:
-    """Tests for OCR-specific filter methods."""
-
-    def test_filter_by_text_confidence(self, sample_ocr_detection):
-        """Test filtering by text confidence."""
-        detections = pf.detections.Detections()
-        detections.add_detection(sample_ocr_detection)
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[200, 200, 400, 250],
-            text="Low confidence",
-            text_confidence=0.5
-        ))
-
-        filtered = detections.filter_by_text_confidence(min_confidence=0.8)
-        assert len(filtered) == 1
-        assert filtered[0].text_confidence == 0.92
-
-    def test_filter_by_text_level(self, sample_ocr_detection):
-        """Test filtering by text hierarchy level."""
-        detections = pf.detections.Detections()
-        detections.add_detection(sample_ocr_detection)  # word level
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[200, 200, 400, 250],
-            text="Line text",
-            text_level="line"
-        ))
-
-        filtered = detections.filter_by_text_level("word")
-        assert len(filtered) == 1
-        assert filtered[0].text_level == "word"
-
-    def test_filter_by_text_language(self, sample_ocr_detection):
-        """Test filtering by text language."""
-        detections = pf.detections.Detections()
-        detections.add_detection(sample_ocr_detection)  # English
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[200, 200, 400, 250],
-            text="Texto español",
-            text_language="es"
-        ))
-
-        filtered = detections.filter_by_text_language("en")
-        assert len(filtered) == 1
-        assert filtered[0].text_language == "en"
-
-    def test_filter_by_text_contains(self, sample_ocr_detection):
-        """Test filtering by text content."""
-        detections = pf.detections.Detections()
-        detections.add_detection(sample_ocr_detection)  # "Sample Text"
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[200, 200, 400, 250],
-            text="Different content"
-        ))
-
-        filtered = detections.filter_by_text_contains("Sample")
-        assert len(filtered) == 1
-        assert "Sample" in filtered[0].text
-
-    def test_sort_by_text_order(self):
-        """Test sorting by text reading order."""
-        detections = pf.detections.Detections()
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 100, 200, 150],
-            text="Third",
-            text_order=3
-        ))
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 50, 200, 100],
-            text="First",
-            text_order=1
-        ))
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 75, 200, 125],
-            text="Second",
-            text_order=2
-        ))
-
-        sorted_dets = detections.sort_by_text_order()
-        assert sorted_dets[0].text == "First"
-        assert sorted_dets[1].text == "Second"
-        assert sorted_dets[2].text == "Third"
-
-    def test_filter_by_text_parent(self):
-        """Test filtering by parent element ID."""
-        detections = pf.detections.Detections()
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 100, 200, 150],
-            text="Child 1",
-            text_parent_id="parent_1"
-        ))
-        detections.add_detection(pf.detections.Detection(
-            bbox=[200, 100, 300, 150],
-            text="Child 2",
-            text_parent_id="parent_1"
-        ))
-        detections.add_detection(pf.detections.Detection(
-            bbox=[300, 100, 400, 150],
-            text="Other child",
-            text_parent_id="parent_2"
-        ))
-
-        filtered = detections.filter_by_text_parent("parent_1")
-        assert len(filtered) == 2
 
 
 # ============================================================================

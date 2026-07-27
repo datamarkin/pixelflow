@@ -293,40 +293,6 @@ class TestComplexPipelines:
 
         assert result.shape == sample_image.shape
 
-    def test_ocr_processing_pipeline(self, sample_image):
-        """Test OCR detection processing pipeline."""
-        # Create mock OCR detections
-        detections = pf.detections.Detections()
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 100, 300, 150],
-            text="Invoice #12345",
-            text_confidence=0.95,
-            text_language="en",
-            text_level="line",
-            text_order=1
-        ))
-
-        detections.add_detection(pf.detections.Detection(
-            bbox=[100, 160, 250, 200],
-            text="Total: $99.99",
-            text_confidence=0.88,
-            text_language="en",
-            text_level="line",
-            text_order=2
-        ))
-
-        # Filter and process
-        high_conf = detections.filter_by_text_confidence(0.9)
-        sorted_text = detections.sort_by_text_order()
-
-        # Annotate
-        annotated = pf.annotate.box(sample_image.copy(), sorted_text)
-        annotated = pf.annotate.label(annotated, sorted_text)
-
-        # Extract text
-        text_content = '\n'.join([d.text for d in sorted_text if d.text])
-        assert "Invoice" in text_content
 
     def test_sliced_inference_pipeline(self, sample_image):
         """Test large image processing with slicing."""
