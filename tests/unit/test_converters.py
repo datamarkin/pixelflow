@@ -112,6 +112,94 @@ def mock_mayaku_output():
 
 
 # ============================================================================
+# Florence-2 Converter Tests
+# ============================================================================
+
+class TestFlorence2Converter:
+    """Tests for from_florence2 converter."""
+
+    def test_from_florence2_object_detection(self):
+        """The <OD> task yields boxes with sequential class_ids."""
+        parsed = {
+            "<OD>": {
+                "bboxes": [[10, 10, 50, 50], [60, 60, 90, 90]],
+                "labels": ["cat", "dog"],
+            }
+        }
+
+        detections = pf.detections.from_florence2(parsed, task_prompt="<OD>")
+
+        assert len(detections) == 2
+        assert detections[0].bbox == [10, 10, 50, 50]
+        assert detections[0].class_name == "cat"
+        assert detections[1].class_name == "dog"
+        # Sequential class_ids drive consistent colour mapping.
+        assert [d.class_id for d in detections] == [0, 1]
+        assert detections[0].confidence == 1.0
+
+    def test_from_florence2_segmentation_polygons(self):
+        """Polygon tasks populate segments and a derived bbox."""
+        parsed = {
+            "<REFERRING_EXPRESSION_SEGMENTATION>": {
+                "polygons": [[[10, 10, 50, 10, 50, 50, 10, 50]]],
+                "labels": ["cat"],
+            }
+        }
+
+        detections = pf.detections.from_florence2(
+            parsed, task_prompt="<REFERRING_EXPRESSION_SEGMENTATION>"
+        )
+
+        assert len(detections) == 1
+        assert detections[0].segments is not None
+        # bbox is the axis-aligned hull of the polygon.
+        assert detections[0].bbox == [10, 10, 50, 50]
+
+    @pytest.mark.parametrize("polygons", [
+        [[10, 10, 50, 10, 50, 50, 10, 50]],        # flat
+        [[[10, 10, 50, 10, 50, 50, 10, 50]]],      # nested once
+        [[[[10, 10, 50, 10, 50, 50, 10, 50]]]],    # nested twice
+    ], ids=["flat", "nested", "deep"])
+    def test_from_florence2_polygon_nesting_depths(self, polygons):
+        """Florence-2 nests polygons inconsistently; all depths must parse."""
+        parsed = {"<SEG>": {"polygons": polygons, "labels": ["cat"]}}
+
+        detections = pf.detections.from_florence2(parsed, task_prompt="<SEG>")
+
+        assert len(detections) == 1
+        assert detections[0].bbox == [10, 10, 50, 50]
+
+    def test_from_florence2_keeps_all_polygon_parts(self):
+        """An instance split into several polygons keeps every part."""
+        parsed = {
+            "<SEG>": {
+                # One instance, two disjoint parts (e.g. split by occlusion).
+                "polygons": [[[0, 0, 10, 0, 10, 10], [90, 90, 100, 90, 100, 100]]],
+                "labels": ["cat"],
+            }
+        }
+
+        detections = pf.detections.from_florence2(parsed, task_prompt="<SEG>")
+
+        assert len(detections) == 1
+        assert len(detections[0].masks) == 2
+        # bbox spans both parts rather than just the first.
+        assert detections[0].bbox == [0, 0, 100, 100]
+
+    def test_from_florence2_missing_task_prompt_raises(self):
+        """A task_prompt absent from the parsed result is an error."""
+        with pytest.raises(ValueError):
+            pf.detections.from_florence2({"<OD>": {}}, task_prompt="<CAPTION>")
+
+    def test_from_florence2_unsupported_data_shape_raises(self):
+        """Data without a recognised field combination raises ValueError."""
+        parsed = {"<OD>": {"something_else": []}}
+
+        with pytest.raises(ValueError):
+            pf.detections.from_florence2(parsed, task_prompt="<OD>")
+
+
+# ============================================================================
 # Ultralytics Converter Tests
 # ============================================================================
 
@@ -536,20 +624,22 @@ class TestDatamarkinAPIConverter:
 
     def test_from_datamarkin_basic(self):
         """Test conversion from Datamarkin API format."""
-        api_response = [
-            {
-                'bbox': [100, 100, 200, 200],
-                'confidence': 0.95,
-                'class_id': 0,
-                'class_name': 'person'
-            },
-            {
-                'bbox': [300, 150, 400, 280],
-                'confidence': 0.87,
-                'class_id': 2,
-                'class_name': 'car'
+        api_response = {
+            "predictions": {
+                "objects": [
+                    {
+                        "bbox": [100, 100, 200, 200],
+                        "bbox_score": 0.95,
+                        "class": "person",
+                    },
+                    {
+                        "bbox": [300, 150, 400, 280],
+                        "bbox_score": 0.87,
+                        "class": "car",
+                    },
+                ]
             }
-        ]
+        }
 
         detections = pf.detections.from_datamarkin(api_response)
 
@@ -557,6 +647,33 @@ class TestDatamarkinAPIConverter:
         assert detections[0].bbox == [100, 100, 200, 200]
         assert detections[0].confidence == 0.95
         assert detections[0].class_name == "person"
+        assert detections[1].class_name == "car"
+
+    def test_from_datamarkin_keypoints(self):
+        """Keypoint probability > 0 maps to visibility=True."""
+        api_response = {
+            "predictions": {
+                "objects": [
+                    {
+                        "bbox": [100, 100, 200, 200],
+                        "bbox_score": 0.9,
+                        "class": "person",
+                        "keypoints": [
+                            {"name": "nose", "point": [150, 120], "probability": 0.8},
+                            {"name": "left_eye", "point": [140, 115], "probability": 0.0},
+                        ],
+                    }
+                ]
+            }
+        }
+
+        detections = pf.detections.from_datamarkin(api_response)
+
+        assert len(detections[0].keypoints) == 2
+        assert detections[0].keypoints[0].name == "nose"
+        assert detections[0].keypoints[0].x == 150
+        assert detections[0].keypoints[0].visibility is True
+        assert detections[0].keypoints[1].visibility is False
 
 
 # ============================================================================
@@ -566,21 +683,32 @@ class TestDatamarkinAPIConverter:
 class TestDatamarkinCSVConverter:
     """Tests for from_datamarkin_csv converter."""
 
-    def test_from_datamarkin_csv_basic(self, tmp_path):
-        """Test conversion from CSV file."""
-        # Create temporary CSV file
-        csv_content = """bbox_x1,bbox_y1,bbox_x2,bbox_y2,confidence,class_id,class_name
-100,100,200,200,0.95,0,person
-300,150,400,280,0.87,2,car"""
+    def test_from_datamarkin_csv_basic(self):
+        """Normalized CSV coords are denormalized against the given height/width."""
+        pd = pytest.importorskip("pandas")
 
-        csv_file = tmp_path / "detections.csv"
-        csv_file.write_text(csv_content)
+        group = pd.DataFrame([
+            {
+                "xmin": 0.1, "ymin": 0.2, "xmax": 0.5, "ymax": 0.6,
+                "segmentation": "[0.1, 0.2, 0.5, 0.2, 0.5, 0.6]",
+                "class": "person", "confidence": 0.95,
+            },
+            {
+                "xmin": 0.5, "ymin": 0.25, "xmax": 0.9, "ymax": 0.75,
+                "segmentation": "[0.5, 0.25, 0.9, 0.25, 0.9, 0.75]",
+                "class": "car", "confidence": 0.87,
+            },
+        ])
 
-        detections = pf.detections.from_datamarkin_csv(str(csv_file))
+        detections = pf.detections.from_datamarkin_csv(group, height=400, width=600)
 
         assert len(detections) == 2
-        assert detections[0].bbox == [100, 100, 200, 200]
+        # 0.1*600=60, 0.2*400=80, 0.5*600=300, 0.6*400=240
+        assert detections[0].bbox == [60, 80, 300, 240]
         assert detections[0].confidence == 0.95
+        assert detections[0].class_id == "person"
+        # Segmentation is parsed into pixel-space (x, y) tuples.
+        assert detections[0].masks[0] == [(60, 80), (300, 80), (300, 240)]
 
 
 # ============================================================================
@@ -592,14 +720,13 @@ class TestConverterEdgeCases:
 
     def test_converter_with_none_values(self):
         """Test converters handle None/null values gracefully."""
-        api_response = [
-            {
-                'bbox': [100, 100, 200, 200],
-                'confidence': None,
-                'class_id': None,
-                'class_name': None
+        api_response = {
+            "predictions": {
+                "objects": [
+                    {"bbox": [100, 100, 200, 200], "bbox_score": None, "class": None}
+                ]
             }
-        ]
+        }
 
         detections = pf.detections.from_datamarkin(api_response)
         assert len(detections) == 1
@@ -607,8 +734,8 @@ class TestConverterEdgeCases:
 
     def test_converter_empty_input(self):
         """Test converters with empty input."""
-        detections = pf.detections.from_datamarkin([])
-        assert len(detections) == 0
+        assert len(pf.detections.from_datamarkin({})) == 0
+        assert len(pf.detections.from_datamarkin({"predictions": {"objects": []}})) == 0
 
 
 # ============================================================================
