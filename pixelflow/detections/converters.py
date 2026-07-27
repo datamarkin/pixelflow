@@ -423,22 +423,22 @@ def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
 def from_mayaku(mayaku_instances, labels=None):
     """Convert Mayaku inference results to a Detections object.
 
-    Mayaku is a clean Detectron2 reimplementation: same `Instances`
-    container, same field names (`pred_boxes`, `scores`, `pred_classes`,
-    `pred_masks`, `pred_keypoints`), same xyxy absolute box format, same
-    `(N, H, W)` boolean mask layout after postprocess, same `(N, K, 3)`
-    keypoint layout with `(x, y, score)` columns. The only divergence
-    that matters here: Mayaku's `Predictor.__call__` returns the
-    `Instances` directly, whereas Detectron2's `DefaultPredictor` wraps
-    it in a `{"instances": ...}` dict.
+    Mayaku shares Detectron2's runtime layout: the same `Instances`
+    container, the same field names (`pred_boxes`, `scores`,
+    `pred_classes`, `pred_masks`, `pred_keypoints`), xyxy absolute boxes,
+    `(N, H, W)` boolean masks after postprocess, and `(N, K, 3)`
+    keypoints with `(x, y, score)` columns. The divergence that matters
+    here: Mayaku's predictor returns the `Instances` directly, whereas
+    Detectron2's `DefaultPredictor` wraps it in a `{"instances": ...}`
+    dict.
 
     Args:
-        mayaku_instances: The `Instances` returned by Mayaku's
-            `Predictor.__call__` (NOT a dict). If you have a wrapper
-            that mimics D2's dict shape, pass `wrapper["instances"]`.
+        mayaku_instances: The `Instances` returned by calling a Mayaku
+            predictor (NOT a dict). If you have a wrapper that mimics
+            D2's dict shape, pass `wrapper["instances"]`.
         labels: Optional label definitions for class name and keypoint
-            name resolution. Accepts the same three formats as
-            `from_detectron2`:
+            name resolution. Pass `predictor.class_names` — see the note
+            below. Accepts the same three formats as `from_detectron2`:
             - List[str]: ["person", "car"] — index = class_id
             - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
             - List[dict]: [{"id": 0, "name": "person", "keypoints": [...]}]
@@ -449,19 +449,33 @@ def from_mayaku(mayaku_instances, labels=None):
 
     Example:
         >>> import pixelflow as pf
-        >>> from mayaku.inference import Predictor
-        >>> from mayaku.utils.image import read_image
-        >>> instances = predictor(read_image("photo.jpg"))   # mayaku is RGB-native
-        >>> detections = pf.detections.from_mayaku(instances, labels=pf.COCO_LABELS)
+        >>> from mayaku import from_pretrained
+        >>>
+        >>> predictor = from_pretrained("mayaku-n-det")
+        >>> instances = predictor("photo.jpg")
+        >>>
+        >>> # Take the vocabulary from the checkpoint, not a hardcoded list.
+        >>> detections = pf.detections.from_mayaku(
+        ...     instances, labels=predictor.class_names
+        ... )
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
     Notes:
-        - Mayaku expects RGB input. Reading via `cv2.imread` gives BGR
-          and silently degrades detection quality — use
-          `mayaku.utils.image.read_image` or swap channels manually.
+        - Use `predictor.class_names`, NOT `pf.COCO_LABELS`. Mayaku
+          checkpoints carry their own vocabulary in the sidecar, and the
+          pretrained models are trained on Objects365 (365 classes), not
+          COCO. Passing COCO_LABELS mislabels every detection — class 5
+          is "Car" in Objects365 but "bus" in COCO — and leaves the 285
+          class IDs beyond COCO's range with `class_name=None`.
+        - A predictor accepts a path directly and decodes it as RGB.
+          When passing an array instead, it must be RGB: `cv2.imread`
+          gives BGR, so convert with `mayaku.utils.bgr_to_rgb` first.
+        - Predictors return a fixed-size candidate set (typically 100
+          rows) with no score threshold applied. Chain
+          `filter_by_confidence()` to cut the low-scoring tail.
         - All tensors are moved to CPU automatically before conversion.
-        - Mayaku auto-runs `detector_postprocess` so coordinates and
+        - Mayaku auto-runs `detector_postprocess`, so coordinates and
           masks are already in original image space.
     """
     from .detections import Detections, Detection, KeyPoint

@@ -56,10 +56,10 @@ from detectron2.engine import DefaultPredictor
 predictor = DefaultPredictor(cfg)
 detections = pf.detections.from_detectron2(predictor(image), labels=["person", "car"])
 
-# Mayaku (Detectron2 reimplementation — RGB-native, returns Instances directly)
-from mayaku.inference import Predictor
-from mayaku.utils.image import read_image
-detections = pf.detections.from_mayaku(predictor(read_image("photo.jpg")), labels=pf.COCO_LABELS)
+# Mayaku (returns Instances directly; take labels from the checkpoint)
+from mayaku import from_pretrained
+predictor = from_pretrained("mayaku-n-det")
+detections = pf.detections.from_mayaku(predictor("photo.jpg"), labels=predictor.class_names)
 
 # HuggingFace Transformers
 from transformers import pipeline

@@ -387,6 +387,57 @@ class TestMayakuConverter:
         assert detections[0].class_name == "person"
         assert detections[1].class_name == "car"
 
+    def test_from_mayaku_uses_checkpoint_vocabulary(self, mock_mayaku_output):
+        """predictor.class_names is a plain List[str] indexed by class_id.
+
+        Mayaku's pretrained checkpoints are Objects365 (365 classes), so the
+        vocabulary must come from the checkpoint. Verified against the real
+        mayaku-n-det weights: class 0 is "Person" and class 5 is "Car",
+        whereas COCO puts "bus" at 5.
+        """
+        # Truncated stand-in for predictor.class_names.
+        class_names = ["Person", "Sneakers", "Chair", "Other Shoes", "Hat", "Car"]
+
+        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=class_names)
+
+        assert detections[0].class_id == 0
+        assert detections[0].class_name == "Person"
+        assert detections[1].class_id == 2
+        assert detections[1].class_name == "Chair"
+
+    def test_from_mayaku_out_of_range_class_id_is_none(self):
+        """A class_id past the end of the vocabulary yields None, not a crash."""
+        class MockTensor:
+            def __init__(self, data):
+                self._data = np.array(data)
+            def numpy(self):
+                return self._data
+
+        class MockBoxes:
+            def __init__(self, data):
+                self.tensor = MockTensor(data)
+
+        class MockInstances:
+            def __init__(self):
+                self.pred_boxes = MockBoxes([[10, 10, 50, 50]])
+                self.scores = MockTensor([0.9])
+                self.pred_classes = MockTensor([364])  # last Objects365 id
+                self._fields = {"pred_boxes", "scores", "pred_classes"}
+            def to(self, device):
+                return self
+            def has(self, field):
+                return field in self._fields
+            def __len__(self):
+                return 1
+
+        # Passing a COCO-sized vocabulary to a 365-class model is the mistake
+        # this guards against: it must degrade to None rather than raise.
+        detections = pf.detections.from_mayaku(MockInstances(), labels=["person", "car"])
+
+        assert len(detections) == 1
+        assert detections[0].class_id == 364
+        assert detections[0].class_name is None
+
     def test_from_mayaku_with_rich_labels(self, mock_mayaku_output):
         """Test Mayaku conversion with rich Datamarkin format labels."""
         labels = [
