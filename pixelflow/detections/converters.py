@@ -164,12 +164,12 @@ def from_florence2(
 
     Notes:
         - Supported tasks: <OD>, <CAPTION_TO_PHRASE_GROUNDING>, <DENSE_REGION_CAPTION>,
-          <REFERRING_EXPRESSION_SEGMENTATION>, <OCR_WITH_REGION>.
+          <REFERRING_EXPRESSION_SEGMENTATION>.
         - Text-only tasks (<CAPTION>, <OCR>, etc.) raise ValueError.
         - Sequential class_ids (0, 1, 2, ...) assigned for consistent color mapping.
         - Confidence defaults to 1.0 when not provided.
     """
-    from .detections import Detections, Detection, OCRData
+    from .detections import Detections, Detection
 
     detections_obj = Detections()
 
@@ -276,57 +276,12 @@ def from_florence2(
                 )
                 detections_obj.add_detection(detection)
 
-    elif 'quad_boxes' in task_data and 'labels' in task_data:
-        # OCR with region: <OCR_WITH_REGION>
-        quad_boxes = task_data['quad_boxes']  # Format: [[x1,y1,x2,y2,x3,y3,x4,y4], ...]
-        labels = task_data['labels']  # Text content
-
-        for idx, (quad, text) in enumerate(zip(quad_boxes, labels)):
-            # quad is 8 values: [x1,y1, x2,y2, x3,y3, x4,y4]
-            # Convert to list of (x,y) tuples for segments
-            segments = [
-                (int(quad[0]), int(quad[1])),  # Top-left
-                (int(quad[2]), int(quad[3])),  # Top-right
-                (int(quad[4]), int(quad[5])),  # Bottom-right
-                (int(quad[6]), int(quad[7]))   # Bottom-left
-            ]
-
-            # Compute axis-aligned bounding box from quad
-            x_coords = [p[0] for p in segments]
-            y_coords = [p[1] for p in segments]
-            bbox = [
-                float(min(x_coords)),
-                float(min(y_coords)),
-                float(max(x_coords)),
-                float(max(y_coords))
-            ]
-
-            # Create OCRData for structured text information
-            ocr_data = OCRData(
-                text=text.strip(),
-                confidence=1.0,  # Florence-2 doesn't provide OCR confidence
-                language='multi',  # Florence-2 is multi-lingual
-                level='word',
-                order=idx,
-                element_type='text'
-            )
-
-            detection = Detection(
-                bbox=bbox,
-                segments=segments,  # Store quad as segments
-                ocr_data=ocr_data,
-                class_id=0,  # OCR has single class
-                class_name='text',
-                confidence=1.0
-            )
-            detections_obj.add_detection(detection)
-
     else:
         # Unknown task format
         raise ValueError(
             f"Unsupported Florence-2 task format for '{task_prompt}'. "
             f"Available data fields: {list(task_data.keys())}. "
-            f"Expected 'bboxes+labels', 'polygons+labels', or 'quad_boxes+labels'."
+            f"Expected 'bboxes+labels' or 'polygons+labels'."
         )
 
     return detections_obj
