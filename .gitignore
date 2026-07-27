@@ -11,6 +11,17 @@ __pycache__/
 *$py.class
 *.so
 
+# Downloaded assets cache
+dtmfiles/
+
+# Test / coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.tox/
+
 # Distribution / packaging
 .Python
 develop-eggs/

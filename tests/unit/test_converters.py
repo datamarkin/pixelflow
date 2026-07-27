@@ -80,6 +80,38 @@ def mock_detectron2_output():
 
 
 @pytest.fixture
+def mock_mayaku_output():
+    """Create mock Mayaku output. Mayaku returns Instances directly (no dict wrap)."""
+    class MockTensor:
+        def __init__(self, data):
+            self._data = np.array(data)
+        def numpy(self):
+            return self._data
+
+    class MockBoxes:
+        def __init__(self, data):
+            self.tensor = MockTensor(data)
+
+    class MockInstances:
+        def __init__(self):
+            self.pred_boxes = MockBoxes([[100, 100, 200, 200], [300, 150, 400, 280]])
+            self.scores = MockTensor([0.95, 0.87])
+            self.pred_classes = MockTensor([0, 2])
+            self._fields = {"pred_boxes", "scores", "pred_classes"}
+
+        def to(self, device):
+            return self
+
+        def has(self, field):
+            return field in self._fields
+
+        def __len__(self):
+            return 2
+
+    return MockInstances()
+
+
+@pytest.fixture
 def mock_tesseract_data():
     """Create mock Tesseract OCR output."""
     return {
@@ -280,6 +312,155 @@ class TestDetectron2Converter:
         assert detections[0].keypoints[1].visibility is True  # 1.0 > 0
         assert detections[0].keypoints[2].name == "right_eye"
         assert detections[0].keypoints[2].visibility is False  # 0.0 > 0 = False
+
+
+# ============================================================================
+# Mayaku Converter Tests
+# ============================================================================
+
+class TestMayakuConverter:
+    """Tests for from_mayaku converter.
+
+    Mayaku is a clean Detectron2 reimplementation; the runtime output schema
+    is identical except that mayaku's Predictor returns the Instances object
+    directly (not wrapped in a {"instances": ...} dict).
+    """
+
+    def test_from_mayaku_basic(self, mock_mayaku_output):
+        """Test basic Mayaku conversion."""
+        detections = pf.detections.from_mayaku(mock_mayaku_output)
+
+        assert len(detections) == 2
+        assert detections[0].bbox == [100, 100, 200, 200]
+        assert detections[0].confidence == 0.95
+        assert detections[0].class_id == 0
+        assert detections[1].class_id == 2
+
+    def test_from_mayaku_with_labels_dict(self, mock_mayaku_output):
+        """Test Mayaku conversion with Dict[int, str] labels."""
+        labels = {0: "person", 2: "car"}
+        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=labels)
+        assert detections[0].class_name == "person"
+        assert detections[1].class_name == "car"
+
+    def test_from_mayaku_with_labels_list(self, mock_mayaku_output):
+        """Test Mayaku conversion with List[str] labels."""
+        labels = ["person", "bicycle", "car"]
+        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=labels)
+        assert detections[0].class_name == "person"
+        assert detections[1].class_name == "car"
+
+    def test_from_mayaku_with_rich_labels(self, mock_mayaku_output):
+        """Test Mayaku conversion with rich Datamarkin format labels."""
+        labels = [
+            {"id": 0, "name": "person", "keypoints": [{"id": 0, "name": "nose"}]},
+            {"id": 2, "name": "car"},
+        ]
+        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=labels)
+        assert detections[0].class_name == "person"
+        assert detections[1].class_name == "car"
+
+    def test_from_mayaku_empty(self):
+        """Test conversion with empty Instances returns empty Detections."""
+        class MockInstances:
+            def to(self, device):
+                return self
+            def has(self, field):
+                return False
+            def __len__(self):
+                return 0
+
+        detections = pf.detections.from_mayaku(MockInstances())
+        assert len(detections) == 0
+
+    def test_from_mayaku_with_keypoints(self):
+        """Test Mayaku keypoint conversion to KeyPoint objects.
+
+        Mayaku stores keypoints as (N, K, 3) with (x, y, score) — same as D2.
+        """
+        class MockTensor:
+            def __init__(self, data):
+                self._data = np.array(data)
+            def numpy(self):
+                return self._data
+
+        class MockBoxes:
+            def __init__(self, data):
+                self.tensor = MockTensor(data)
+
+        class MockInstances:
+            def __init__(self):
+                self.pred_boxes = MockBoxes([[100, 100, 200, 200]])
+                self.scores = MockTensor([0.95])
+                self.pred_classes = MockTensor([0])
+                self.pred_keypoints = MockTensor(
+                    [[[150, 120, 0.9], [140, 115, 0.5], [160, 115, 0.0]]]
+                )
+                self._fields = {"pred_boxes", "scores", "pred_classes", "pred_keypoints"}
+
+            def to(self, device):
+                return self
+            def has(self, field):
+                return field in self._fields
+            def __len__(self):
+                return 1
+
+        labels = [{"id": 0, "name": "person", "keypoints": [
+            {"id": 0, "name": "nose"},
+            {"id": 1, "name": "left_eye"},
+            {"id": 2, "name": "right_eye"},
+        ]}]
+
+        detections = pf.detections.from_mayaku(MockInstances(), labels=labels)
+        assert len(detections) == 1
+        assert detections[0].keypoints is not None
+        assert len(detections[0].keypoints) == 3
+        assert detections[0].keypoints[0].name == "nose"
+        assert detections[0].keypoints[0].x == 150
+        assert detections[0].keypoints[0].visibility is True   # 0.9 > 0
+        assert detections[0].keypoints[1].visibility is True   # 0.5 > 0
+        assert detections[0].keypoints[2].visibility is False  # 0.0 > 0 = False
+
+    def test_from_mayaku_with_masks(self):
+        """Test Mayaku mask conversion. Masks are (N, H, W) bool after postprocess."""
+        class MockTensor:
+            def __init__(self, data):
+                self._data = np.array(data)
+            def numpy(self):
+                return self._data
+
+        class MockBoxes:
+            def __init__(self, data):
+                self.tensor = MockTensor(data)
+
+        class MockInstances:
+            def __init__(self):
+                self.pred_boxes = MockBoxes([[10, 10, 20, 20]])
+                self.scores = MockTensor([0.9])
+                self.pred_classes = MockTensor([0])
+                # (N=1, H=4, W=4) bool mask
+                self.pred_masks = MockTensor([[[True, True, False, False],
+                                                [True, True, False, False],
+                                                [False, False, False, False],
+                                                [False, False, False, False]]])
+                self._fields = {"pred_boxes", "scores", "pred_classes", "pred_masks"}
+
+            def to(self, device):
+                return self
+            def has(self, field):
+                return field in self._fields
+            def __len__(self):
+                return 1
+
+        detections = pf.detections.from_mayaku(MockInstances())
+        assert len(detections) == 1
+        assert detections[0].masks is not None
+        assert len(detections[0].masks) == 1
+        mask = detections[0].masks[0]
+        assert mask.dtype == bool
+        assert mask.shape == (4, 4)
+        assert mask[0, 0] == True
+        assert mask[3, 3] == False
 
 
 # ============================================================================

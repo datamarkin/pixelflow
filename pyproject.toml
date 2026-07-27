@@ -23,6 +23,7 @@ keywords = [
     "opencv",
     "yolo",
     "detectron2",
+    "mayaku",
     "ml-results"
 ]
 

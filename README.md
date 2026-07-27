@@ -54,7 +54,12 @@ detections = pf.detections.from_ultralytics(model.predict(image))
 # Detectron2
 from detectron2.engine import DefaultPredictor
 predictor = DefaultPredictor(cfg)
-detections = pf.detections.from_detectron2(predictor(image), class_names=["person", "car"])
+detections = pf.detections.from_detectron2(predictor(image), labels=["person", "car"])
+
+# Mayaku (Detectron2 reimplementation — RGB-native, returns Instances directly)
+from mayaku.inference import Predictor
+from mayaku.utils.image import read_image
+detections = pf.detections.from_mayaku(predictor(read_image("photo.jpg")), labels=pf.COCO_LABELS)
 
 # HuggingFace Transformers
 from transformers import pipeline
@@ -316,6 +321,7 @@ report = detections.to_json_with_metrics()
 |-----------|-----------|----------|
 | Ultralytics (YOLO) | `from_ultralytics()` | Boxes, masks, keypoints |
 | Detectron2 | `from_detectron2()` | Boxes, masks, keypoints |
+| Mayaku | `from_mayaku()` | Boxes, masks, keypoints |
 | HuggingFace Transformers | `from_transformers()` | Boxes, scores |
 | Florence-2 | `from_florence2()` | Boxes, phrases |
 | SAM | `from_sam()` | Masks, scores |
