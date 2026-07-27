@@ -72,10 +72,11 @@ detections = pf.detections.from_florence2(model_output)
 # SAM (Segment Anything)
 detections = pf.detections.from_sam(masks, scores)
 
-# OCR Engines
-detections = pf.detections.from_tesseract(tesseract_output)
-detections = pf.detections.from_paddleocr(paddleocr_output)
-detections = pf.detections.from_easyocr(easyocr_output)
+# RF-DETR
+detections = pf.detections.from_rfdetr(model_output)
+
+# Supervision
+detections = pf.detections.from_supervision(sv_detections)
 ```
 
 ### Powerful Filtering
@@ -323,12 +324,14 @@ report = detections.to_json_with_metrics()
 | Detectron2 | `from_detectron2()` | Boxes, masks, keypoints |
 | Mayaku | `from_mayaku()` | Boxes, masks, keypoints |
 | HuggingFace Transformers | `from_transformers()` | Boxes, scores |
-| Florence-2 | `from_florence2()` | Boxes, phrases |
+| Florence-2 | `from_florence2()` | Boxes, polygons, phrases |
 | SAM | `from_sam()` | Masks, scores |
-| Tesseract OCR | `from_tesseract()` | Text, boxes, confidence |
-| PaddleOCR | `from_paddleocr()` | Text, boxes, structure |
-| EasyOCR | `from_easyocr()` | Text, boxes |
-| PP-Structure | `from_ppstructure()` | Tables, formulas, layouts |
+| EfficientTAM | `from_efficienttam()` | Masks, scores |
+| RF-DETR | `from_rfdetr()` | Boxes, masks |
+| Supervision | `from_supervision()` | Boxes, masks, keypoints |
+| Falcon Perception | `from_falcon_perception()` | Boxes, masks |
+| Datamarkin API | `from_datamarkin()` | Boxes, masks, keypoints |
+| Datamarkin CSV | `from_datamarkin_csv()` | Boxes, polygons |
 
 ## Documentation
 
