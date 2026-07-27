@@ -69,6 +69,29 @@ def _get_label_info(labels, class_id):
     return None, None
 
 
+def _flat_coord_lists(nested):
+    """Yield every flat [x1, y1, x2, y2, ...] coordinate list inside `nested`.
+
+    Florence-2 nests segmentation polygons inconsistently across versions and
+    tasks — an instance may arrive as [x1, y1, ...], [[x1, y1, ...]], or
+    [[[x1, y1, ...]]]. Descending until the first numeric element makes the
+    converter indifferent to the depth.
+    """
+    if nested is None:
+        return
+
+    # A flat run of numbers is a polygon in itself.
+    if not isinstance(nested, (list, tuple)):
+        return
+    if all(isinstance(v, (int, float)) for v in nested):
+        if nested:
+            yield list(nested)
+        return
+
+    for item in nested:
+        yield from _flat_coord_lists(item)
+
+
 def from_datamarkin(api_response: Dict[str, Any]):
     """Convert Datamarkin API response to a Detections object.
 
@@ -228,7 +251,10 @@ def from_florence2(
 
     elif 'polygons' in task_data and 'labels' in task_data:
         # Segmentation tasks: <REFERRING_EXPRESSION_SEGMENTATION>
-        polygons = task_data['polygons']  # Triple-nested: [[[x1,y1,x2,y2,...]]]
+        # polygons[i] holds every polygon belonging to instance i, each a flat
+        # [x1,y1,x2,y2,...] list. Nesting depth varies between Florence-2
+        # versions, so _flat_coord_lists normalises it.
+        polygons = task_data['polygons']
         labels = task_data['labels']
 
         # Assign sequential class IDs
@@ -242,39 +268,39 @@ def from_florence2(
         for idx, (poly_nested, label) in enumerate(zip(polygons, labels)):
             class_id = label_to_id[label]
 
-            # Florence-2 polygons are triple-nested: [[[x1,y1,x2,y2,...]]]
-            # Extract the innermost list of coordinates
-            if len(poly_nested) > 0 and len(poly_nested[0]) > 0:
-                poly_coords = poly_nested[0][0]  # Get innermost list
+            # Every polygon for this instance is kept — an instance split by
+            # occlusion has more than one, and dropping the rest loses geometry.
+            all_polygons = []
+            for coords in _flat_coord_lists(poly_nested):
+                points = [
+                    (int(coords[i]), int(coords[i + 1]))
+                    for i in range(0, len(coords) - 1, 2)
+                ]
+                if points:
+                    all_polygons.append(points)
 
-                # Convert flat list [x1,y1,x2,y2,...] to list of tuples [(x1,y1), (x2,y2), ...]
-                segments = []
-                for i in range(0, len(poly_coords), 2):
-                    if i + 1 < len(poly_coords):
-                        segments.append((int(poly_coords[i]), int(poly_coords[i + 1])))
+            if not all_polygons:
+                continue
 
-                # Compute axis-aligned bounding box from polygon
-                if segments:
-                    x_coords = [p[0] for p in segments]
-                    y_coords = [p[1] for p in segments]
-                    bbox = [
-                        float(min(x_coords)),
-                        float(min(y_coords)),
-                        float(max(x_coords)),
-                        float(max(y_coords))
-                    ]
-                else:
-                    bbox = None
+            # bbox is the axis-aligned hull across every polygon of the instance.
+            x_coords = [p[0] for poly in all_polygons for p in poly]
+            y_coords = [p[1] for poly in all_polygons for p in poly]
+            bbox = [
+                float(min(x_coords)),
+                float(min(y_coords)),
+                float(max(x_coords)),
+                float(max(y_coords))
+            ]
 
-                detection = Detection(
-                    bbox=bbox,
-                    segments=segments,  # Store polygon as segments
-                    masks=[segments],   # Also store as mask for compatibility
-                    class_id=class_id,
-                    class_name=label,
-                    confidence=1.0
-                )
-                detections_obj.add_detection(detection)
+            detection = Detection(
+                bbox=bbox,
+                segments=all_polygons[0],  # segments holds a single polygon
+                masks=all_polygons,        # masks keeps every part
+                class_id=class_id,
+                class_name=label,
+                confidence=1.0
+            )
+            detections_obj.add_detection(detection)
 
     else:
         # Unknown task format
