@@ -82,7 +82,11 @@ def polygon(
         thickness = params['thickness']
 
     for result in detections:
-        # Iterate over the segments in the result
+        # Detections without segments (plain boxes, keypoint-only results) are
+        # skipped rather than raising, so mixed Detections can be drawn as-is.
+        if not result.segments:
+            continue
+
         # Convert the points to a NumPy array and reshape for OpenCV
         polygon = np.array(result.segments, dtype=np.int32).reshape((-1, 1, 2))
         # Draw the polygon on the canvas
