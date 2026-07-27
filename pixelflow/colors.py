@@ -93,8 +93,16 @@ def _get_color_for_prediction(prediction, colors_override=None, palette='default
     Returns:
         RGB color tuple for the prediction
     """
-    if colors_override:
-        return colors_override[prediction.class_id % len(colors_override)]
+    active = colors_override if colors_override else PALETTES.get(palette, DEFAULT_PALETTE)
 
-    active = PALETTES.get(palette, DEFAULT_PALETTE)
-    return active[prediction.class_id % len(active)]
+    # class_id is optional on Detection, and converters may set it to a string
+    # (from_datamarkin_csv) or leave it None (from_sam, hand-built boxes).
+    # Neither should raise on annotation.
+    class_id = prediction.class_id
+    if class_id is None:
+        return active[0]
+    if isinstance(class_id, str):
+        # Deterministic across runs, unlike hash() which is seed-randomised.
+        class_id = sum(class_id.encode("utf-8"))
+
+    return active[class_id % len(active)]
