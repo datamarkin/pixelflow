@@ -145,10 +145,11 @@ class TestDetection:
         assert decoded_mask.dtype == bool
         assert np.array_equal(decoded_mask, original_mask)
 
-    def test_detection_to_json(self, sample_detection):
-        """Test detection JSON serialization."""
-        json_str = sample_detection.to_json()
-        data = json.loads(json_str)
+    def test_detection_to_dict_is_json_serializable(self, sample_detection):
+        """Detection exposes to_dict(); to_json() lives on the Detections container."""
+        assert not hasattr(sample_detection, "to_json")
+
+        data = json.loads(json.dumps(sample_detection.to_dict()))
         assert data["bbox"] == [100, 100, 200, 200]
         assert data["confidence"] == 0.95
 

@@ -76,29 +76,26 @@ class TestRemapClassIds:
     """Tests for remap_class_ids method."""
 
     def test_remap_class_ids_basic(self, sample_detections):
-        """Test basic class ID remapping."""
-        # Remap: 0->10, 1->11, 2->12
-        mapping = {0: 10, 1: 11, 2: 12}
-        remapped = sample_detections.remap_class_ids(mapping)
+        """Consolidate several source class IDs onto a single target ID."""
+        remapped = sample_detections.remap_class_ids([0, 1, 2], 99)
 
-        for det in remapped:
-            if det.class_name == "person":
-                assert det.class_id == 10
-            elif det.class_name == "bicycle":
-                assert det.class_id == 11
-            elif det.class_name == "car":
-                assert det.class_id == 12
+        assert all(det.class_id == 99 for det in remapped)
 
     def test_remap_class_ids_partial_mapping(self, sample_detections):
-        """Test remapping with partial mapping (some IDs unmapped)."""
-        mapping = {0: 100}  # Only remap class 0
-        remapped = sample_detections.remap_class_ids(mapping)
+        """IDs outside from_ids are left untouched."""
+        remapped = sample_detections.remap_class_ids(0, 100)
 
         person_count = sum(1 for d in remapped if d.class_id == 100)
         assert person_count == 2
         # Other classes should remain unchanged
         assert any(d.class_id == 1 for d in remapped)
         assert any(d.class_id == 2 for d in remapped)
+
+    def test_remap_class_ids_accepts_scalar_from_id(self, sample_detections):
+        """A bare int is accepted as from_ids, not just a list."""
+        remapped = sample_detections.remap_class_ids(2, 42)
+
+        assert sum(1 for d in remapped if d.class_id == 42) == 1
 
 
 # ============================================================================
@@ -153,16 +150,19 @@ class TestSizeFilters:
 class TestRelativeSizeFilter:
     """Tests for filter_by_relative_size method."""
 
-    def test_filter_by_relative_size(self, sample_detections, blank_image):
-        """Test filtering by relative size to image."""
-        # Image is 640x480 = 307200 pixels
-        # Filter for detections larger than 2% of image
+    def test_filter_by_relative_size(self, sample_detections):
+        """Test filtering by size relative to total frame area."""
+        # Frame is 640x480 = 307200 px. min_percent is a *fraction* of frame
+        # area despite the name, so 0.02 means "at least 2% of the frame".
         filtered = sample_detections.filter_by_relative_size(
-            image=blank_image,
-            min_relative_size=0.02
+            min_percent=0.02,
+            frame_width=640,
+            frame_height=480,
         )
-        # Only larger detections should remain
-        assert len(filtered) >= 1
+        # person 10000px (3.3%), person 13000px (4.2%), car 15600px (5.1%) pass;
+        # the 50x50 bicycle at 2500px (0.8%) is dropped.
+        assert len(filtered) == 3
+        assert all(d.class_name != "bicycle" for d in filtered)
 
 
 # ============================================================================
@@ -173,26 +173,34 @@ class TestPositionFilter:
     """Tests for filter_by_position method."""
 
     def test_filter_by_position_left_side(self, sample_detections):
-        """Test filtering detections on left side of image."""
-        # Filter for detections with center x < 250
-        filtered = sample_detections.filter_by_position(max_x=250)
-        # Person 1 (center at 150) and Bicycle (center at 75) should pass
-        assert len(filtered) >= 1
-
-    def test_filter_by_position_top_half(self, sample_detections):
-        """Test filtering detections in top half."""
-        filtered = sample_detections.filter_by_position(max_y=240)
-        # Detections with center y < 240
-        assert len(filtered) >= 1
-
-    def test_filter_by_position_region(self, sample_detections):
-        """Test filtering to specific region."""
+        """The "left" region keeps boxes whose centre falls inside the margin."""
+        # margin_x = 640 * 0.3 = 192; person(150) and bicycle(75) qualify.
         filtered = sample_detections.filter_by_position(
-            min_x=250, max_x=450,
-            min_y=100, max_y=300
+            "left", margin_percent=0.3, frame_width=640, frame_height=480
         )
-        # Person 2 centered around 350, 215
-        assert len(filtered) >= 1
+        assert len(filtered) == 2
+        assert {d.class_name for d in filtered} == {"person", "bicycle"}
+
+    def test_filter_by_position_top(self, sample_detections):
+        """The "top" region keeps boxes above the vertical margin."""
+        # margin_y = 480 * 0.4 = 192; person(150) and bicycle(75) qualify.
+        filtered = sample_detections.filter_by_position(
+            "top", margin_percent=0.4, frame_width=640, frame_height=480
+        )
+        assert len(filtered) == 2
+
+    def test_filter_by_position_center(self, sample_detections):
+        """The "center" region excludes the margin band on every side."""
+        filtered = sample_detections.filter_by_position(
+            "center", margin_percent=0.1, frame_width=640, frame_height=480
+        )
+        # All four sample boxes sit inside the 64/48px inset.
+        assert len(filtered) == 4
+
+    def test_filter_by_position_requires_frame_dims(self, sample_detections):
+        """Frame dimensions are mandatory — omitting them is an error."""
+        with pytest.raises(ValueError):
+            sample_detections.filter_by_position("center")
 
 
 # ============================================================================
@@ -251,14 +259,14 @@ class TestTrackingFilters:
     def test_filter_by_tracking_duration(self, tracked_detections):
         """Test filtering by tracking duration."""
         # Filter for objects tracked for at least 4 seconds
-        filtered = tracked_detections.filter_by_tracking_duration(min_duration=4.0)
+        filtered = tracked_detections.filter_by_tracking_duration(min_seconds=4.0)
         assert len(filtered) == 1
-        assert filtered[0].tracking_duration == 5.0
+        assert filtered[0].total_time == 5.0
 
     def test_filter_by_first_seen_time(self, tracked_detections):
         """Test filtering by first seen time."""
         # Filter for objects first seen after time 1.0
-        filtered = tracked_detections.filter_by_first_seen_time(min_time=1.0)
+        filtered = tracked_detections.filter_by_first_seen_time(start_time=1.0)
         assert len(filtered) == 1
         assert filtered[0].first_seen_time == 2.0
 
@@ -303,7 +311,7 @@ class TestDuplicateFilters:
             class_id=0
         ))
 
-        filtered = detections.filter_overlapping(iou_threshold=0.3)
+        filtered = detections.filter_overlapping(min_overlap=0.3)
         # Should remove overlapping detections
         assert len(filtered) <= 2
 

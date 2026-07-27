@@ -123,13 +123,25 @@ class TestImageEnhancement:
         assert enhanced.dtype == np.uint8
 
     def test_normalize(self, sample_image):
-        """Test image normalization."""
-        normalized = pf.transform.normalize(sample_image)
+        """normalize() scales to 0-1 then applies (x - mean) / std."""
+        # Identity mean/std leaves the plain 0-1 scaling.
+        normalized = pf.transform.normalize(sample_image, mean=0.0, std=1.0)
 
-        # Should be float type normalized to 0-1
         assert normalized.dtype in [np.float32, np.float64]
         assert normalized.min() >= 0.0
         assert normalized.max() <= 1.0
+
+    def test_normalize_with_imagenet_stats(self, sample_image):
+        """ImageNet mean/std produce a zero-centred result."""
+        normalized = pf.transform.normalize(
+            sample_image,
+            mean=(0.485, 0.456, 0.406),
+            std=(0.229, 0.224, 0.225),
+        )
+
+        assert normalized.dtype == np.float32
+        # Centring pushes values below zero, unlike the plain 0-1 scaling.
+        assert normalized.min() < 0.0
 
     def test_gamma_correction(self, sample_image):
         """Test gamma correction."""
@@ -283,15 +295,20 @@ class TestDetectionCropping:
         detections = pf.detections.Detections()
         detections.add_detection(sample_detection)
 
-        cropped_img, cropped_dets = pf.transform.crop_around_detections(
+        # Returns one crop per detection (a list), not an (image, detections)
+        # tuple. `padding` is a fraction of the bbox's shorter side.
+        crops = pf.transform.crop_around_detections(
             sample_image,
             detections,
-            padding=20
+            padding=0.2
         )
 
-        # Should crop to encompass all detections with padding
-        assert isinstance(cropped_img, np.ndarray)
-        assert len(cropped_dets) == 1
+        assert isinstance(crops, list)
+        assert len(crops) == 1
+        assert isinstance(crops[0], np.ndarray)
+        # bbox is 100x100, +20% on each side => roughly 140x140.
+        assert crops[0].shape[0] == pytest.approx(140, abs=2)
+        assert crops[0].shape[1] == pytest.approx(140, abs=2)
 
 
 class TestDetectionPadding:
@@ -331,8 +348,8 @@ class TestKeypointAlignment:
         aligned_img, aligned_dets = pf.transform.rotate_to_align(
             sample_image,
             detections,
-            keypoint1='left_eye',
-            keypoint2='right_eye',
+            point1_name='left_eye',
+            point2_name='right_eye',
             target_angle=0  # Horizontal
         )
 

@@ -298,15 +298,23 @@ class TestComplexPipelines:
         """Test large image processing with slicing."""
         # Create slicer
         slicer = pf.SlicedInference(
-            image=sample_image,
-            slice_size=(320, 320),
-            overlap=0.2
+            slice_height=320,
+            slice_width=320,
+            overlap_ratio_h=0.2,
+            overlap_ratio_w=0.2
         )
 
         all_detections = pf.detections.Detections()
 
         # Process each slice
-        for slice_img, x_offset, y_offset in slicer.get_slices():
+        slices = slicer.generate_slices(
+            image_height=sample_image.shape[0],
+            image_width=sample_image.shape[1]
+        )
+        assert len(slices) > 1  # 640x480 at 320x320 must tile into several slices
+
+        for x1, y1, x2, y2, _slice_id in slices:
+            x_offset, y_offset = x1, y1
             # Mock detection in slice
             slice_det = pf.detections.Detection(
                 bbox=[10, 10, 50, 50],
@@ -368,9 +376,8 @@ class TestPerformance:
         import time
 
         video = pf.VideoReader(temp_video_path)
-        timer = pf.TimeTracker()
 
-        timer.start("video_processing")
+        start = time.perf_counter()
 
         for frame in video:
             # Mock detection
@@ -382,9 +389,7 @@ class TestPerformance:
             # Annotate
             _ = pf.annotate.box(frame.copy(), dets)
 
-        timer.stop("video_processing")
-
-        elapsed = timer.get_time("video_processing")
+        elapsed = time.perf_counter() - start
 
         # Should process 10 frames reasonably fast
         assert elapsed < 10.0  # Less than 10 seconds for 10 frames

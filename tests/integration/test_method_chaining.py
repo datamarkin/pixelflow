@@ -36,7 +36,7 @@ class TestFilterChaining:
                  .filter_by_confidence(0.7)
                  .filter_by_class_id([0, 2])
                  .filter_by_size(min_area=5000)
-                 .filter_by_position(max_x=500))
+                 .filter_by_position("center", frame_width=640, frame_height=480))
 
         # All filters should be applied
         assert isinstance(result, pf.detections.Detections)
@@ -59,7 +59,8 @@ class TestFilterChaining:
                  .filter_by_class_id([0, 1, 2])       # Class
                  .filter_by_size(min_area=1000)       # Size
                  .filter_by_aspect_ratio(0.5, 2.0)    # Dimensions
-                 .filter_by_position(min_x=0, max_x=640))  # Position
+                 .filter_by_position("center", frame_width=640,
+                                      frame_height=480))  # Position
 
         assert isinstance(result, pf.detections.Detections)
 
@@ -80,12 +81,12 @@ class TestTrackingFilterChaining:
         """Test chaining tracking filters."""
         result = (tracked_detections
                  .filter_tracked_objects()
-                 .filter_by_tracking_duration(min_duration=2.0))
+                 .filter_by_tracking_duration(min_seconds=2.0))
 
         # Should have only long-tracked objects
         for det in result:
             assert det.tracker_id is not None
-            assert det.tracking_duration >= 2.0
+            assert det.total_time >= 2.0
 
     def test_tracking_with_confidence_chain(self, tracked_detections):
         """Test combining tracking and confidence filters."""
@@ -155,7 +156,7 @@ class TestSerialization:
     def test_detection_to_json_and_back(self, sample_detection):
         """Test roundtrip serialization of single detection."""
         # Serialize
-        json_str = sample_detection.to_json()
+        json_str = json.dumps(sample_detection.to_dict())
         data = json.loads(json_str)
 
         # Verify structure

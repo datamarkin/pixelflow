@@ -68,16 +68,19 @@ def sample_detection() -> pf.detections.Detection:
         bbox=[100, 100, 200, 200],
         confidence=0.95,
         class_id=0,
-        class_name="person",
-        label="person 0.95"
+        class_name="person"
     )
 
 
 @pytest.fixture
 def sample_detection_with_mask() -> pf.detections.Detection:
-    """Create a detection with a binary mask."""
-    mask = np.zeros((100, 100), dtype=bool)
-    mask[20:80, 20:80] = True
+    """Create a detection with a binary mask.
+
+    The mask is full-frame (480x640, matching blank_image/sample_image) because
+    annotators require mask dimensions to match the frame they draw onto.
+    """
+    mask = np.zeros((480, 640), dtype=bool)
+    mask[100:200, 100:200] = True  # matches the bbox below
     return pf.detections.Detection(
         bbox=[100, 100, 200, 200],
         confidence=0.9,
@@ -187,6 +190,10 @@ def sample_zones() -> pf.Zones:
     return zones
 
 
+# ============================================================================
+# Tracking Fixtures
+# ============================================================================
+
 @pytest.fixture
 def tracked_detections() -> pf.detections.Detections:
     """Create detections with tracking IDs."""
@@ -198,7 +205,7 @@ def tracked_detections() -> pf.detections.Detections:
         class_id=0,
         tracker_id=1,
         first_seen_time=0.0,
-        tracking_duration=5.0
+        total_time=5.0
     ))
 
     detections.add_detection(pf.detections.Detection(
@@ -207,7 +214,7 @@ def tracked_detections() -> pf.detections.Detections:
         class_id=0,
         tracker_id=2,
         first_seen_time=2.0,
-        tracking_duration=3.0
+        total_time=3.0
     ))
 
     return detections

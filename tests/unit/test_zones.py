@@ -93,7 +93,7 @@ class TestZonesContainer:
         )
 
         assert len(zones.zones) == 1
-        assert "zone1" in zones.zones
+        assert "zone1" in [z.zone_id for z in zones.zones]
 
     def test_zones_add_multiple(self):
         """Test adding multiple zones."""
@@ -152,10 +152,10 @@ class TestZoneDetectionUpdate:
 
         updated = zones.update(sample_detections)
 
-        # Check if zone_ids are added to detections
+        # Zones.update() populates detection.zones / .zone_names.
         for det in updated:
-            # Each detection should have zone_ids attribute (may be empty)
-            assert hasattr(det, 'zone_ids')
+            assert hasattr(det, 'zones')
+            assert hasattr(det, 'zone_names')
 
     def test_update_with_center_strategy(self, sample_detections):
         """Test zone matching with center point strategy."""
@@ -170,7 +170,7 @@ class TestZoneDetectionUpdate:
 
         # First detection (bbox [100, 100, 200, 200]) center is at (150, 150)
         # Should be in zone1
-        matching = [d for d in updated if hasattr(d, 'zone_ids') and 'zone1' in (d.zone_ids or [])]
+        matching = [d for d in updated if 'zone1' in (d.zones or [])]
         assert len(matching) >= 1
 
     def test_update_with_bottom_center_strategy(self, sample_detections):
