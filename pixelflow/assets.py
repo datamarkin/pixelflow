@@ -42,6 +42,10 @@ _DEFAULT_BASE_URL = "https://dtmfiles.com"
 _DTMFILES_DIR = "dtmfiles"
 _CHUNK_SIZE = 65536  # 64 KB
 _SIDECAR_MAX_BYTES = 1024
+# Socket timeout for downloads. Without this urlopen blocks indefinitely, which
+# turns a mistyped filename into a hung process (media._resolve_path falls back
+# to download() for any path that isn't on disk).
+_DOWNLOAD_TIMEOUT = 30
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +185,7 @@ def _download_file(
     for attempt in range(retries):
         try:
             req = urllib.request.Request(url)
-            with urllib.request.urlopen(req) as resp:
+            with urllib.request.urlopen(req, timeout=_DOWNLOAD_TIMEOUT) as resp:
                 total = resp.headers.get("Content-Length")
                 total = int(total) if total else None
                 downloaded = 0
