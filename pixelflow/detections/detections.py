@@ -7,6 +7,7 @@ information. Designed for efficient processing and seamless integration across
 different ML frameworks and visualization tools.
 """
 
+import copy as copy_module
 import json
 import base64
 import numpy as np
@@ -472,8 +473,6 @@ class Detection:
             - Keypoints are deep copied to ensure complete independence from original
             - Useful for immutable transform operations in detection processing
         """
-        import copy as copy_module
-
         return Detection(
             inference_id=self.inference_id,
             bbox=self.bbox.copy() if self.bbox else None,
