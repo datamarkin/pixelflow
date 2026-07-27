@@ -9,6 +9,8 @@ import pytest
 import numpy as np
 import cv2
 import time
+from unittest.mock import patch
+
 import pixelflow as pf
 
 
@@ -77,9 +79,15 @@ class TestVideoReader:
             assert count == 10
 
     def test_video_reader_invalid_path(self):
-        """Test with nonexistent file."""
-        with pytest.raises(FileNotFoundError):
-            pf.VideoReader("nonexistent_file.mp4")
+        """A path that is neither on disk nor downloadable raises FileNotFoundError.
+
+        media._resolve_path falls back to assets.download() for any missing
+        path, so the download is stubbed out here — otherwise this test would
+        make a real network request to dtmfiles.com.
+        """
+        with patch("pixelflow.media.assets.download", side_effect=OSError("offline")):
+            with pytest.raises(FileNotFoundError):
+                pf.VideoReader("nonexistent_file.mp4")
 
     def test_video_reader_codec(self, temp_video_path):
         """Test codec property."""
@@ -110,8 +118,9 @@ class TestReadImage:
 
     def test_read_image_invalid_path(self):
         """Test with nonexistent file."""
-        with pytest.raises(FileNotFoundError):
-            pf.read_image("nonexistent.jpg")
+        with patch("pixelflow.media.assets.download", side_effect=OSError("offline")):
+            with pytest.raises(FileNotFoundError):
+                pf.read_image("nonexistent.jpg")
 
 
 # ============================================================================
@@ -163,14 +172,25 @@ class TestDisplayVideo:
     """Tests for display_video function."""
 
     def test_display_video_returns_none_or_int(self, sample_image):
-        """Test display_video return type."""
-        try:
+        """display_video forwards to cv2 and returns the waitKey code.
+
+        cv2.imshow/waitKey are stubbed: a real window needs a display server,
+        which CI runners do not have, and on macOS the call blocks.
+        """
+        # 255 is OpenCV's "no key pressed" sentinel.
+        with patch("cv2.imshow") as imshow, patch("cv2.waitKey", return_value=255) as wait_key:
             result = pf.display_video(sample_image, "test", wait_key=1)
-            assert result is None or isinstance(result, int)
-            pf.close_display()
-        except Exception:
-            # May fail in headless environment
-            pass
+
+        imshow.assert_called_once()
+        wait_key.assert_called_once_with(1)
+        assert result is None
+
+    def test_display_video_raises_on_quit_key(self, sample_image):
+        """Pressing the quit key raises DisplayExit so loops can break out."""
+        with patch("cv2.imshow"), patch("cv2.waitKey", return_value=ord("q")), \
+                patch("cv2.destroyWindow"):
+            with pytest.raises(pf.media.DisplayExit):
+                pf.display_video(sample_image, "test", wait_key=1)
 
 
 # ============================================================================
@@ -533,8 +553,9 @@ class TestUtilityEdgeCases:
 
     def test_video_reader_with_invalid_path(self):
         """Test VideoReader with invalid path."""
-        with pytest.raises(FileNotFoundError):
-            pf.VideoReader("nonexistent_file.mp4")
+        with patch("pixelflow.media.assets.download", side_effect=OSError("offline")):
+            with pytest.raises(FileNotFoundError):
+                pf.VideoReader("nonexistent_file.mp4")
 
     def test_timer_stop_without_start(self):
         """Test stopping timer that wasn't started."""
