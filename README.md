@@ -77,6 +77,9 @@ detections = pf.detections.from_rfdetr(model_output)
 
 # Supervision
 detections = pf.detections.from_supervision(sv_detections)
+
+# Plain arrays (numpy or torch) - no framework container to convert from
+detections = pf.detections.from_arrays(boxes, scores, class_ids, labels=model.class_names)
 ```
 
 ### Powerful Filtering
@@ -320,6 +323,7 @@ report = detections.to_json_with_metrics()
 
 | Framework | Converter | Features |
 |-----------|-----------|----------|
+| None (plain numpy/torch arrays) | `from_arrays()` | Boxes, masks, keypoints |
 | Ultralytics (YOLO) | `from_ultralytics()` | Boxes, masks, keypoints |
 | Detectron2 | `from_detectron2()` | Boxes, masks, keypoints |
 | Mayaku | `from_mayaku()` | Boxes, masks, keypoints |
