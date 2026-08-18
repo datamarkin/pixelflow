@@ -46,18 +46,18 @@ def small_image() -> np.ndarray:
 @pytest.fixture
 def sample_keypoint() -> pf.detections.KeyPoint:
     """Create a sample keypoint."""
-    return pf.detections.KeyPoint(x=100, y=200, name="nose", visibility=True)
+    return pf.detections.KeyPoint(x=100, y=200, id=0, name="nose", confidence=0.9)
 
 
 @pytest.fixture
 def sample_keypoints() -> List[pf.detections.KeyPoint]:
     """Create a list of sample keypoints for pose estimation."""
     return [
-        pf.detections.KeyPoint(x=100, y=100, name="nose", visibility=True),
-        pf.detections.KeyPoint(x=90, y=110, name="left_eye", visibility=True),
-        pf.detections.KeyPoint(x=110, y=110, name="right_eye", visibility=True),
-        pf.detections.KeyPoint(x=80, y=130, name="left_ear", visibility=False),
-        pf.detections.KeyPoint(x=120, y=130, name="right_ear", visibility=True),
+        pf.detections.KeyPoint(x=100, y=100, id=0, name="nose", confidence=0.9),
+        pf.detections.KeyPoint(x=90, y=110, id=1, name="left_eye", confidence=0.9),
+        pf.detections.KeyPoint(x=110, y=110, id=2, name="right_eye", confidence=0.9),
+        pf.detections.KeyPoint(x=80, y=130, id=3, name="left_ear", confidence=0.0),
+        pf.detections.KeyPoint(x=120, y=130, id=4, name="right_ear", confidence=0.9),
     ]
 
 
