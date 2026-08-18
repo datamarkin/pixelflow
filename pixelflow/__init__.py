@@ -15,7 +15,6 @@ from . import smoother
 from . import timer
 from . import tracker
 from . import assets
-from .classes import COCO_LABELS
 
 # Import specific functions for top-level access
 from .media import (
@@ -77,7 +76,6 @@ __all__ = [
     "tracker",
 
     # Constants
-    "COCO_LABELS",
 
     # Metadata
     "__version__",
