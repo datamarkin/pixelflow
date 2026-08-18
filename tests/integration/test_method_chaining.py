@@ -199,12 +199,13 @@ class TestSerialization:
         assert "keypoints" in data
         assert len(data["keypoints"]) > 0
 
-        # Each keypoint should have x, y, name, visibility
+        # Each keypoint should have x, y, id, name, confidence
         for kp in data["keypoints"]:
             assert "x" in kp
             assert "y" in kp
             assert "name" in kp
-            assert "visibility" in kp
+            assert "id" in kp
+            assert "confidence" in kp
 
 
     def test_full_pipeline_with_serialization(self, sample_detections):

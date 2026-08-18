@@ -20,11 +20,12 @@ class TestKeyPoint:
 
     def test_keypoint_creation(self):
         """Test basic keypoint creation."""
-        kp = pf.detections.KeyPoint(x=100, y=200, name="nose", visibility=True)
+        kp = pf.detections.KeyPoint(x=100, y=200, id=0, name="nose", confidence=0.9)
         assert kp.x == 100
         assert kp.y == 200
         assert kp.name == "nose"
-        assert kp.visibility is True
+        assert kp.id == 0
+        assert kp.confidence == 0.9
 
     def test_keypoint_to_dict(self, sample_keypoint):
         """Test keypoint serialization to dict."""
@@ -32,7 +33,8 @@ class TestKeyPoint:
         assert data["x"] == 100
         assert data["y"] == 200
         assert data["name"] == "nose"
-        assert data["visibility"] is True
+        assert data["id"] == 0
+        assert data["confidence"] == 0.9
 
     def test_keypoint_numpy_conversion(self):
         """Test keypoint with numpy integer types."""
@@ -40,7 +42,8 @@ class TestKeyPoint:
             x=np.int64(150),
             y=np.int32(250),
             name="point",
-            visibility=True
+            id=0,
+            confidence=0.9
         )
         data = kp.to_dict()
         # Should convert numpy types to Python native types

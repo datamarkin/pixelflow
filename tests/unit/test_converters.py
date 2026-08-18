@@ -319,7 +319,7 @@ class TestDetectron2Converter:
                 self.pred_boxes = MockBoxes([[100, 100, 200, 200]])
                 self.scores = MockTensor([0.95])
                 self.pred_classes = MockTensor([0])
-                # 3 keypoints: (x, y, visibility)
+                # 3 keypoints: (x, y, confidence)
                 self.pred_keypoints = MockTensor([[[150, 120, 2.0], [140, 115, 1.0], [160, 115, 0.0]]])
                 self._fields = {"pred_boxes", "scores", "pred_classes", "pred_keypoints"}
 
@@ -344,11 +344,12 @@ class TestDetectron2Converter:
         assert len(detections[0].keypoints) == 3
         assert detections[0].keypoints[0].name == "nose"
         assert detections[0].keypoints[0].x == 150
-        assert detections[0].keypoints[0].visibility is True  # 2.0 > 0
+        assert detections[0].keypoints[0].id == 0
+        assert detections[0].keypoints[0].confidence == 2.0
         assert detections[0].keypoints[1].name == "left_eye"
-        assert detections[0].keypoints[1].visibility is True  # 1.0 > 0
+        assert detections[0].keypoints[1].confidence == 1.0
         assert detections[0].keypoints[2].name == "right_eye"
-        assert detections[0].keypoints[2].visibility is False  # 0.0 > 0 = False
+        assert detections[0].keypoints[2].confidence == 0.0
 
 
 # ============================================================================
@@ -505,9 +506,10 @@ class TestMayakuConverter:
         assert len(detections[0].keypoints) == 3
         assert detections[0].keypoints[0].name == "nose"
         assert detections[0].keypoints[0].x == 150
-        assert detections[0].keypoints[0].visibility is True   # 0.9 > 0
-        assert detections[0].keypoints[1].visibility is True   # 0.5 > 0
-        assert detections[0].keypoints[2].visibility is False  # 0.0 > 0 = False
+        assert [kp.id for kp in detections[0].keypoints] == [0, 1, 2]
+        assert detections[0].keypoints[0].confidence == pytest.approx(0.9)
+        assert detections[0].keypoints[1].confidence == pytest.approx(0.5)
+        assert detections[0].keypoints[2].confidence == pytest.approx(0.0)
 
     def test_from_mayaku_with_masks(self):
         """Test Mayaku mask conversion. Masks are (N, H, W) bool after postprocess."""
@@ -701,7 +703,7 @@ class TestDatamarkinAPIConverter:
         assert detections[1].class_name == "car"
 
     def test_from_datamarkin_keypoints(self):
-        """Keypoint probability > 0 maps to visibility=True."""
+        """Keypoint probability is carried through as confidence, not thresholded."""
         api_response = {
             "predictions": {
                 "objects": [
@@ -723,8 +725,9 @@ class TestDatamarkinAPIConverter:
         assert len(detections[0].keypoints) == 2
         assert detections[0].keypoints[0].name == "nose"
         assert detections[0].keypoints[0].x == 150
-        assert detections[0].keypoints[0].visibility is True
-        assert detections[0].keypoints[1].visibility is False
+        assert detections[0].keypoints[0].confidence == pytest.approx(0.8)
+        assert detections[0].keypoints[1].confidence == pytest.approx(0.0)
+        assert [kp.id for kp in detections[0].keypoints] == [0, 1]
 
 
 # ============================================================================
@@ -849,3 +852,103 @@ class TestFalconPerceptionConverter:
                 output, image_size=(100, 100), label="cat"
             )
         assert len(detections) == 0
+
+
+class TestArraysConverter:
+    """Tests for from_arrays, the framework-free converter."""
+
+    def test_boxes_scores_and_classes(self):
+        detections = pf.detections.from_arrays(
+            boxes=[[10, 20, 110, 220], [30, 40, 130, 240]],
+            scores=[0.9, 0.8],
+            class_ids=[0, 2],
+        )
+        assert len(detections) == 2
+        assert detections[0].bbox == [10, 20, 110, 220]
+        assert detections[0].confidence == 0.9
+        assert detections[1].class_id == 2
+
+    def test_labels_resolve_class_names(self):
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1]], scores=[0.5], class_ids=[2],
+            labels=["person", "bike", "car"],
+        )
+        assert detections[0].class_name == "car"
+
+    def test_numpy_input(self):
+        detections = pf.detections.from_arrays(
+            boxes=np.array([[0.0, 0.0, 5.0, 5.0]]),
+            scores=np.array([0.7]),
+            class_ids=np.array([1]),
+        )
+        assert len(detections) == 1
+        assert detections[0].class_id == 1
+
+    def test_masks_are_cast_to_bool(self):
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 4, 4]], scores=[0.6], class_ids=[0],
+            masks=np.ones((1, 4, 4), dtype=np.float32),
+        )
+        assert detections[0].masks[0].dtype == bool
+        assert detections[0].masks[0].shape == (4, 4)
+
+    def test_keypoints_carry_id_and_score(self):
+        keypoints = np.zeros((1, 17, 3), dtype=np.float32)
+        keypoints[0, 0] = [5, 6, 0.9]
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 10, 10]], scores=[0.8], class_ids=[0], keypoints=keypoints,
+        )
+        first = detections[0].keypoints[0]
+        assert (first.x, first.y) == (5, 6)
+        assert first.id == 0
+        assert first.confidence == pytest.approx(0.9)
+
+    def test_keypoints_are_unnamed_without_labels(self):
+        """A model whose vocabulary nobody stated gets ids, not COCO's pose names."""
+        keypoints = np.zeros((1, 21, 3), dtype=np.float32)
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 10, 10]], scores=[0.8], class_ids=[0], keypoints=keypoints,
+        )
+        kps = detections[0].keypoints
+        assert len(kps) == 21
+        assert [kp.id for kp in kps] == list(range(21))
+        assert all(kp.name is None for kp in kps)
+
+    def test_empty_input(self):
+        assert len(pf.detections.from_arrays(boxes=[], scores=[], class_ids=[])) == 0
+
+    def test_mismatched_lengths_raise(self):
+        with pytest.raises(ValueError, match="scores describes 2"):
+            pf.detections.from_arrays(boxes=[[0, 0, 1, 1]], scores=[0.5, 0.6], class_ids=[0])
+
+    def test_torch_tensors_are_detached(self):
+        torch = pytest.importorskip("torch")
+        detections = pf.detections.from_arrays(
+            boxes=torch.tensor([[1.0, 2.0, 3.0, 4.0]], requires_grad=True),
+            scores=torch.tensor([0.5]),
+            class_ids=torch.tensor([1]),
+            labels=["a", "b"],
+        )
+        assert detections[0].class_name == "b"
+
+
+class TestNoBundledVocabulary:
+    """pixelflow holds no dataset's class names. Callers state their model's vocabulary."""
+
+    def test_no_label_constants_are_exported(self):
+        """A container library knowing about COCO is how the mislabelling bug got written."""
+        assert not [name for name in dir(pf) if "COCO" in name.upper()]
+
+    def test_names_come_only_from_the_caller(self):
+        ids = [1, 73]
+        unnamed = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], class_ids=ids,
+        )
+        assert [d.class_id for d in unnamed] == ids
+        assert all(d.class_name is None for d in unnamed)
+
+        named = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], class_ids=ids,
+            labels={1: "person", 73: "laptop"},
+        )
+        assert [d.class_name for d in named] == ["person", "laptop"]
