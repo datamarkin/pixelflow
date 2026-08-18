@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _meets_confidence
 from ..colors import _get_color_for_prediction
 
 
@@ -40,7 +40,8 @@ def keypoint_skeleton(
     detections: 'Detections',
     connections: Optional[List[Tuple[str, str]]] = None,
     thickness: Optional[int] = None,
-    colors: Optional[List[tuple]] = None
+    colors: Optional[List[tuple]] = None,
+    min_confidence: float = 0.0
 ) -> np.ndarray:
     """
     Draw skeleton connections between keypoints.
@@ -54,7 +55,7 @@ def keypoint_skeleton(
                            Modified in-place with drawn skeleton lines.
         detections (Detections): Detections object containing keypoints.
                                 Each detection may have a 'keypoints' attribute with
-                                KeyPoint objects (x, y, name, visibility).
+                                KeyPoint objects (x, y, id, name, confidence).
         connections (Optional[List[Tuple[str, str]]]): List of keypoint name pairs
                                                        defining which points to connect.
                                                        Format: [("nose", "left_eye"), ...]
@@ -64,6 +65,10 @@ def keypoint_skeleton(
         colors (Optional[List[tuple]]): List of RGB color tuples for custom colors.
                                        Colors mapped to unique class_ids in order.
                                        If None, uses default ColorManager colors.
+        min_confidence (float): Skip a connection unless both of its keypoints score at
+                               or above this. Default 0.0 draws every bone the model
+                               returned; the threshold is yours to choose because only
+                               you know what the score means.
 
     Returns:
         np.ndarray: Image with skeleton drawn. The input image is modified in-place.
@@ -110,7 +115,7 @@ def keypoint_skeleton(
         ... )
 
     Notes:
-        - Only draws connections where both keypoints are visible
+        - Only draws connections where both keypoints score at or above min_confidence
         - Default connections follow COCO human pose skeleton format
         - Missing keypoint names are skipped gracefully
         - Input image is modified in-place for memory efficiency
@@ -140,7 +145,8 @@ def keypoint_skeleton(
         color = _get_color_for_prediction(detection, colors)
 
         # Build keypoint lookup dictionary for fast access
-        kp_dict = {kp.name: kp for kp in detection.keypoints}
+        # Connections are named, so unnamed keypoints cannot take part in a skeleton.
+        kp_dict = {kp.name: kp for kp in detection.keypoints if kp.name}
 
         # Draw each connection
         for start_name, end_name in connections:
@@ -151,8 +157,9 @@ def keypoint_skeleton(
             start_kp = kp_dict[start_name]
             end_kp = kp_dict[end_name]
 
-            # Only draw if both keypoints are visible
-            if not start_kp.visibility or not end_kp.visibility:
+            # Only draw a bone when both ends clear the caller's threshold
+            if not (_meets_confidence(start_kp, min_confidence)
+                    and _meets_confidence(end_kp, min_confidence)):
                 continue
 
             # Get coordinates

@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 import math
 from typing import Tuple, Union, Dict, List, Optional
-from ..detections.detections import Detections, Detection, KeyPoint
+from ..detections.detections import Detections, Detection
 from . import image as image_transforms
 
 __all__ = [
@@ -118,11 +118,9 @@ def rotate_detections(
             # Create new keypoints with transformed coordinates
             new_keypoints = []
             for i, kp in enumerate(detection.keypoints):
-                new_kp = KeyPoint(
-                    x=int(transformed_coords[i, 0]),
-                    y=int(transformed_coords[i, 1]),
-                    name=kp.name,
-                    visibility=kp.visibility
+                new_kp = kp.with_xy(
+                    int(transformed_coords[i, 0]),
+                    int(transformed_coords[i, 1]),
                 )
                 new_keypoints.append(new_kp)
             detection.keypoints = new_keypoints
@@ -249,12 +247,7 @@ def flip_horizontal_detections(
         if detection.keypoints is not None:
             new_keypoints = []
             for kp in detection.keypoints:
-                new_kp = KeyPoint(
-                    x=int(w - kp.x),
-                    y=int(kp.y),
-                    name=kp.name,
-                    visibility=kp.visibility
-                )
+                new_kp = kp.with_xy(int(w - kp.x), int(kp.y))
                 new_keypoints.append(new_kp)
             detection.keypoints = new_keypoints
 
@@ -361,12 +354,7 @@ def flip_vertical_detections(
         if detection.keypoints is not None:
             new_keypoints = []
             for kp in detection.keypoints:
-                new_kp = KeyPoint(
-                    x=int(kp.x),
-                    y=int(h - kp.y),
-                    name=kp.name,
-                    visibility=kp.visibility
-                )
+                new_kp = kp.with_xy(int(kp.x), int(h - kp.y))
                 new_keypoints.append(new_kp)
             detection.keypoints = new_keypoints
 
@@ -491,12 +479,7 @@ def crop_detections(
             for kp in new_detection.keypoints:
                 # Check if keypoint is within crop
                 if x1 <= kp.x <= x2 and y1 <= kp.y <= y2:
-                    new_kp = KeyPoint(
-                        x=int(kp.x - x1),
-                        y=int(kp.y - y1),
-                        name=kp.name,
-                        visibility=kp.visibility
-                    )
+                    new_kp = kp.with_xy(int(kp.x - x1), int(kp.y - y1))
                     new_keypoints.append(new_kp)
             new_detection.keypoints = new_keypoints if new_keypoints else None
 

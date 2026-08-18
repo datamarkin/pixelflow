@@ -26,71 +26,80 @@ __all__ = ["KeyPoint", "Detection", "Detections"]
 
 class KeyPoint:
     """
-    Represents a single keypoint with coordinate and visibility information for pose estimation.
-    
-    Stores spatial coordinates and visibility state for structured keypoint data representation
-    in pose estimation and object keypoint detection tasks. Provides a standardized format
-    for keypoint data across different ML frameworks and coordinate systems.
-    
+    One landmark of a detected object, in the shape :class:`Detection` uses for its class.
+
+    A keypoint is identified by its `id`: the position it occupies in the vocabulary the model
+    was trained on. That number comes out of the weights and is always right. Its `name` is
+    metadata about that number, and metadata has to come from somewhere -- the weights, or the
+    caller. Where neither supplies it, `name` is None rather than a plausible guess: a hand model
+    with 21 landmarks and a pose model with 17 both emit an index 5, and calling that
+    "left_shoulder" because a pose model's fifth landmark is one would be wrong in a way nobody
+    would think to check.
+
     Args:
-        x (int): X coordinate in pixels from image left edge.
-        y (int): Y coordinate in pixels from image top edge.
-        name (str): Descriptive name or label for the keypoint (e.g., "nose", "left_eye").
-        visibility (bool): Whether the keypoint is visible and detectable in the image.
-    
+        x (int): X coordinate in pixels from the image's left edge.
+        y (int): Y coordinate in pixels from the image's top edge.
+        id (int): Index of this landmark in the model's keypoint vocabulary.
+        name (Optional[str]): Human-readable name, when the model or caller supplies one.
+        confidence (Optional[float]): The score the model emitted for this landmark.
+
     Example:
         >>> import pixelflow as pf
-        >>> 
-        >>> # Create a keypoint for pose estimation
-        >>> nose_point = pf.detections.KeyPoint(x=320, y=240, name="nose", visibility=True)
-        >>> print(f"Nose at ({nose_point.x}, {nose_point.y})")
-        >>> 
-        >>> # Create keypoint with occlusion
-        >>> hidden_point = pf.detections.KeyPoint(x=150, y=200, name="left_elbow", visibility=False)
-        >>> 
-        >>> # Use in detection workflow
-        >>> keypoints = [nose_point, hidden_point]
-        >>> detection = pf.detections.Detection(keypoints=keypoints, class_name="person")
-    
+        >>>
+        >>> # Named, because the caller knew the vocabulary
+        >>> nose = pf.detections.KeyPoint(x=320, y=240, id=0, name="nose", confidence=0.98)
+        >>>
+        >>> # Unnamed: the index still identifies it exactly
+        >>> fifth = pf.detections.KeyPoint(x=150, y=200, id=5, confidence=0.12)
+        >>> fifth.name is None
+        True
+
     Notes:
-        - Coordinates are stored as integers for pixel-perfect alignment
-        - Visibility flag helps distinguish between occluded and visible keypoints
-        - Compatible with major pose estimation frameworks (MediaPipe, OpenPose, etc.)
+        - Coordinates are stored as integers for pixel-perfect alignment.
+        - `confidence` is the model's raw score, not a boolean. Deciding what counts as visible
+          is the caller's threshold to pick; annotators take `min_confidence` for exactly this.
+        - `id` is meaningful only within the model that produced it. Two models' index 5 are
+          unrelated unless they share a vocabulary.
     """
-    
-    def __init__(self, x: int, y: int, name: str, visibility: bool):
+
+    def __init__(self, x: int, y: int, id: int, name: Optional[str] = None,
+                 confidence: Optional[float] = None):
         self.x = x
         self.y = y
+        self.id = id
         self.name = name
-        self.visibility = visibility
+        self.confidence = confidence
 
-    def to_dict(self) -> Dict[str, Union[int, str, bool]]:
+    def with_xy(self, x: int, y: int) -> "KeyPoint":
+        """
+        Return a copy of this keypoint moved to `(x, y)`, keeping its identity.
+
+        Geometric transforms move a landmark without changing which landmark it is, so
+        `id`, `name` and `confidence` carry across untouched. Having one place that says
+        what "the same keypoint, somewhere else" means keeps the eight transform call
+        sites from drifting apart when a field is added.
+
+        Args:
+            x (int): New X coordinate in pixels.
+            y (int): New Y coordinate in pixels.
+
+        Returns:
+            KeyPoint: A new keypoint at `(x, y)` with this one's id, name and confidence.
+        """
+        return KeyPoint(x, y, self.id, self.name, self.confidence)
+
+    def to_dict(self) -> Dict[str, Any]:
         """
         Convert KeyPoint to dictionary format for JSON serialization and storage.
 
-        Transforms the KeyPoint object into a standardized dictionary representation
-        suitable for JSON export, API responses, and data persistence workflows.
-        Automatically converts NumPy types to native Python types for JSON compatibility.
-
         Returns:
-            Dict[str, Union[int, str, bool]]: Dictionary containing x, y, name, and visibility fields
-                                            in standardized format for serialization.
+            Dict[str, Any]: The keypoint's x, y, id, name and confidence. `name` is None when
+                nothing supplied one, so a consumer can tell "unnamed" from a real name.
 
         Example:
             >>> import pixelflow as pf
-            >>>
-            >>> # Basic keypoint serialization
-            >>> keypoint = pf.detections.KeyPoint(100, 200, "nose", True)
-            >>> data = keypoint.to_dict()
-            >>> print(data)  # {'x': 100, 'y': 200, 'name': 'nose', 'visibility': True}
-            >>>
-            >>> # JSON export workflow
-            >>> import json
-            >>> json_str = json.dumps(data)
-            >>>
-            >>> # Multiple keypoints serialization
-            >>> keypoints = [pf.detections.KeyPoint(x, y, f"point_{i}", True) for i, (x, y) in enumerate([(100, 200), (150, 250)])]
-            >>> serialized = [kp.to_dict() for kp in keypoints]
+            >>> pf.detections.KeyPoint(100, 200, 0, "nose", 0.9).to_dict()
+            {'x': 100, 'y': 200, 'id': 0, 'name': 'nose', 'confidence': 0.9}
         """
         # Convert numpy types to native Python types for JSON serialization
         x_val = int(self.x) if isinstance(self.x, np.integer) else self.x
@@ -99,8 +108,9 @@ class KeyPoint:
         return {
             "x": x_val,
             "y": y_val,
+            "id": int(self.id) if self.id is not None else None,
             "name": self.name,
-            "visibility": self.visibility
+            "confidence": float(self.confidence) if self.confidence is not None else None,
         }
 
 
@@ -169,7 +179,7 @@ class Detection:
         ... )
         >>> 
         >>> # Detection with keypoints for pose estimation
-        >>> nose_point = pf.detections.KeyPoint(250, 120, "nose", True)
+        >>> nose_point = pf.detections.KeyPoint(250, 120, id=0, name="nose", confidence=0.98)
         >>> pose_detection = pf.detections.Detection(
         ...     bbox=[200, 100, 300, 400],
         ...     class_name="person",
@@ -246,7 +256,7 @@ class Detection:
             >>> json_str = json.dumps(data, indent=2)  # Now JSON-safe!
             >>>
             >>> # Detection with keypoints serialization
-            >>> keypoint = pf.detections.KeyPoint(250, 120, "nose", True)
+            >>> keypoint = pf.detections.KeyPoint(250, 120, id=0, name="nose", confidence=0.98)
             >>> detection_with_pose = pf.detections.Detection(
             ...     bbox=[200, 100, 300, 400],
             ...     keypoints=[keypoint],
@@ -478,7 +488,7 @@ class Detection:
             bbox=self.bbox.copy() if self.bbox else None,
             masks=copy_module.deepcopy(self.masks) if self.masks else None,
             segments=copy_module.deepcopy(self.segments) if self.segments else None,
-            keypoints=[KeyPoint(kp.x, kp.y, kp.name, kp.visibility) for kp in self.keypoints] if self.keypoints else None,
+            keypoints=[kp.with_xy(kp.x, kp.y) for kp in self.keypoints] if self.keypoints else None,
             class_id=self.class_id,
             class_name=self.class_name,
             labels=self.labels.copy() if self.labels else None,

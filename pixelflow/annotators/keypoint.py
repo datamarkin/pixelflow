@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 import cv2
 import numpy as np
-from .utils import _get_adaptive_params
+from .utils import _get_adaptive_params, _meets_confidence
 from ..colors import _get_color_for_prediction
 
 
@@ -15,13 +15,15 @@ def keypoint(
     radius: Optional[int] = None,
     thickness: Optional[int] = None,
     colors: Optional[List[tuple]] = None,
-    show_names: bool = False
+    show_names: bool = False,
+    min_confidence: float = 0.0
 ) -> np.ndarray:
     """
     Draw keypoint markers on detected objects.
 
-    Visualizes keypoint locations as colored circles on the image. Respects keypoint
-    visibility flags and automatically adapts marker size based on image dimensions.
+    Visualizes keypoint locations as colored circles on the image. Respects a
+    caller-chosen confidence threshold and automatically adapts marker size based on
+    image dimensions.
     Useful for pose estimation, landmark detection, and any application involving
     point annotations.
 
@@ -30,7 +32,7 @@ def keypoint(
                            Modified in-place with drawn keypoint markers.
         detections (Detections): Detections object containing keypoints.
                                 Each detection may have a 'keypoints' attribute with
-                                KeyPoint objects (x, y, name, visibility).
+                                KeyPoint objects (x, y, id, name, confidence).
         radius (Optional[int]): Radius of keypoint circles in pixels.
                                If None, automatically scaled based on image size.
         thickness (Optional[int]): Thickness of circle outline in pixels.
@@ -40,7 +42,10 @@ def keypoint(
                                        Colors mapped to unique class_ids in order.
                                        If None, uses default ColorManager colors.
         show_names (bool): If True, draws keypoint names as text labels next to points.
-                          Default is False.
+                          Keypoints without a name are skipped. Default is False.
+        min_confidence (float): Skip keypoints scoring below this. Default 0.0 draws
+                               everything the model returned; the threshold is yours to
+                               choose because only you know what the score means.
 
     Returns:
         np.ndarray: Image with keypoints drawn. The input image is modified in-place.
@@ -76,7 +81,7 @@ def keypoint(
         >>> annotated = pf.annotate.keypoint_skeleton(image, detections, thickness=2)
 
     Notes:
-        - Only draws keypoints with visibility=True
+        - Only draws keypoints scoring at or above min_confidence
         - Radius is automatically scaled with image size if not specified
         - Input image is modified in-place for memory efficiency
         - Keypoint names can be displayed for debugging or annotation purposes
@@ -106,8 +111,7 @@ def keypoint(
 
         # Draw each keypoint
         for kp in detection.keypoints:
-            # Skip invisible keypoints
-            if not kp.visibility:
+            if not _meets_confidence(kp, min_confidence):
                 continue
 
             x, y = int(kp.x), int(kp.y)

@@ -1,11 +1,14 @@
 """
 Detection Converters for Machine Learning Framework Integration.
 
-Provides standardized conversion utilities to transform detection outputs from 
-various machine learning frameworks (Detectron2, Ultralytics YOLO, Datamarkin API, 
-Transformers) into PixelFlow's unified Detections format. This module enables seamless 
-integration with different ML backends while maintaining consistent data structures r
+Provides standardized conversion utilities to transform detection outputs from
+various machine learning frameworks (Detectron2, Ultralytics YOLO, Datamarkin API,
+Transformers) into PixelFlow's unified Detections format. This module enables seamless
+integration with different ML backends while maintaining consistent data structures
 for downstream processing, visualization, and analysis workflows.
+
+Framework-free deployment code -- code with no framework container to convert from --
+is served by `from_arrays`, which accepts plain numpy or torch arrays directly.
 """
 
 import ast
@@ -15,6 +18,7 @@ import numpy as np
 from typing import (List, Dict, Any, Union, Optional)
 
 __all__ = [
+    "from_arrays",
     "from_datamarkin",
     "from_florence2",
     "from_detectron2",
@@ -29,10 +33,34 @@ __all__ = [
     "from_efficienttam"
 ]
 
-from ..classes import COCO_LABELS
 
-# Derive COCO keypoint names from COCO_LABELS for internal fallback
-_COCO_KEYPOINT_NAMES = [kp["name"] for kp in COCO_LABELS[0]["keypoints"]]
+def _to_numpy(array):
+    """Return `array` as numpy, detaching torch tensors and passing None through."""
+    if array is None:
+        return None
+    if hasattr(array, "detach"):
+        array = array.detach().cpu()
+    return np.asarray(array)
+
+
+def _build_keypoints(kpt_data, kp_names):
+    """Build KeyPoint objects from a `(K, 3)` array of `(x, y, score)` rows.
+
+    `id` is the row's index in the model's keypoint vocabulary. `name` is taken from
+    `kp_names` when the caller supplied one for that index and is None otherwise -- a
+    landmark's name is metadata that has to come from somewhere, and guessing it is how
+    a 21-point hand model ends up reporting `left_shoulder`.
+    """
+    from .detections import KeyPoint
+
+    return [
+        KeyPoint(
+            x=int(kpt[0]), y=int(kpt[1]), id=idx,
+            name=kp_names[idx] if kp_names and idx < len(kp_names) else None,
+            confidence=float(kpt[2]),
+        )
+        for idx, kpt in enumerate(kpt_data)
+    ]
 
 
 def _get_label_info(labels, class_id):
@@ -108,7 +136,7 @@ def from_datamarkin(api_response: Dict[str, Any]):
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
     Notes:
-        - Keypoint probability > 0 is converted to visibility=True.
+        - Keypoint probability is carried through as `confidence`, not thresholded.
     """
     from .detections import Detections, Detection, KeyPoint
 
@@ -121,26 +149,21 @@ def from_datamarkin(api_response: Dict[str, Any]):
         class_name = obj.get("class", "")
         confidence = obj.get("bbox_score", None)
 
-        # Convert API keypoint format to PixelFlow KeyPoint objects
         # API format: {"name": "p0", "point": [x, y], "probability": 0.375}
-        # PixelFlow format: KeyPoint(x, y, name, visibility)
+        # The API names its own keypoints, so nothing here has to be inferred. Position in the
+        # list is the id, and an absent name stays absent rather than becoming "".
         keypoints = None
-        if keypoints_api and len(keypoints_api) > 0:
+        if keypoints_api:
             keypoints = []
-            for kp_dict in keypoints_api:
-                point = kp_dict.get("point", [0, 0])
-                probability = kp_dict.get("probability", 0.0)
-
-                # Convert probability to visibility (True if probability > 0)
-                visibility = probability > 0.0
-
-                keypoint = KeyPoint(
+            for idx, kp in enumerate(keypoints_api):
+                point = kp.get("point", (0, 0))
+                keypoints.append(KeyPoint(
                     x=int(point[0]),
                     y=int(point[1]),
-                    name=kp_dict.get("name", ""),
-                    visibility=visibility
-                )
-                keypoints.append(keypoint)
+                    id=idx,
+                    name=kp.get("name") or None,
+                    confidence=kp.get("probability"),
+                ))
 
         # Create the Detection object
         detection = Detection(
@@ -313,6 +336,95 @@ def from_florence2(
     return detections_obj
 
 
+def from_arrays(boxes, scores, class_ids, masks=None, keypoints=None, labels=None):
+    """Convert plain detection arrays to a Detections object.
+
+    The framework-free entry point. Every other converter in this module is named
+    after a framework's output container — `sv.Detections`, D2's `Instances`, an
+    Ultralytics `Results`. Deployment code that has been extracted from a research
+    repository has no such container: it returns arrays, because stripping the
+    framework wrapper is what extraction is for. This converter takes those arrays
+    directly, so a vendored model does not need a converter of its own.
+
+    Torch tensors and numpy arrays are both accepted; tensors are detached and moved
+    to CPU automatically.
+
+    Args:
+        boxes: `(N, 4)` bounding boxes in absolute XYXY pixel coordinates.
+        scores: `(N,)` confidence scores.
+        class_ids: `(N,)` integer class IDs.
+        masks: Optional `(N, H, W)` masks, cast to boolean. Instance segmentation only.
+        keypoints: Optional `(N, K, 3)` keypoints with `(x, y, score)` columns.
+        labels: Optional label definitions for class and keypoint name resolution.
+            Accepts the same three formats as `from_detectron2`:
+            - List[str]: ["person", "car"] — index = class_id
+            - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
+            - List[dict]: [{"id": 0, "name": "person", "keypoints": [...]}]
+
+    Returns:
+        Detections: Bounding boxes, masks, keypoints, class IDs and confidence
+        scores in PixelFlow's unified format.
+
+    Raises:
+        ValueError: If the arrays do not all describe the same number of detections.
+
+    Example:
+        >>> import pixelflow as pf
+        >>> boxes = [[10, 20, 110, 220], [30, 40, 130, 240]]
+        >>> detections = pf.detections.from_arrays(
+        ...     boxes, scores=[0.9, 0.8], class_ids=[0, 2], labels=["person", "bike", "car"]
+        ... )
+        >>> len(detections)
+        2
+        >>> detections[0].class_name
+        'person'
+
+    Notes:
+        - Boxes must already be in absolute pixel coordinates. Normalised boxes, or
+          the CXCYWH layout many DETR-style models emit internally, must be converted
+          by the caller — this function cannot tell the layouts apart.
+        - No score threshold is applied. Chain `filter_by_confidence()` to cut the tail.
+        - Pass the model's own class names as `labels`. A checkpoint fine-tuned on your
+          data has its own vocabulary, and another model's names would mislabel every
+          detection rather than fail.
+    """
+    from .detections import Detections, Detection
+
+    detections_obj = Detections()
+
+    boxes = _to_numpy(boxes)
+    scores = _to_numpy(scores)
+    class_ids = _to_numpy(class_ids)
+    masks = _to_numpy(masks)
+    keypoints = _to_numpy(keypoints)
+
+    count = len(boxes)
+    for name, array in (("scores", scores), ("class_ids", class_ids),
+                        ("masks", masks), ("keypoints", keypoints)):
+        if array is not None and len(array) != count:
+            raise ValueError(
+                f"{name} describes {len(array)} detections but boxes describes {count}"
+            )
+
+    for i in range(count):
+        class_id = int(class_ids[i])
+        class_name, kp_names = _get_label_info(labels, class_id)
+
+        kpts = _build_keypoints(keypoints[i], kp_names) if keypoints is not None else None
+
+        detections_obj.add_detection(Detection(
+            bbox=boxes[i].tolist(),
+            masks=[masks[i].astype(bool)] if masks is not None else None,
+            segments=None,
+            keypoints=kpts,
+            class_id=class_id,
+            class_name=class_name,
+            confidence=float(scores[i])
+        ))
+
+    return detections_obj
+
+
 def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
     """Convert Detectron2 inference results to a Detections object.
 
@@ -330,7 +442,7 @@ def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
     Example:
         >>> import pixelflow as pf
         >>> outputs = predictor(image)
-        >>> detections = pf.detections.from_detectron2(outputs, labels=pf.COCO_LABELS)
+        >>> detections = pf.detections.from_detectron2(outputs, labels=predictor.class_names)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
@@ -339,7 +451,7 @@ def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
         - Segmentation masks are converted to boolean arrays.
         - Keypoints are converted to KeyPoint objects with names from labels.
     """
-    from .detections import Detections, Detection, KeyPoint
+    from .detections import Detections, Detection
     
     detections_obj = Detections()
     
@@ -391,17 +503,8 @@ def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
             mask = mask_data
 
         # Handle keypoints if available
-        kpts = None
-        if keypoints is not None:
-            kpt_data = keypoints[i]  # shape (K, 3): x, y, visibility_score
-            names = kp_names or _COCO_KEYPOINT_NAMES
-            kpts = []
-            for idx, kpt in enumerate(kpt_data):
-                name = names[idx] if idx < len(names) else f"keypoint_{idx}"
-                kpts.append(KeyPoint(
-                    x=int(kpt[0]), y=int(kpt[1]),
-                    name=name, visibility=float(kpt[2]) > 0
-                ))
+        # keypoints[i] has shape (K, 3): x, y, confidence
+        kpts = _build_keypoints(keypoints[i], kp_names) if keypoints is not None else None
         
         # Create a Detection object
         detection = Detection(
@@ -462,12 +565,10 @@ def from_mayaku(mayaku_instances, labels=None):
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
     Notes:
-        - Use `predictor.class_names`, NOT `pf.COCO_LABELS`. Mayaku
-          checkpoints carry their own vocabulary in the sidecar, and the
-          pretrained models are trained on Objects365 (365 classes), not
-          COCO. Passing COCO_LABELS mislabels every detection — class 5
-          is "Car" in Objects365 but "bus" in COCO — and leaves the 285
-          class IDs beyond COCO's range with `class_name=None`.
+        - Use `predictor.class_names`. Mayaku checkpoints carry their own
+          vocabulary in the sidecar, and the pretrained models are trained on
+          Objects365 (365 classes). Another dataset's names mislabel every
+          detection — class 5 is "Car" in Objects365 but "bus" in COCO.
         - A predictor accepts a path directly and decodes it as RGB.
           When passing an array instead, it must be RGB: `cv2.imread`
           gives BGR, so convert with `mayaku.utils.bgr_to_rgb` first.
@@ -478,7 +579,7 @@ def from_mayaku(mayaku_instances, labels=None):
         - Mayaku auto-runs `detector_postprocess`, so coordinates and
           masks are already in original image space.
     """
-    from .detections import Detections, Detection, KeyPoint
+    from .detections import Detections, Detection
 
     detections_obj = Detections()
 
@@ -518,17 +619,8 @@ def from_mayaku(mayaku_instances, labels=None):
         if masks is not None:
             mask = masks[i].astype(bool)
 
-        kpts = None
-        if keypoints is not None:
-            kpt_data = keypoints[i]  # shape (K, 3): x, y, score
-            names = kp_names or _COCO_KEYPOINT_NAMES
-            kpts = []
-            for idx, kpt in enumerate(kpt_data):
-                name = names[idx] if idx < len(names) else f"keypoint_{idx}"
-                kpts.append(KeyPoint(
-                    x=int(kpt[0]), y=int(kpt[1]),
-                    name=name, visibility=float(kpt[2]) > 0
-                ))
+        # keypoints[i] has shape (K, 3): x, y, confidence
+        kpts = _build_keypoints(keypoints[i], kp_names) if keypoints is not None else None
 
         detection = Detection(
             bbox=bbox,
@@ -574,7 +666,7 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
         - Classification models produce a single detection with top-5 predictions in metadata.
         - Binary masks are resized to original image dimensions with letterbox padding removed.
     """
-    from .detections import Detections, Detection, KeyPoint
+    from .detections import Detections, Detection
 
     detections_obj = Detections()
 
@@ -733,28 +825,9 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
         # Handle keypoints if available (pose estimation)
         keypoints_list = None
         if has_keypoints and keypoints_data is not None:
-            kpts = keypoints_data[i]  # Shape: [17, 3] for detection i
-
-            # Determine keypoint names from labels or fall back to COCO
-            kpt_names = None
-            if labels is not None:
-                _, kpt_names = _get_label_info(labels, class_id)
-            if kpt_names is None:
-                kpt_names = _COCO_KEYPOINT_NAMES
-
-            keypoints_list = []
-            for kpt_idx, kpt in enumerate(kpts):
-                x, y, conf = kpt[0], kpt[1], kpt[2]
-                visibility = conf > 0.5
-                name = kpt_names[kpt_idx] if kpt_idx < len(kpt_names) else f"keypoint_{kpt_idx}"
-
-                keypoint = KeyPoint(
-                    x=int(x),
-                    y=int(y),
-                    name=name,
-                    visibility=visibility
-                )
-                keypoints_list.append(keypoint)
+            # keypoints_data[i] has shape (K, 3): x, y, confidence
+            _, kpt_names = _get_label_info(labels, class_id)
+            keypoints_list = _build_keypoints(keypoints_data[i], kpt_names)
 
         # Create detection object
         detection = Detection(
@@ -932,7 +1005,7 @@ def from_supervision(
 
     Example:
         >>> import pixelflow as pf
-        >>> detections = pf.detections.from_supervision(sv_detections, labels=pf.COCO_LABELS)
+        >>> detections = pf.detections.from_supervision(sv_detections, labels=model.class_names)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
@@ -1020,7 +1093,7 @@ def from_rfdetr(
         >>> rfdetr_output = model.predict(image, threshold=0.5)
         >>>
         >>> # Convert with COCO labels for meaningful names
-        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output, labels=pf.COCO_LABELS)
+        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output, labels=model.class_names)
         >>> print(f"Detected {len(pf_detections)} objects")
 
     Notes:
