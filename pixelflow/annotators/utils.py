@@ -46,3 +46,13 @@ def _get_adaptive_params(image):
     
     _adaptive_cache[shape_key] = params
     return params
+
+
+def _meets_confidence(keypoint, min_confidence):
+    """Whether `keypoint` clears the caller's threshold and should be drawn.
+
+    A keypoint carrying no score cannot fail a threshold, so it draws. Keeping the
+    comparison in one place stops the renderers from drifting on the boundary the way
+    the old `visibility` flag drifted between `> 0` and `> 0.5` across converters.
+    """
+    return keypoint.confidence is None or keypoint.confidence >= min_confidence
