@@ -146,7 +146,8 @@ class Detection:
     Args:
         inference_id (Optional[str]): Unique identifier for the inference session or batch.
         bbox (Optional[List[float]]): Bounding box coordinates in XYXY format [x1, y1, x2, y2].
-                                     Automatically validated and normalized.
+                                     Validated by validate_bbox: kept as floats rounded to two
+                                     decimals, or None if the box is malformed or non-finite.
         masks (Optional[List[Any]]): Segmentation masks in various formats (binary arrays, polygons).
         segments (Optional[List[Any]]): Polygon segments for precise object boundaries.
         keypoints (Optional[List[KeyPoint]]): List of KeyPoint objects for pose/structure data.
@@ -207,7 +208,8 @@ class Detection:
         ... )
 
     Notes:
-        - Bounding box coordinates are automatically validated using validate_bbox function
+        - Bounding box coordinates are automatically validated using validate_bbox function,
+          which preserves sub-pixel precision to two decimal places
         - Confidence scores are automatically rounded using round_to_decimal for precision
         - Zone and line crossing lists are initialized as empty lists if None provided
         - Compatible with all major ML framework outputs through converter functions
@@ -232,7 +234,7 @@ class Detection:
                  first_seen_time: Optional[float] = None,
                  total_time: float = 0.0):
         self.inference_id = inference_id
-        self.bbox = validate_bbox(bbox) if bbox is not None else None
+        self.bbox = bbox  # goes through the validating property setter below
         self.masks = masks
         self.segments = segments
         self.keypoints = keypoints if keypoints is not None else None
@@ -249,6 +251,23 @@ class Detection:
         self.line_crossings = line_crossings if line_crossings is not None else []  # List of line crossing events
         self.first_seen_time = first_seen_time  # Timestamp/frame when first detected
         self.total_time = total_time  # Total time since first detection (in seconds)
+
+    @property
+    def bbox(self) -> Optional[List[float]]:
+        """Bounding box in XYXY format, or None if never set or rejected as invalid."""
+        return self._bbox
+
+    @bbox.setter
+    def bbox(self, value: Optional[List[float]]) -> None:
+        """Validate on every assignment, not just at construction.
+
+        Transforms rewrite this attribute in place (flips, rotations, crops), so
+        validating only in __init__ would let transformed boxes drift off the
+        precision contract and let a non-finite coordinate through. Note that
+        mutating the list itself - bbox[0] = x - still bypasses this, as it does
+        for any Python attribute.
+        """
+        self._bbox = validate_bbox(value)
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -522,9 +541,9 @@ class Detection:
             - Keypoints are deep copied to ensure complete independence from original
             - Useful for immutable transform operations in detection processing
         """
-        return Detection(
+        duplicate = Detection(
             inference_id=self.inference_id,
-            bbox=self.bbox.copy() if self.bbox else None,
+            bbox=None,
             masks=copy_module.deepcopy(self.masks) if self.masks else None,
             segments=copy_module.deepcopy(self.segments) if self.segments else None,
             keypoints=[kp.with_xy(kp.x, kp.y) for kp in self.keypoints] if self.keypoints else None,
@@ -540,6 +559,11 @@ class Detection:
             first_seen_time=self.first_seen_time,
             total_time=self.total_time
         )
+        # Already validated on the way in, so bypass the setter rather than
+        # re-running validate_bbox: transforms copy then rewrite, and paying
+        # for validation twice per detection showed up on their hot path.
+        duplicate._bbox = self._bbox.copy() if self._bbox else None
+        return duplicate
 
 
 class Detections:

@@ -1,11 +1,28 @@
+import math
+
 from typing import List, Optional
 from shapely.geometry import Polygon as Shapely_Polygon
 
 
+# How much precision pixelflow keeps on each numeric field. Truncating bbox
+# coordinates to whole pixels shifts every box half a pixel in a fixed
+# direction, which reads as a systematic translation rather than noise and
+# costs ~1 mAP concentrated in the high-IoU bins and on small objects. Two
+# decimals measures indistinguishable from full precision while keeping
+# float32 artefacts like 10.699999809265137 out of the JSON payload.
+BBOX_DECIMALS = 2
+CONFIDENCE_DECIMALS = 3
+
+
 def validate_bbox(bbox):
     """
-    Ensure that bbox contains exactly 4 integer values.
-    If bbox is not valid, return a default bbox.
+    Ensure that bbox contains exactly 4 finite coordinates.
+    If bbox is not valid, return None.
+
+    Coordinates are returned as floats rounded to ``BBOX_DECIMALS`` places,
+    matching the ``List[float]`` that Detection declares. Non-finite values
+    (NaN, ±inf) are rejected rather than passed through: they would poison IoU
+    maths silently, and strict JSON encoders refuse to serialize them.
 
     Accepts any 4-element sequence — list, tuple, or numpy array — since
     framework converters routinely hand back numpy rows.
@@ -14,19 +31,24 @@ def validate_bbox(bbox):
     if isinstance(bbox, (str, bytes)):
         return None
 
+    # Unpacking materializes the sequence and length-checks it in one step:
+    # a non-iterable raises TypeError, a wrong length raises ValueError.
     try:
-        values = list(bbox)
-    except TypeError:
+        x1, y1, x2, y2 = bbox
+    except (TypeError, ValueError):
         return None
 
-    if len(values) != 4:
-        return None
-
+    coords = []
     try:
-        # Convert all elements to integers if they aren't already
-        return [int(x) for x in values]
+        for value in (x1, y1, x2, y2):
+            coord = float(value)
+            if not math.isfinite(coord):
+                return None
+            coords.append(round(coord, BBOX_DECIMALS))
     except (ValueError, TypeError):
         return None
+
+    return coords
 
 
 def validate_masks(mask: Optional[list]) -> Optional[list]:
@@ -87,13 +109,13 @@ def convert_datamarkin_masks(mask: list) -> list:
     return validated_mask
 
 
-def round_to_decimal(value, decimals=3):
+def round_to_decimal(value, decimals=CONFIDENCE_DECIMALS):
     """
     Rounds the given value to the specified number of decimal places.
 
     Args:
         value (float or None): The value to be rounded.
-        decimals (int): The number of decimal places (default is 3).
+        decimals (int): The number of decimal places (default CONFIDENCE_DECIMALS).
 
     Returns:
         float or None: The rounded value or None if the input is None.

@@ -503,6 +503,67 @@ class TestValidators:
         assert isinstance(bbox, list)
         assert bbox == [100, 100, 200, 200]
 
+    def test_validate_bbox_preserves_subpixel_precision(self):
+        """Fractional coordinates survive validation instead of being truncated."""
+        from pixelflow.validators import validate_bbox
+
+        assert validate_bbox([10.7, 20.3, 110.9, 220.4]) == [10.7, 20.3, 110.9, 220.4]
+
+    def test_validate_bbox_returns_floats(self):
+        """Coordinates are floats, matching Detection's List[float] signature."""
+        from pixelflow.validators import validate_bbox
+
+        assert all(isinstance(v, float) for v in validate_bbox([1, 2, 3, 4]))
+
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            # A truncating implementation returns [1, 2, 3, 4] for all three.
+            ([1.9, 2.9, 3.9, 4.9], [1.9, 2.9, 3.9, 4.9]),
+            ([1.999, 2.999, 3.999, 4.999], [2.0, 3.0, 4.0, 5.0]),
+            ([-1.9, -2.9, 3.9, 4.9], [-1.9, -2.9, 3.9, 4.9]),
+        ],
+    )
+    def test_validate_bbox_rounds_rather_than_truncates(self, raw, expected):
+        """Validation must not shift boxes toward zero.
+
+        Truncating moved every coordinate down by ~0.5 px on average, which
+        reads as a systematic translation rather than as noise and costs
+        roughly 1 mAP in the high-IoU bins.
+        """
+        from pixelflow.validators import validate_bbox
+
+        assert validate_bbox(raw) == expected
+
+    def test_validate_bbox_rounds_away_float32_artifacts(self):
+        """float32 -> tolist() expansions are trimmed, keeping payloads small."""
+        from pixelflow.validators import validate_bbox
+
+        raw = np.array([10.7, 20.3, 110.9, 220.4], dtype=np.float32).tolist()
+        assert raw[0] != 10.7  # float32 gives 10.699999809265137
+        assert validate_bbox(raw) == [10.7, 20.3, 110.9, 220.4]
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_validate_bbox_rejects_non_finite(self, bad):
+        """NaN/inf are rejected, not passed through.
+
+        They would poison IoU maths silently, and strict JSON encoders -
+        Starlette's JSONResponse among them - refuse to serialize them.
+        """
+        from pixelflow.validators import validate_bbox
+
+        assert validate_bbox([0.0, 0.0, bad, 10.0]) is None
+
+    @pytest.mark.parametrize(
+        "bad", [None, "10,20,30,40", b"abcd", 42, [1, 2, 3], [1, 2, 3, 4, 5], ["a", 2, 3, 4]]
+    )
+    def test_validate_bbox_rejects_malformed(self, bad):
+        """Malformed input still degrades to None rather than raising."""
+        from pixelflow.validators import validate_bbox
+
+        assert validate_bbox(bad) is None
+
+
     def test_round_to_decimal(self):
         """Test decimal rounding utility."""
         from pixelflow.validators import round_to_decimal

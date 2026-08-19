@@ -219,6 +219,38 @@ class TestDetection:
         assert data["bbox"] == [100, 100, 200, 200]
         assert data["confidence"] == 0.95
 
+    def test_detection_bbox_validates_on_reassignment(self):
+        """Writing to .bbox validates, not just constructing.
+
+        Transforms rewrite this attribute in place, so validating only in
+        __init__ would let transformed boxes escape the precision contract.
+        """
+        det = pf.detections.Detection(bbox=[0, 0, 10, 10])
+        det.bbox = [1.23456, 2.0, 3.0, 4.0]
+        assert det.bbox == [1.23, 2.0, 3.0, 4.0]
+
+    def test_detection_bbox_rejects_non_finite_on_reassignment(self):
+        """A non-finite coordinate written post-construction is rejected too."""
+        det = pf.detections.Detection(bbox=[0, 0, 10, 10])
+        det.bbox = [0.0, 0.0, float("nan"), 10.0]
+        assert det.bbox is None
+
+    def test_detection_bbox_accepts_none(self):
+        """Clearing the box stays legal."""
+        det = pf.detections.Detection(bbox=[0, 0, 10, 10])
+        det.bbox = None
+        assert det.bbox is None
+
+    def test_detection_bbox_is_json_safe(self):
+        """A validated bbox always survives a strict JSON encoder."""
+        det = pf.detections.Detection(bbox=[10.7, 20.3, 110.9, 220.4])
+        assert json.dumps(det.to_dict()["bbox"], allow_nan=False) == "[10.7, 20.3, 110.9, 220.4]"
+
+    def test_detection_bbox_survives_copy(self):
+        """copy() round-trips through the property without losing precision."""
+        det = pf.detections.Detection(bbox=[10.7, 20.3, 110.9, 220.4])
+        assert det.copy().bbox == [10.7, 20.3, 110.9, 220.4]
+
 
 # ============================================================================
 # Detections Container Tests

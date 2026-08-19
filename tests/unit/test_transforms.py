@@ -378,8 +378,66 @@ class TestBboxFromKeypoints:
 # Inverse Transform Tests
 # ============================================================================
 
+# Coordinates chosen so that truncation is visibly lossy in every direction.
+FRACTIONAL_BBOX = [10.7, 20.3, 110.9, 220.4]
+
+
 class TestInverseTransforms:
     """Tests for automated inverse transformations."""
+
+    @pytest.fixture
+    def fractional_detections(self):
+        """Detections whose coordinates are not integers.
+
+        The rest of the suite uses whole-number boxes, which cannot tell a
+        precision-preserving transform apart from a truncating one.
+        """
+        dets = pf.detections.Detections()
+        dets.add_detection(pf.detections.Detection(
+            bbox=list(FRACTIONAL_BBOX), confidence=0.9, class_id=0, class_name="person"
+        ))
+        return dets
+
+    @pytest.mark.parametrize(
+        "flip",
+        ["flip_horizontal_detections", "flip_vertical_detections"],
+    )
+    def test_flip_round_trip_is_exact(self, sample_image, fractional_detections, flip):
+        """Flipping twice returns the original coordinates exactly."""
+        flip_fn = getattr(pf.transform, flip)
+        _, once = flip_fn(sample_image, fractional_detections)
+        _, twice = flip_fn(sample_image, once)
+        assert twice.detections[0].bbox == FRACTIONAL_BBOX
+
+    def test_crop_inverse_recovers_original_coordinates(self, sample_image, fractional_detections):
+        """Cropping then inverting recovers the original box exactly."""
+        _, cropped = pf.transform.crop_detections(
+            sample_image, fractional_detections, bbox=[5.5, 10.5, 300.5, 250.5]
+        )
+        restored = pf.transform.inverse_transforms(cropped)
+        assert restored.detections[0].bbox == FRACTIONAL_BBOX
+
+    def test_mixed_transform_chain_does_not_accumulate_drift(self, sample_image, fractional_detections):
+        """A chain of different transforms must not walk the box off position.
+
+        Each write re-validates, which snaps coordinates back onto the decimal
+        grid rather than letting float error compound across steps. Mixing the
+        transforms matters: a self-inverse one repeated cannot show drift that
+        alternating axes would.
+        """
+        dets = fractional_detections
+        for _ in range(3):
+            _, dets = pf.transform.flip_horizontal_detections(sample_image, dets)
+            _, dets = pf.transform.flip_vertical_detections(sample_image, dets)
+            _, dets = pf.transform.flip_horizontal_detections(sample_image, dets)
+            _, dets = pf.transform.flip_vertical_detections(sample_image, dets)
+        assert dets.detections[0].bbox == FRACTIONAL_BBOX
+
+    def test_transform_preserves_subpixel_precision(self, sample_image, fractional_detections):
+        """A transformed box keeps its fraction instead of being truncated."""
+        _, flipped = pf.transform.flip_horizontal_detections(sample_image, fractional_detections)
+        w = sample_image.shape[1]
+        assert flipped.detections[0].bbox == [w - 110.9, 20.3, w - 10.7, 220.4]
 
     def test_inverse_transforms_basic(self, sample_image, sample_detections):
         """Test inverse transforms tracking and reversal."""
