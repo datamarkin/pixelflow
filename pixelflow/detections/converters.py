@@ -16,6 +16,7 @@ import cv2
 import warnings
 import numpy as np
 from typing import (List, Dict, Any, Union, Optional)
+from pixelflow.validators import COORD_DECIMALS, round_coord
 
 __all__ = [
     "from_arrays",
@@ -55,7 +56,7 @@ def _build_keypoints(kpt_data, kp_names):
 
     return [
         KeyPoint(
-            x=int(kpt[0]), y=int(kpt[1]), id=idx,
+            x=kpt[0], y=kpt[1], id=idx,
             name=kp_names[idx] if kp_names and idx < len(kp_names) else None,
             confidence=float(kpt[2]),
         )
@@ -158,8 +159,8 @@ def from_datamarkin(api_response: Dict[str, Any]):
             for idx, kp in enumerate(keypoints_api):
                 point = kp.get("point", (0, 0))
                 keypoints.append(KeyPoint(
-                    x=int(point[0]),
-                    y=int(point[1]),
+                    x=point[0],
+                    y=point[1],
                     id=idx,
                     name=kp.get("name") or None,
                     confidence=kp.get("probability"),
@@ -296,7 +297,7 @@ def from_florence2(
             all_polygons = []
             for coords in _flat_coord_lists(poly_nested):
                 points = [
-                    (int(coords[i]), int(coords[i + 1]))
+                    (round_coord(coords[i]), round_coord(coords[i + 1]))
                     for i in range(0, len(coords) - 1, 2)
                 ]
                 if points:
@@ -786,7 +787,10 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
             # Store polygon format (xy) for segments
             segments = result.masks.xy[i]
             if segments is not None and len(segments) > 0:
-                segments = segments.astype(int).tolist()
+                # Widen before rounding: rounding a float32 array stays in
+                # float32, whose nearest value to 10.7 is 10.699999809265137,
+                # and .tolist() then writes that in full.
+                segments = segments.astype(float).round(COORD_DECIMALS).tolist()
             
             # Store binary mask if available
             if binary_masks is not None:
@@ -954,18 +958,20 @@ def from_datamarkin_csv(group: Any, height: int, width: int):
     detections_obj = Detections()
 
     for index, row in group.iterrows():
-        # Get the bounding box coordinates and denormalize them
-        xmin = int(row['xmin'] * width)
-        ymin = int(row['ymin'] * height)
-        xmax = int(row['xmax'] * width)
-        ymax = int(row['ymax'] * height)
+        # Get the bounding box coordinates and denormalize them. Every value
+        # here is a normalized fraction scaled by the frame size, so truncating
+        # would bias essentially every coordinate rather than the odd one.
+        xmin = round_coord(row['xmin'] * width)
+        ymin = round_coord(row['ymin'] * height)
+        xmax = round_coord(row['xmax'] * width)
+        ymax = round_coord(row['ymax'] * height)
 
         # Convert normalized points to pixel coordinates for the mask
         segmentation_list = ast.literal_eval(row['segmentation'])
         segmentation_points = []
         for i in range(0, len(segmentation_list), 2):
-            x = int(segmentation_list[i] * width)
-            y = int(segmentation_list[i + 1] * height)
+            x = round_coord(segmentation_list[i] * width)
+            y = round_coord(segmentation_list[i + 1] * height)
             segmentation_points.append((x, y))  # Convert to tuple for polygon points
 
         # Create the Detection object

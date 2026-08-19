@@ -14,6 +14,7 @@ import base64
 import numpy as np
 from PIL import Image
 from pixelflow.validators import (validate_bbox,
+                                  round_coord,
                                   round_to_decimal,
                                   simplify_polygon)
 from typing import (List,
@@ -57,8 +58,8 @@ class KeyPoint:
     would think to check.
 
     Args:
-        x (int): X coordinate in pixels from the image's left edge.
-        y (int): Y coordinate in pixels from the image's top edge.
+        x (float): X coordinate in pixels from the image's left edge.
+        y (float): Y coordinate in pixels from the image's top edge.
         id (int): Index of this landmark in the model's keypoint vocabulary.
         name (Optional[str]): Human-readable name, when the model or caller supplies one.
         confidence (Optional[float]): The score the model emitted for this landmark.
@@ -75,22 +76,26 @@ class KeyPoint:
         True
 
     Notes:
-        - Coordinates are stored as integers for pixel-perfect alignment.
+        - Coordinates keep sub-pixel precision, rounded to two decimals. Annotators cast
+          to int themselves when they draw.
         - `confidence` is the model's raw score, not a boolean. Deciding what counts as visible
           is the caller's threshold to pick; annotators take `min_confidence` for exactly this.
         - `id` is meaningful only within the model that produced it. Two models' index 5 are
           unrelated unless they share a vocabulary.
     """
 
-    def __init__(self, x: int, y: int, id: int, name: Optional[str] = None,
+    def __init__(self, x: float, y: float, id: int, name: Optional[str] = None,
                  confidence: Optional[float] = None):
-        self.x = x
-        self.y = y
+        # __init__ is the choke point: with_xy funnels every transform through it.
+        # round_coord raises on a non-finite coordinate, which is deliberate -
+        # unlike bbox there is no None convention for consumers to guard against.
+        self.x = round_coord(x)
+        self.y = round_coord(y)
         self.id = id
         self.name = name
         self.confidence = confidence
 
-    def with_xy(self, x: int, y: int) -> "KeyPoint":
+    def with_xy(self, x: float, y: float) -> "KeyPoint":
         """
         Return a copy of this keypoint moved to `(x, y)`, keeping its identity.
 
@@ -100,13 +105,25 @@ class KeyPoint:
         sites from drifting apart when a field is added.
 
         Args:
-            x (int): New X coordinate in pixels.
-            y (int): New Y coordinate in pixels.
+            x (float): New X coordinate in pixels.
+            y (float): New Y coordinate in pixels.
 
         Returns:
             KeyPoint: A new keypoint at `(x, y)` with this one's id, name and confidence.
         """
         return KeyPoint(x, y, self.id, self.name, self.confidence)
+
+    def _clone(self) -> "KeyPoint":
+        """
+        Copy this keypoint verbatim, skipping validation.
+
+        The coordinates were rounded on the way in, so re-running round_coord
+        on them is a guaranteed no-op. Detection.copy() clones every landmark
+        of every detection, which made that no-op measurable on pose workloads.
+        """
+        twin = object.__new__(KeyPoint)
+        twin.__dict__.update(self.__dict__)
+        return twin
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -119,15 +136,13 @@ class KeyPoint:
         Example:
             >>> import pixelflow as pf
             >>> pf.detections.KeyPoint(100, 200, 0, "nose", 0.9).to_dict()
-            {'x': 100, 'y': 200, 'id': 0, 'name': 'nose', 'confidence': 0.9}
+            {'x': 100.0, 'y': 200.0, 'id': 0, 'name': 'nose', 'confidence': 0.9}
         """
-        # Convert numpy types to native Python types for JSON serialization
-        x_val = int(self.x) if isinstance(self.x, np.integer) else self.x
-        y_val = int(self.y) if isinstance(self.y, np.integer) else self.y
-
         return {
-            "x": x_val,
-            "y": y_val,
+            # round_coord already returned native floats, so no numpy scalars
+            # can reach here.
+            "x": self.x,
+            "y": self.y,
             "id": int(self.id) if self.id is not None else None,
             "name": self.name,
             "confidence": float(self.confidence) if self.confidence is not None else None,
@@ -546,7 +561,7 @@ class Detection:
             bbox=None,
             masks=copy_module.deepcopy(self.masks) if self.masks else None,
             segments=copy_module.deepcopy(self.segments) if self.segments else None,
-            keypoints=[kp.with_xy(kp.x, kp.y) for kp in self.keypoints] if self.keypoints else None,
+            keypoints=[kp._clone() for kp in self.keypoints] if self.keypoints else None,
             class_id=self.class_id,
             class_name=self.class_name,
             labels=self.labels.copy() if self.labels else None,

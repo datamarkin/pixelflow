@@ -169,7 +169,7 @@ def _inverse_rotate(detection, metadata):
             x_rot = (x_centered - center[0]) * cos_a - (y_centered - center[1]) * sin_a + center[0]
             y_rot = (x_centered - center[0]) * sin_a + (y_centered - center[1]) * cos_a + center[1]
 
-            new_kp = kp.with_xy(int(x_rot), int(y_rot))
+            new_kp = kp.with_xy(x_rot, y_rot)
             new_keypoints.append(new_kp)
         detection.keypoints = new_keypoints
 
@@ -250,7 +250,7 @@ def _inverse_flip_horizontal(detection, metadata):
     if detection.keypoints is not None:
         new_keypoints = []
         for kp in detection.keypoints:
-            new_kp = kp.with_xy(int(w - kp.x), int(kp.y))
+            new_kp = kp.with_xy(w - kp.x, kp.y)
             new_keypoints.append(new_kp)
         detection.keypoints = new_keypoints
 
@@ -299,7 +299,7 @@ def _inverse_flip_vertical(detection, metadata):
     if detection.keypoints is not None:
         new_keypoints = []
         for kp in detection.keypoints:
-            new_kp = kp.with_xy(int(kp.x), int(h - kp.y))
+            new_kp = kp.with_xy(kp.x, h - kp.y)
             new_keypoints.append(new_kp)
         detection.keypoints = new_keypoints
 
@@ -353,7 +353,7 @@ def _inverse_crop(detection, metadata):
     if detection.keypoints is not None:
         new_keypoints = []
         for kp in detection.keypoints:
-            new_kp = kp.with_xy(int(kp.x + x1_offset), int(kp.y + y1_offset))
+            new_kp = kp.with_xy(kp.x + x1_offset, kp.y + y1_offset)
             new_keypoints.append(new_kp)
         detection.keypoints = new_keypoints
 

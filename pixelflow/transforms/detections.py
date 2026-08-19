@@ -119,8 +119,8 @@ def rotate_detections(
             new_keypoints = []
             for i, kp in enumerate(detection.keypoints):
                 new_kp = kp.with_xy(
-                    int(transformed_coords[i, 0]),
-                    int(transformed_coords[i, 1]),
+                    transformed_coords[i, 0],
+                    transformed_coords[i, 1],
                 )
                 new_keypoints.append(new_kp)
             detection.keypoints = new_keypoints
@@ -247,7 +247,7 @@ def flip_horizontal_detections(
         if detection.keypoints is not None:
             new_keypoints = []
             for kp in detection.keypoints:
-                new_kp = kp.with_xy(int(w - kp.x), int(kp.y))
+                new_kp = kp.with_xy(w - kp.x, kp.y)
                 new_keypoints.append(new_kp)
             detection.keypoints = new_keypoints
 
@@ -354,7 +354,7 @@ def flip_vertical_detections(
         if detection.keypoints is not None:
             new_keypoints = []
             for kp in detection.keypoints:
-                new_kp = kp.with_xy(int(kp.x), int(h - kp.y))
+                new_kp = kp.with_xy(kp.x, h - kp.y)
                 new_keypoints.append(new_kp)
             detection.keypoints = new_keypoints
 
@@ -479,7 +479,7 @@ def crop_detections(
             for kp in new_detection.keypoints:
                 # Check if keypoint is within crop
                 if x1 <= kp.x <= x2 and y1 <= kp.y <= y2:
-                    new_kp = kp.with_xy(int(kp.x - x1), int(kp.y - y1))
+                    new_kp = kp.with_xy(kp.x - x1, kp.y - y1)
                     new_keypoints.append(new_kp)
             new_detection.keypoints = new_keypoints if new_keypoints else None
 

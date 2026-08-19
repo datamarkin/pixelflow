@@ -1,17 +1,34 @@
 import math
 
-from typing import List, Optional
 from shapely.geometry import Polygon as Shapely_Polygon
 
 
-# How much precision pixelflow keeps on each numeric field. Truncating bbox
-# coordinates to whole pixels shifts every box half a pixel in a fixed
-# direction, which reads as a systematic translation rather than noise and
-# costs ~1 mAP concentrated in the high-IoU bins and on small objects. Two
-# decimals measures indistinguishable from full precision while keeping
-# float32 artefacts like 10.699999809265137 out of the JSON payload.
-BBOX_DECIMALS = 2
+# How much precision pixelflow keeps. Truncating pixel coordinates to whole
+# numbers shifts every one of them toward zero, which reads as a systematic
+# translation rather than as noise and costs ~1 mAP concentrated in the
+# high-IoU bins and on small objects. Two decimals measures indistinguishable
+# from full precision while keeping float32 artefacts like 10.699999809265137
+# out of the JSON payload.
+COORD_DECIMALS = 2
 CONFIDENCE_DECIMALS = 3
+
+
+def round_coord(value):
+    """
+    Round one pixel coordinate to ``COORD_DECIMALS`` places.
+
+    Bounding boxes, keypoints and polygon vertices all measure the same thing,
+    so they all round here rather than each picking their own precision.
+
+    Raises on anything that is not a finite number: NaN and ±inf poison IoU
+    maths silently, and strict JSON encoders refuse to serialize them. What to
+    do about that is the caller's to decide - validate_bbox degrades to None,
+    KeyPoint lets it propagate.
+    """
+    coord = float(value)
+    if not math.isfinite(coord):
+        raise ValueError(f"pixel coordinate must be finite, got {value!r}")
+    return round(coord, COORD_DECIMALS)
 
 
 def validate_bbox(bbox):
@@ -19,10 +36,8 @@ def validate_bbox(bbox):
     Ensure that bbox contains exactly 4 finite coordinates.
     If bbox is not valid, return None.
 
-    Coordinates are returned as floats rounded to ``BBOX_DECIMALS`` places,
-    matching the ``List[float]`` that Detection declares. Non-finite values
-    (NaN, ±inf) are rejected rather than passed through: they would poison IoU
-    maths silently, and strict JSON encoders refuse to serialize them.
+    Coordinates come back as floats at the shared pixel precision, matching the
+    ``List[float]`` that Detection declares.
 
     Accepts any 4-element sequence — list, tuple, or numpy array — since
     framework converters routinely hand back numpy rows.
@@ -31,82 +46,13 @@ def validate_bbox(bbox):
     if isinstance(bbox, (str, bytes)):
         return None
 
-    # Unpacking materializes the sequence and length-checks it in one step:
-    # a non-iterable raises TypeError, a wrong length raises ValueError.
     try:
+        # Unpacking checks iterability and length in one step; round_coord
+        # checks that each element is a finite number.
         x1, y1, x2, y2 = bbox
+        return [round_coord(v) for v in (x1, y1, x2, y2)]
     except (TypeError, ValueError):
         return None
-
-    coords = []
-    try:
-        for value in (x1, y1, x2, y2):
-            coord = float(value)
-            if not math.isfinite(coord):
-                return None
-            coords.append(round(coord, BBOX_DECIMALS))
-    except (ValueError, TypeError):
-        return None
-
-    return coords
-
-
-def validate_masks(mask: Optional[list]) -> Optional[list]:
-    """
-    Validates that the mask data is a list of lists of tuples (each tuple representing a polygon).
-    Each tuple must contain exactly two integers.
-
-    Args:
-        mask (list): The mask data to be validated, expected to be a list of lists of tuples of integers.
-
-    Returns:
-        list: The validated mask data if all values are lists of tuples containing two integers.
-        None: If the data is not in the expected format.
-    """
-    if not isinstance(mask, list):
-        return None
-
-    for sublist in mask:
-        if not isinstance(sublist, list):
-            return None
-        for value in sublist:
-            if not (isinstance(value, tuple) and len(value) == 2 and all(isinstance(i, int) for i in value)):
-                return None
-
-    return mask
-
-
-def convert_flattened_to_tuples(flat_list: list) -> list:
-    """
-    Converts a flattened list of coordinates into a list of tuples (polygon points).
-    Each tuple contains two integers representing a point.
-
-    Args:
-        flat_list (list): A flattened list of coordinates (e.g., [x1, y1, x2, y2, ...]).
-
-    Returns:
-        list: A list of tuples containing integer polygon points.
-    """
-    # Ensure the list length is even to form coordinate pairs
-    if len(flat_list) % 2 != 0:
-        raise ValueError("The flattened list must contain an even number of values to form coordinate pairs.")
-
-    return [(round(flat_list[i]), round(flat_list[i + 1])) for i in range(0, len(flat_list), 2)]
-
-
-def convert_datamarkin_masks(mask: list) -> list:
-    """
-    Converts a list of lists of flattened coordinates into lists of tuples (polygon points).
-    Each sublist will be processed separately, with each tuple containing two integers representing a point.
-
-    Args:
-        mask (list): The mask data to be converted, expected to be a list of lists of floats.
-
-    Returns:
-        list: A list of lists of tuples containing integer polygon points.
-    """
-    validated_mask = [convert_flattened_to_tuples(sublist) for sublist in mask]
-    return validated_mask
 
 
 def round_to_decimal(value, decimals=CONFIDENCE_DECIMALS):
@@ -145,24 +91,3 @@ def simplify_polygon(polygon_points: list, tolerance: float = 2.0, preserve_topo
 
     # Return the simplified coordinates as a list of tuples
     return list(simplified_polygon.exterior.coords)
-
-
-def simplify_polygons(polygons: list, tolerance: float = 1.0, preserve_topology: bool = True) -> list:
-    """
-    Simplifies a list of polygons using Shapely by calling the simplify_single_polygon function.
-
-    Args:
-        polygons (list): A list of lists of tuples representing multiple polygons.
-        tolerance (float): The tolerance factor for simplification (higher = more simplified).
-        preserve_topology (bool): If True, the function will try to preserve the polygons' topology.
-
-    Returns:
-        list: A list of simplified polygons, each represented as a list of tuples.
-    """
-    simplified_polygons = []
-
-    for polygon_points in polygons:
-        # Call the simplify_single_polygon function for each polygon
-        simplified_polygons.append(simplify_polygon(polygon_points, tolerance, preserve_topology))
-
-    return simplified_polygons
