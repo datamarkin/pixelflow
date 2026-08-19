@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixelflow"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Computer vision processing library for visualizing and analyzing detection results from ML models"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -63,6 +63,9 @@ Homepage = "https://github.com/datamarkin/pixelflow"
 Repository = "https://github.com/datamarkin/pixelflow"
 Issues = "https://github.com/datamarkin/pixelflow/issues"
 Documentation = "https://pixelflow.datamarkin.com"
+
+[tool.setuptools.dynamic]
+version = {attr = "pixelflow.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["pixelflow*"]
