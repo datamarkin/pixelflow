@@ -564,6 +564,26 @@ class TestValidators:
         assert validate_bbox(bad) is None
 
 
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            None,
+            [],
+            np.zeros((0, 2)),                 # vertexless mask from ultralytics
+            [[1, 2, 3]],                      # points are not pairs
+            [1, 2, 3],                        # flat, not points
+            "abc",
+            [[1, 2], [3]],                    # ragged
+            [[1, 2], [float("nan"), 3]],
+            [[[1, 2], [3, 4]], [[5, 6], [7, 8]]],  # several polygons, not one
+        ],
+    )
+    def test_validate_segments_rejects_non_polygons(self, bad):
+        """Anything that is not one polygon of (x, y) points degrades to None."""
+        from pixelflow.validators import validate_segments
+
+        assert validate_segments(bad) is None
+
     def test_round_to_decimal(self):
         """Test decimal rounding utility."""
         from pixelflow.validators import round_to_decimal

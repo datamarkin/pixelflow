@@ -257,6 +257,30 @@ class TestDetection:
         det.bbox = None
         assert det.bbox is None
 
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            [[10.7, 20.3], [50.9, 60.4]],                              # ultralytics
+            [(10.7, 20.3), (50.9, 60.4)],                              # florence-2
+            np.array([[10.7, 20.3], [50.9, 60.4]], dtype=np.float32),  # raw model output
+        ],
+        ids=["list", "tuple", "float32"],
+    )
+    def test_detection_segments_normalize_to_one_shape(self, raw):
+        """Every shape a converter produces is stored identically.
+
+        Callers used to branch on which of the three they had been handed, and
+        the branches disagreed - one raised, one silently dropped the polygon.
+        """
+        det = pf.detections.Detection(bbox=[0, 0, 60, 60], segments=raw)
+        assert det.segments == [[10.7, 20.3], [50.9, 60.4]]
+
+    def test_detection_segments_validate_on_reassignment(self):
+        """Transforms rewrite this attribute, so writes validate like bbox writes."""
+        det = pf.detections.Detection(bbox=[0, 0, 60, 60], segments=[[1.0, 2.0]])
+        det.segments = np.array([[10.7, 20.3]], dtype=np.float32)
+        assert det.segments == [[10.7, 20.3]]
+
     def test_detection_bbox_is_json_safe(self):
         """A validated bbox always survives a strict JSON encoder."""
         det = pf.detections.Detection(bbox=[10.7, 20.3, 110.9, 220.4])

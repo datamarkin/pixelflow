@@ -157,7 +157,7 @@ class TestFlorence2Converter:
         )
 
         assert len(detections) == 1
-        assert detections[0].segments[0] == (10.7, 20.3)
+        assert detections[0].segments[0] == [10.7, 20.3]
         # bbox is the axis-aligned hull of the polygon.
         assert detections[0].bbox == [10.7, 20.3, 50.9, 60.4]
 

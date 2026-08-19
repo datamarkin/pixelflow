@@ -397,6 +397,7 @@ class TestInverseTransforms:
         dets.add_detection(pf.detections.Detection(
             bbox=list(FRACTIONAL_BBOX), confidence=0.9, class_id=0, class_name="person",
             keypoints=[pf.detections.KeyPoint(*FRACTIONAL_KEYPOINT, id=0, name="nose")],
+            segments=[list(FRACTIONAL_KEYPOINT), [50.9, 60.4]],
         ))
         return dets
 
@@ -416,6 +417,24 @@ class TestInverseTransforms:
         assert twice.detections[0].bbox == FRACTIONAL_BBOX
         kp = twice.detections[0].keypoints[0]
         assert (kp.x, kp.y) == FRACTIONAL_KEYPOINT
+        assert twice.detections[0].segments == [list(FRACTIONAL_KEYPOINT), [50.9, 60.4]]
+
+    def test_full_turn_rotation_recovers_geometry(self, sample_image, fractional_detections):
+        """Four quarter turns return every coordinate exactly.
+
+        The rotate path is the one whose numerics this change altered - polygon
+        vertices go through cv2 rather than a comprehension - and a full turn is
+        the strongest available check, since it must be the identity.
+        """
+        dets = fractional_detections
+        for _ in range(4):
+            _, dets = pf.transform.rotate_detections(sample_image, dets, angle=90)
+
+        detection = dets.detections[0]
+        assert detection.bbox == FRACTIONAL_BBOX
+        kp = detection.keypoints[0]
+        assert (kp.x, kp.y) == FRACTIONAL_KEYPOINT
+        assert detection.segments == [list(FRACTIONAL_KEYPOINT), [50.9, 60.4]]
 
     def test_crop_inverse_recovers_original_coordinates(self, sample_image, fractional_detections):
         """Cropping then inverting recovers the original box exactly."""
