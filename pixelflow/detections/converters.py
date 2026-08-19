@@ -16,7 +16,7 @@ import cv2
 import warnings
 import numpy as np
 from typing import (List, Dict, Any, Union, Optional)
-from pixelflow.validators import COORD_DECIMALS, round_coord
+from pixelflow.validators import round_coord, validate_segments
 
 __all__ = [
     "from_arrays",
@@ -785,12 +785,9 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
         segments = None
         if has_masks:
             # Store polygon format (xy) for segments
-            segments = result.masks.xy[i]
-            if segments is not None and len(segments) > 0:
-                # Widen before rounding: rounding a float32 array stays in
-                # float32, whose nearest value to 10.7 is 10.699999809265137,
-                # and .tolist() then writes that in full.
-                segments = segments.astype(float).round(COORD_DECIMALS).tolist()
+            # Detection would normalize this anyway; doing it here too means the
+            # mask fallback below also gets plain rounded lists.
+            segments = validate_segments(result.masks.xy[i])
             
             # Store binary mask if available
             if binary_masks is not None:

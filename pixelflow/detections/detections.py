@@ -14,6 +14,7 @@ import base64
 import numpy as np
 from PIL import Image
 from pixelflow.validators import (validate_bbox,
+                                  validate_segments,
                                   round_coord,
                                   round_to_decimal,
                                   simplify_polygon)
@@ -163,8 +164,11 @@ class Detection:
         bbox (Optional[List[float]]): Bounding box coordinates in XYXY format [x1, y1, x2, y2].
                                      Validated by validate_bbox: kept as floats rounded to two
                                      decimals, or None if the box is malformed or non-finite.
-        masks (Optional[List[Any]]): Segmentation masks in various formats (binary arrays, polygons).
-        segments (Optional[List[Any]]): Polygon segments for precise object boundaries.
+        masks (Optional[List[Any]]): Segmentation masks, either boolean rasters or polygon
+                                    point lists depending on the source model. Unlike bbox and
+                                    segments this field is not yet normalized to one shape.
+        segments (Optional[List[List[float]]]): Object outline as one polygon, normalized by
+                                    validate_segments to [[x, y], ...] at two decimals, or None.
         keypoints (Optional[List[KeyPoint]]): List of KeyPoint objects for pose/structure data.
         class_id (Optional[Union[int, str]]): Numeric or string class identifier from model.
         class_name (Optional[str]): Human-readable class name (e.g., "person", "vehicle").
@@ -284,6 +288,16 @@ class Detection:
         """
         self._bbox = validate_bbox(value)
 
+    @property
+    def segments(self) -> Optional[List[List[float]]]:
+        """Polygon outline as a list of [x, y] points, or None if never set."""
+        return self._segments
+
+    @segments.setter
+    def segments(self, value) -> None:
+        """Normalize on every assignment; see validate_segments for the shape."""
+        self._segments = validate_segments(value)
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert Detection to dictionary format for JSON serialization and API export.
@@ -376,23 +390,11 @@ class Detection:
                         'data': mask
                     })
 
-        # Process segments - convert numpy to list if needed
-        serializable_segments = self.segments
-        if self.segments:
-            if isinstance(self.segments, np.ndarray):
-                serializable_segments = self.segments.tolist()
-            elif isinstance(self.segments, list):
-                # Check if list contains numpy arrays and convert them
-                serializable_segments = [
-                    seg.tolist() if isinstance(seg, np.ndarray) else seg
-                    for seg in self.segments
-                ]
-
         return {
             "inference_id": self.inference_id,
             "bbox": to_python_type(self.bbox),
             "masks": serializable_masks,
-            "segments": serializable_segments,
+            "segments": self.segments,  # already plain lists of floats
             "keypoints": [kp.to_dict() for kp in self.keypoints] if self.keypoints is not None else None,
             "class_id": to_python_type(self.class_id),
             "class_name": self.class_name,
@@ -560,7 +562,7 @@ class Detection:
             inference_id=self.inference_id,
             bbox=None,
             masks=copy_module.deepcopy(self.masks) if self.masks else None,
-            segments=copy_module.deepcopy(self.segments) if self.segments else None,
+            segments=None,
             keypoints=[kp._clone() for kp in self.keypoints] if self.keypoints else None,
             class_id=self.class_id,
             class_name=self.class_name,
@@ -578,6 +580,7 @@ class Detection:
         # re-running validate_bbox: transforms copy then rewrite, and paying
         # for validation twice per detection showed up on their hot path.
         duplicate._bbox = self._bbox.copy() if self._bbox else None
+        duplicate._segments = [p.copy() for p in self._segments] if self._segments else None
         return duplicate
 
 

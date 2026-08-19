@@ -1,5 +1,14 @@
+"""Validation and precision policy for the values a Detection stores.
+
+Every pixel coordinate pixelflow keeps - bounding boxes, keypoints and polygon
+vertices - rounds to the same precision here, so no single converter or
+transform gets to pick its own. Malformed geometry degrades to None for the
+Optional fields; see round_coord for why a KeyPoint raises instead.
+"""
+
 import math
 
+import numpy as np
 from shapely.geometry import Polygon as Shapely_Polygon
 
 
@@ -53,6 +62,41 @@ def validate_bbox(bbox):
         return [round_coord(v) for v in (x1, y1, x2, y2)]
     except (TypeError, ValueError):
         return None
+
+
+def validate_segments(segments):
+    """
+    Normalize one polygon to a list of ``[x, y]`` points at the shared precision.
+    If the polygon is not valid, return None.
+
+    Converters hand polygons over in whichever shape their framework used - an
+    ``(N, 2)`` numpy array, a list of tuples, a list of lists. Settling on one
+    shape here is what lets every caller that moves a polygon write a single
+    comprehension instead of branching on how it arrived.
+
+    Rounding here also keeps float32 vertices from reaching ``tolist()``, where
+    the nearest float32 to 10.7 prints as 10.699999809265137.
+
+    One polygon, not several: an instance split by occlusion keeps its extra
+    parts in ``masks``, and a nested list of polygons is rejected rather than
+    flattened. If that ever needs to change, this is the function to change.
+    """
+    if segments is None:
+        return None
+
+    try:
+        points = np.asarray(segments, dtype=float)
+    except (TypeError, ValueError):
+        return None
+
+    # A polygon is N points of (x, y). `size` rather than `ndim` alone catches
+    # the vertexless (0, 2) array that ultralytics emits for an empty mask.
+    if points.ndim != 2 or points.shape[1] != 2 or points.size == 0:
+        return None
+    if not np.isfinite(points).all():
+        return None
+
+    return points.round(COORD_DECIMALS).tolist()
 
 
 def round_to_decimal(value, decimals=CONFIDENCE_DECIMALS):

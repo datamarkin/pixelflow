@@ -127,26 +127,8 @@ def rotate_detections(
 
         # Transform segments (polygons)
         if detection.segments is not None:
-            if isinstance(detection.segments, np.ndarray):
-                # Single segment as numpy array
-                segment_coords = detection.segments.astype(np.float32).reshape(1, -1, 2)
-                transformed = cv2.transform(segment_coords, rotation_matrix)[0]
-                detection.segments = transformed
-            elif isinstance(detection.segments, list):
-                # Multiple segments as list
-                new_segments_list = []
-                for segment in detection.segments:
-                    if isinstance(segment, np.ndarray):
-                        # Segment is numpy array
-                        segment_coords = segment.astype(np.float32).reshape(1, -1, 2)
-                        transformed = cv2.transform(segment_coords, rotation_matrix)[0]
-                        new_segments_list.append(transformed)
-                    elif isinstance(segment, list):
-                        # Segment is list of [x, y] coordinates
-                        segment_coords = np.array(segment, dtype=np.float32).reshape(1, -1, 2)
-                        transformed = cv2.transform(segment_coords, rotation_matrix)[0]
-                        new_segments_list.append(transformed.tolist())
-                detection.segments = new_segments_list
+            coords = np.array(detection.segments, dtype=np.float64).reshape(1, -1, 2)
+            detection.segments = cv2.transform(coords, rotation_matrix)[0]
 
         # Transform masks
         if detection.masks is not None:
@@ -253,18 +235,7 @@ def flip_horizontal_detections(
 
         # Transform segments
         if detection.segments is not None:
-            if isinstance(detection.segments, np.ndarray):
-                detection.segments[:, 0] = w - detection.segments[:, 0]
-            elif isinstance(detection.segments, list):
-                new_segments_list = []
-                for segment in detection.segments:
-                    if isinstance(segment, np.ndarray):
-                        segment[:, 0] = w - segment[:, 0]
-                        new_segments_list.append(segment)
-                    elif isinstance(segment, list):
-                        new_segment = [[w - x, y] for x, y in segment]
-                        new_segments_list.append(new_segment)
-                detection.segments = new_segments_list
+            detection.segments = [[w - x, y] for x, y in detection.segments]
 
         # Transform masks
         if detection.masks is not None:
@@ -360,18 +331,7 @@ def flip_vertical_detections(
 
         # Transform segments
         if detection.segments is not None:
-            if isinstance(detection.segments, np.ndarray):
-                detection.segments[:, 1] = h - detection.segments[:, 1]
-            elif isinstance(detection.segments, list):
-                new_segments_list = []
-                for segment in detection.segments:
-                    if isinstance(segment, np.ndarray):
-                        segment[:, 1] = h - segment[:, 1]
-                        new_segments_list.append(segment)
-                    elif isinstance(segment, list):
-                        new_segment = [[x, h - y] for x, y in segment]
-                        new_segments_list.append(new_segment)
-                detection.segments = new_segments_list
+            detection.segments = [[x, h - y] for x, y in detection.segments]
 
         # Transform masks
         if detection.masks is not None:
@@ -485,20 +445,7 @@ def crop_detections(
 
         # Transform segments
         if new_detection.segments is not None:
-            if isinstance(new_detection.segments, np.ndarray):
-                new_detection.segments[:, 0] -= x1
-                new_detection.segments[:, 1] -= y1
-            elif isinstance(new_detection.segments, list):
-                new_segments_list = []
-                for segment in new_detection.segments:
-                    if isinstance(segment, np.ndarray):
-                        segment[:, 0] -= x1
-                        segment[:, 1] -= y1
-                        new_segments_list.append(segment)
-                    elif isinstance(segment, list):
-                        new_segment = [[x - x1, y - y1] for x, y in segment]
-                        new_segments_list.append(new_segment)
-                new_detection.segments = new_segments_list
+            new_detection.segments = [[x - x1, y - y1] for x, y in new_detection.segments]
 
         # Transform masks
         if new_detection.masks is not None:

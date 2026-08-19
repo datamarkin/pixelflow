@@ -107,6 +107,21 @@ def inverse_transforms(
     return inverse_detections
 
 
+def _unrotate_point(x, y, dx, dy, cx, cy, cos_a, sin_a):
+    """Map one point from rotated space back to its pre-rotation position.
+
+    Takes the matrix offsets and centre pre-unpacked as plain floats rather than
+    indexing them per point: read inside the loop they arrive as numpy scalars,
+    and every arithmetic op below then costs several times what it should.
+    """
+    x_centered = x - dx - cx
+    y_centered = y - dy - cy
+    return [
+        x_centered * cos_a - y_centered * sin_a + cx,
+        x_centered * sin_a + y_centered * cos_a + cy,
+    ]
+
+
 def _inverse_rotate(detection, metadata):
     """Inverse rotation - rotate by negative angle."""
     angle = metadata['angle']
@@ -134,22 +149,16 @@ def _inverse_rotate(detection, metadata):
     rotation_matrix[0, 2] += (new_w / 2) - center[0]
     rotation_matrix[1, 2] += (new_h / 2) - center[1]
 
+    dx, dy = float(rotation_matrix[0, 2]), float(rotation_matrix[1, 2])
+    cx, cy = float(center[0]), float(center[1])
+
     # Transform bbox
     if detection.bbox is not None:
         x1, y1, x2, y2 = detection.bbox
         corners = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
-        rotated_corners = []
-
-        for x, y in corners:
-            # Reverse the forward rotation offsets first
-            x_centered = x - rotation_matrix[0, 2]
-            y_centered = y - rotation_matrix[1, 2]
-
-            # Apply inverse rotation
-            x_rot = (x_centered - center[0]) * cos_a - (y_centered - center[1]) * sin_a + center[0]
-            y_rot = (x_centered - center[0]) * sin_a + (y_centered - center[1]) * cos_a + center[1]
-
-            rotated_corners.append((x_rot, y_rot))
+        rotated_corners = [
+            _unrotate_point(x, y, dx, dy, cx, cy, cos_a, sin_a) for x, y in corners
+        ]
 
         xs = [pt[0] for pt in rotated_corners]
         ys = [pt[1] for pt in rotated_corners]
@@ -157,54 +166,17 @@ def _inverse_rotate(detection, metadata):
 
     # Transform keypoints
     if detection.keypoints is not None:
-        new_keypoints = []
-        for kp in detection.keypoints:
-            x, y = kp.x, kp.y
-
-            # Reverse forward offsets
-            x_centered = x - rotation_matrix[0, 2]
-            y_centered = y - rotation_matrix[1, 2]
-
-            # Apply inverse rotation
-            x_rot = (x_centered - center[0]) * cos_a - (y_centered - center[1]) * sin_a + center[0]
-            y_rot = (x_centered - center[0]) * sin_a + (y_centered - center[1]) * cos_a + center[1]
-
-            new_kp = kp.with_xy(x_rot, y_rot)
-            new_keypoints.append(new_kp)
-        detection.keypoints = new_keypoints
+        detection.keypoints = [
+            kp.with_xy(*_unrotate_point(kp.x, kp.y, dx, dy, cx, cy, cos_a, sin_a))
+            for kp in detection.keypoints
+        ]
 
     # Transform segments
     if detection.segments is not None:
-        if isinstance(detection.segments, np.ndarray):
-            for i in range(len(detection.segments)):
-                x, y = detection.segments[i]
-                x_centered = x - rotation_matrix[0, 2]
-                y_centered = y - rotation_matrix[1, 2]
-                x_rot = (x_centered - center[0]) * cos_a - (y_centered - center[1]) * sin_a + center[0]
-                y_rot = (x_centered - center[0]) * sin_a + (y_centered - center[1]) * cos_a + center[1]
-                detection.segments[i] = [x_rot, y_rot]
-        elif isinstance(detection.segments, list):
-            new_segments_list = []
-            for segment in detection.segments:
-                if isinstance(segment, np.ndarray):
-                    for i in range(len(segment)):
-                        x, y = segment[i]
-                        x_centered = x - rotation_matrix[0, 2]
-                        y_centered = y - rotation_matrix[1, 2]
-                        x_rot = (x_centered - center[0]) * cos_a - (y_centered - center[1]) * sin_a + center[0]
-                        y_rot = (x_centered - center[0]) * sin_a + (y_centered - center[1]) * cos_a + center[1]
-                        segment[i] = [x_rot, y_rot]
-                    new_segments_list.append(segment)
-                elif isinstance(segment, list):
-                    new_segment = []
-                    for x, y in segment:
-                        x_centered = x - rotation_matrix[0, 2]
-                        y_centered = y - rotation_matrix[1, 2]
-                        x_rot = (x_centered - center[0]) * cos_a - (y_centered - center[1]) * sin_a + center[0]
-                        y_rot = (x_centered - center[0]) * sin_a + (y_centered - center[1]) * cos_a + center[1]
-                        new_segment.append([x_rot, y_rot])
-                    new_segments_list.append(new_segment)
-            detection.segments = new_segments_list
+        detection.segments = [
+            _unrotate_point(x, y, dx, dy, cx, cy, cos_a, sin_a)
+            for x, y in detection.segments
+        ]
 
     # Transform masks (rotate back)
     if detection.masks is not None:
@@ -223,14 +195,10 @@ def _inverse_rotate(detection, metadata):
             else:
                 # Polygon mask
                 if isinstance(mask, list):
-                    new_mask = []
-                    for x, y in mask:
-                        x_centered = x - rotation_matrix[0, 2]
-                        y_centered = y - rotation_matrix[1, 2]
-                        x_rot = (x_centered - center[0]) * cos_a - (y_centered - center[1]) * sin_a + center[0]
-                        y_rot = (x_centered - center[0]) * sin_a + (y_centered - center[1]) * cos_a + center[1]
-                        new_mask.append([x_rot, y_rot])
-                    new_masks.append(new_mask)
+                    new_masks.append([
+                        _unrotate_point(x, y, dx, dy, cx, cy, cos_a, sin_a)
+                        for x, y in mask
+                    ])
                 else:
                     new_masks.append(mask)
         detection.masks = new_masks
@@ -256,18 +224,7 @@ def _inverse_flip_horizontal(detection, metadata):
 
     # Transform segments
     if detection.segments is not None:
-        if isinstance(detection.segments, np.ndarray):
-            detection.segments[:, 0] = w - detection.segments[:, 0]
-        elif isinstance(detection.segments, list):
-            new_segments_list = []
-            for segment in detection.segments:
-                if isinstance(segment, np.ndarray):
-                    segment[:, 0] = w - segment[:, 0]
-                    new_segments_list.append(segment)
-                elif isinstance(segment, list):
-                    new_segment = [[w - x, y] for x, y in segment]
-                    new_segments_list.append(new_segment)
-            detection.segments = new_segments_list
+        detection.segments = [[w - x, y] for x, y in detection.segments]
 
     # Transform masks
     if detection.masks is not None:
@@ -305,18 +262,7 @@ def _inverse_flip_vertical(detection, metadata):
 
     # Transform segments
     if detection.segments is not None:
-        if isinstance(detection.segments, np.ndarray):
-            detection.segments[:, 1] = h - detection.segments[:, 1]
-        elif isinstance(detection.segments, list):
-            new_segments_list = []
-            for segment in detection.segments:
-                if isinstance(segment, np.ndarray):
-                    segment[:, 1] = h - segment[:, 1]
-                    new_segments_list.append(segment)
-                elif isinstance(segment, list):
-                    new_segment = [[x, h - y] for x, y in segment]
-                    new_segments_list.append(new_segment)
-            detection.segments = new_segments_list
+        detection.segments = [[x, h - y] for x, y in detection.segments]
 
     # Transform masks
     if detection.masks is not None:
@@ -359,20 +305,9 @@ def _inverse_crop(detection, metadata):
 
     # Transform segments
     if detection.segments is not None:
-        if isinstance(detection.segments, np.ndarray):
-            detection.segments[:, 0] += x1_offset
-            detection.segments[:, 1] += y1_offset
-        elif isinstance(detection.segments, list):
-            new_segments_list = []
-            for segment in detection.segments:
-                if isinstance(segment, np.ndarray):
-                    segment[:, 0] += x1_offset
-                    segment[:, 1] += y1_offset
-                    new_segments_list.append(segment)
-                elif isinstance(segment, list):
-                    new_segment = [[x + x1_offset, y + y1_offset] for x, y in segment]
-                    new_segments_list.append(new_segment)
-            detection.segments = new_segments_list
+        detection.segments = [
+            [x + x1_offset, y + y1_offset] for x, y in detection.segments
+        ]
 
     # Masks remain in cropped space (can't expand back without original image size)
 
