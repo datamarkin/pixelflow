@@ -166,6 +166,39 @@ class TestDetection:
         assert decoded_mask.dtype == np.uint8
         assert np.array_equal(decoded_mask, original_mask)
 
+    @pytest.mark.parametrize(
+        "mask,expected_format",
+        [
+            (np.zeros((20, 30), dtype=bool), "png"),
+            (np.zeros((20, 30), dtype=np.uint8), "png"),
+            (np.zeros((20, 30), dtype=np.uint16), "png"),
+            (np.zeros((20, 30, 3), dtype=np.uint8), "png"),
+            # Pillow's 'I' mode PNG save is removed in Pillow 13 -> raw.
+            (np.zeros((20, 30), dtype=np.int32), "raw"),
+            (np.zeros((20, 30), dtype=np.int64), "raw"),
+            (np.zeros((20, 30), dtype=np.float32), "raw"),
+            (np.zeros((20, 30), dtype=np.float64), "raw"),
+            (np.zeros((5, 20, 30), dtype=bool), "raw"),
+            (np.zeros((0, 0), dtype=bool), "raw"),
+        ],
+    )
+    def test_detection_mask_roundtrip_all_dtypes(self, mask, expected_format):
+        """Every dtype stays serializable; PNG where possible, raw otherwise."""
+        rng = np.random.default_rng(0)
+        if mask.size:
+            mask = (rng.random(mask.shape) * 200).astype(mask.dtype)
+
+        det = pf.detections.Detection(bbox=[0, 0, 30, 20], masks=[mask])
+        encoded = det.to_dict()["masks"][0]
+        decoded = pf.detections.Detection.decode_mask(encoded)
+
+        assert encoded["format"] == expected_format
+        assert decoded.shape == mask.shape
+        assert decoded.dtype == mask.dtype
+        assert np.array_equal(decoded, mask)
+        # Callers mutate masks; np.frombuffer alone would return a read-only view.
+        assert decoded.flags.writeable
+
     def test_detection_mask_payload_is_compressed(self):
         """Guard against regressing to a raw 1-byte-per-pixel bitmap."""
         height, width = 1080, 1920
