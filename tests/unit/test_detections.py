@@ -37,18 +37,34 @@ class TestKeyPoint:
         assert data["confidence"] == 0.9
 
     def test_keypoint_numpy_conversion(self):
-        """Test keypoint with numpy integer types."""
+        """Test keypoint with numpy numeric types."""
         kp = pf.detections.KeyPoint(
             x=np.int64(150),
-            y=np.int32(250),
+            y=np.float32(250.5),
             name="point",
             id=0,
             confidence=0.9
         )
         data = kp.to_dict()
-        # Should convert numpy types to Python native types
-        assert isinstance(data["x"], int)
-        assert isinstance(data["y"], int)
+        # Native Python types, not numpy scalars, so the payload is JSON-safe.
+        assert type(data["x"]) is float
+        assert type(data["y"]) is float
+        assert json.dumps(data, allow_nan=False)
+
+    def test_keypoint_preserves_subpixel_precision(self):
+        """Landmarks keep their fraction; truncating biased them toward the origin."""
+        kp = pf.detections.KeyPoint(x=10.7, y=20.3, id=0)
+        assert (kp.x, kp.y) == (10.7, 20.3)
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_keypoint_rejects_non_finite(self, bad):
+        """A non-finite landmark fails at construction rather than downstream.
+
+        Unlike bbox there is no None-coordinate convention for consumers to
+        guard against, so this raises instead of degrading.
+        """
+        with pytest.raises(ValueError):
+            pf.detections.KeyPoint(x=bad, y=0.0, id=0)
 
 
 # ============================================================================

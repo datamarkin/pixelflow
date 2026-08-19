@@ -7,6 +7,7 @@ Transformers, SAM, Datamarkin, and Falcon Perception converters.
 
 import pytest
 import numpy as np
+from types import SimpleNamespace
 import pixelflow as pf
 
 
@@ -138,10 +139,15 @@ class TestFlorence2Converter:
         assert detections[0].confidence == 1.0
 
     def test_from_florence2_segmentation_polygons(self):
-        """Polygon tasks populate segments and a derived bbox."""
+        """Polygon tasks populate segments and a derived bbox, both sub-pixel.
+
+        Fractional vertices matter here: the bbox is their hull, so truncating a
+        vertex truncated the box with it, past the validator that never saw the
+        fraction.
+        """
         parsed = {
             "<REFERRING_EXPRESSION_SEGMENTATION>": {
-                "polygons": [[[10, 10, 50, 10, 50, 50, 10, 50]]],
+                "polygons": [[[10.7, 20.3, 50.9, 20.3, 50.9, 60.4, 10.7, 60.4]]],
                 "labels": ["cat"],
             }
         }
@@ -151,9 +157,9 @@ class TestFlorence2Converter:
         )
 
         assert len(detections) == 1
-        assert detections[0].segments is not None
+        assert detections[0].segments[0] == (10.7, 20.3)
         # bbox is the axis-aligned hull of the polygon.
-        assert detections[0].bbox == [10, 10, 50, 50]
+        assert detections[0].bbox == [10.7, 20.3, 50.9, 60.4]
 
     @pytest.mark.parametrize("polygons", [
         [[10, 10, 50, 10, 50, 50, 10, 50]],        # flat
@@ -239,6 +245,21 @@ class TestUltralyticsConverter:
         detections = pf.detections.from_ultralytics([MockResult()])
         assert len(detections) == 0
 
+    def test_from_ultralytics_segments_keep_subpixel_precision(self, mock_ultralytics_result):
+        """Polygon vertices keep their fraction, in a compact representation.
+
+        The vertices arrive as float32, whose nearest value to 10.7 is
+        10.699999809265137 - rounding without widening to float64 first leaves
+        that expansion intact and .tolist() writes every digit of it.
+        """
+        polygon = np.array([[10.7, 20.3], [50.9, 20.3], [50.9, 60.4]], dtype=np.float32)
+        result = mock_ultralytics_result[0]
+        result.masks = SimpleNamespace(xy=[polygon, polygon])  # one per detection
+
+        detections = pf.detections.from_ultralytics([result])
+
+        assert detections[0].segments[0] == [10.7, 20.3]
+
     def test_from_ultralytics_with_labels(self, mock_ultralytics_result):
         """Test that labels parameter overrides result.names."""
         labels = {0: "human", 2: "vehicle"}
@@ -301,6 +322,23 @@ class TestDetectron2Converter:
         )
         assert detections[0].class_name == "person"
         assert detections[1].class_name == "car"
+
+    def test_build_keypoints_preserves_subpixel_precision(self):
+        """The shared keypoint intake does not truncate.
+
+        _build_keypoints feeds from_arrays, from_detectron2, from_mayaku and
+        from_ultralytics, so it is the highest-fan-in coordinate boundary in
+        this module - and every other keypoint test here uses whole numbers,
+        which cannot tell a truncating intake from a faithful one.
+        """
+        from pixelflow.detections.converters import _build_keypoints
+
+        keypoints = _build_keypoints(
+            np.array([[10.7, 20.3, 0.9], [50.9, 60.4, 0.8]], dtype=np.float32),
+            kp_names=["nose", "eye"],
+        )
+
+        assert [(kp.x, kp.y) for kp in keypoints] == [(10.7, 20.3), (50.9, 60.4)]
 
     def test_from_detectron2_with_keypoints(self):
         """Test Detectron2 keypoint conversion to KeyPoint objects."""

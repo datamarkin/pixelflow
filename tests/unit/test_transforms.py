@@ -380,6 +380,7 @@ class TestBboxFromKeypoints:
 
 # Coordinates chosen so that truncation is visibly lossy in every direction.
 FRACTIONAL_BBOX = [10.7, 20.3, 110.9, 220.4]
+FRACTIONAL_KEYPOINT = (10.7, 20.3)
 
 
 class TestInverseTransforms:
@@ -394,7 +395,8 @@ class TestInverseTransforms:
         """
         dets = pf.detections.Detections()
         dets.add_detection(pf.detections.Detection(
-            bbox=list(FRACTIONAL_BBOX), confidence=0.9, class_id=0, class_name="person"
+            bbox=list(FRACTIONAL_BBOX), confidence=0.9, class_id=0, class_name="person",
+            keypoints=[pf.detections.KeyPoint(*FRACTIONAL_KEYPOINT, id=0, name="nose")],
         ))
         return dets
 
@@ -403,11 +405,17 @@ class TestInverseTransforms:
         ["flip_horizontal_detections", "flip_vertical_detections"],
     )
     def test_flip_round_trip_is_exact(self, sample_image, fractional_detections, flip):
-        """Flipping twice returns the original coordinates exactly."""
+        """Flipping twice returns the original box and landmarks exactly.
+
+        Keypoints go through the same transforms as boxes, so asserting only on
+        the box would certify half the geometry.
+        """
         flip_fn = getattr(pf.transform, flip)
         _, once = flip_fn(sample_image, fractional_detections)
         _, twice = flip_fn(sample_image, once)
         assert twice.detections[0].bbox == FRACTIONAL_BBOX
+        kp = twice.detections[0].keypoints[0]
+        assert (kp.x, kp.y) == FRACTIONAL_KEYPOINT
 
     def test_crop_inverse_recovers_original_coordinates(self, sample_image, fractional_detections):
         """Cropping then inverting recovers the original box exactly."""
