@@ -769,41 +769,6 @@ class TestDatamarkinAPIConverter:
 
 
 # ============================================================================
-# CSV Converter Tests
-# ============================================================================
-
-class TestDatamarkinCSVConverter:
-    """Tests for from_datamarkin_csv converter."""
-
-    def test_from_datamarkin_csv_basic(self):
-        """Normalized CSV coords are denormalized against the given height/width."""
-        pd = pytest.importorskip("pandas")
-
-        group = pd.DataFrame([
-            {
-                "xmin": 0.1, "ymin": 0.2, "xmax": 0.5, "ymax": 0.6,
-                "segmentation": "[0.1, 0.2, 0.5, 0.2, 0.5, 0.6]",
-                "class": "person", "confidence": 0.95,
-            },
-            {
-                "xmin": 0.5, "ymin": 0.25, "xmax": 0.9, "ymax": 0.75,
-                "segmentation": "[0.5, 0.25, 0.9, 0.25, 0.9, 0.75]",
-                "class": "car", "confidence": 0.87,
-            },
-        ])
-
-        detections = pf.detections.from_datamarkin_csv(group, height=400, width=600)
-
-        assert len(detections) == 2
-        # 0.1*600=60, 0.2*400=80, 0.5*600=300, 0.6*400=240
-        assert detections[0].bbox == [60, 80, 300, 240]
-        assert detections[0].confidence == 0.95
-        assert detections[0].class_id == "person"
-        # Segmentation is parsed into pixel-space (x, y) tuples.
-        assert detections[0].masks[0] == [(60, 80), (300, 80), (300, 240)]
-
-
-# ============================================================================
 # Edge Cases and Error Handling
 # ============================================================================
 

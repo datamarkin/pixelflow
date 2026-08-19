@@ -335,7 +335,6 @@ report = detections.to_json_with_metrics()
 | Supervision | `from_supervision()` | Boxes, masks, keypoints |
 | Falcon Perception | `from_falcon_perception()` | Boxes, masks |
 | Datamarkin API | `from_datamarkin()` | Boxes, masks, keypoints |
-| Datamarkin CSV | `from_datamarkin_csv()` | Boxes, polygons |
 
 ## Documentation
 

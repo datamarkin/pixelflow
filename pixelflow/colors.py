@@ -95,9 +95,9 @@ def _get_color_for_prediction(prediction, colors_override=None, palette='default
     """
     active = colors_override if colors_override else PALETTES.get(palette, DEFAULT_PALETTE)
 
-    # class_id is optional on Detection, and converters may set it to a string
-    # (from_datamarkin_csv) or leave it None (from_sam, hand-built boxes).
-    # Neither should raise on annotation.
+    # class_id is optional on Detection, and callers may set it to a string or
+    # leave it None (from_sam, hand-built boxes). Neither should raise on
+    # annotation.
     class_id = prediction.class_id
     if class_id is None:
         return active[0]

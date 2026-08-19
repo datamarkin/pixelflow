@@ -11,7 +11,6 @@ Framework-free deployment code -- code with no framework container to convert fr
 is served by `from_arrays`, which accepts plain numpy or torch arrays directly.
 """
 
-import ast
 import cv2
 import warnings
 import numpy as np
@@ -27,7 +26,6 @@ __all__ = [
     "from_ultralytics",
     "from_transformers",
     "from_sam",
-    "from_datamarkin_csv",
     "from_supervision",
     "from_rfdetr",
     "from_falcon_perception",
@@ -925,65 +923,6 @@ def from_sam(masks, scores):
         Detections: One Detection per candidate mask.
     """
     return from_efficienttam(masks, scores)
-
-
-def from_datamarkin_csv(group: Any, height: int, width: int):
-    """Convert normalized CSV annotation data from Datamarkin format to a Detections object.
-
-    Args:
-        group: Pandas DataFrame (or groupby group) with columns: xmin, ymin, xmax, ymax,
-               segmentation, class, confidence. Coordinates must be normalized [0, 1].
-        height: Image height in pixels for denormalization.
-        width: Image width in pixels for denormalization.
-
-    Returns:
-        Detections: Pixel-coordinate bounding boxes, polygon masks, and class labels.
-
-    Example:
-        >>> import pandas as pd
-        >>> import pixelflow as pf
-        >>> df = pd.read_csv("annotations.csv")
-        >>> for image_name, group in df.groupby("image"):
-        ...     detections = pf.detections.from_datamarkin_csv(group, height=480, width=640)
-
-    Notes:
-        - Input coordinates are assumed to be normalized floats in [0, 1].
-        - Segmentation strings are parsed with ast.literal_eval.
-    """
-    from .detections import Detections, Detection
-
-    detections_obj = Detections()
-
-    for index, row in group.iterrows():
-        # Get the bounding box coordinates and denormalize them. Every value
-        # here is a normalized fraction scaled by the frame size, so truncating
-        # would bias essentially every coordinate rather than the odd one.
-        xmin = round_coord(row['xmin'] * width)
-        ymin = round_coord(row['ymin'] * height)
-        xmax = round_coord(row['xmax'] * width)
-        ymax = round_coord(row['ymax'] * height)
-
-        # Convert normalized points to pixel coordinates for the mask
-        segmentation_list = ast.literal_eval(row['segmentation'])
-        segmentation_points = []
-        for i in range(0, len(segmentation_list), 2):
-            x = round_coord(segmentation_list[i] * width)
-            y = round_coord(segmentation_list[i + 1] * height)
-            segmentation_points.append((x, y))  # Convert to tuple for polygon points
-
-        # Create the Detection object
-        detection = Detection(
-            bbox=[xmin, ymin, xmax, ymax],
-            masks=[segmentation_points],  # Add mask as list of lists of tuples
-            keypoints=None,  # TODO
-            class_id=row['class'],
-            confidence=row.get('confidence', None)  # Add confidence if available
-        )
-
-        # Add the prediction to the predictions list
-        detections_obj.add_detection(detection)
-
-    return detections_obj
 
 
 def from_supervision(
