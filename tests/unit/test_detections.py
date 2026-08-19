@@ -128,13 +128,13 @@ class TestDetection:
         data = sample_detection_with_mask.to_dict()
         assert "masks" in data
         assert len(data["masks"]) == 1
-        # Mask should be base64 encoded
+        # Mask should be a PNG-encoded payload
         assert isinstance(data["masks"][0], dict)
         assert "data" in data["masks"][0]
         assert "shape" in data["masks"][0]
 
     def test_detection_decode_mask(self):
-        """Test mask decoding from base64."""
+        """Test mask decoding from PNG."""
         # Create and encode mask
         original_mask = np.zeros((50, 50), dtype=bool)
         original_mask[10:40, 10:40] = True
@@ -147,6 +147,36 @@ class TestDetection:
         assert decoded_mask.shape == original_mask.shape
         assert decoded_mask.dtype == bool
         assert np.array_equal(decoded_mask, original_mask)
+
+    def test_detection_mask_uses_png_format(self):
+        """Masks serialize as PNG, not a raw bitmap."""
+        det = pf.detections.Detection(
+            bbox=[0, 0, 50, 50], masks=[np.zeros((50, 50), dtype=bool)]
+        )
+        assert det.to_dict()["masks"][0]["format"] == "png"
+
+    def test_detection_decode_mask_uint8_roundtrip(self):
+        """uint8 masks round-trip through PNG without dtype drift."""
+        original_mask = np.zeros((40, 60), dtype=np.uint8)
+        original_mask[5:35, 10:50] = 255
+
+        det = pf.detections.Detection(bbox=[0, 0, 60, 40], masks=[original_mask])
+        decoded_mask = pf.detections.Detection.decode_mask(det.to_dict()["masks"][0])
+
+        assert decoded_mask.dtype == np.uint8
+        assert np.array_equal(decoded_mask, original_mask)
+
+    def test_detection_mask_payload_is_compressed(self):
+        """Guard against regressing to a raw 1-byte-per-pixel bitmap."""
+        height, width = 1080, 1920
+        mask = np.zeros((height, width), dtype=bool)
+        mask[100:900, 200:1500] = True
+
+        det = pf.detections.Detection(bbox=[200, 100, 1500, 900], masks=[mask])
+        payload = det.to_dict()["masks"][0]["data"]
+
+        # A raw bitmap would base64 to ~2.8 MB; PNG must stay far below that.
+        assert len(payload) < height * width / 100
 
     def test_detection_to_dict_is_json_serializable(self, sample_detection):
         """Detection exposes to_dict(); to_json() lives on the Detections container."""

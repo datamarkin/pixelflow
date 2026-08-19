@@ -8,9 +8,11 @@ different ML frameworks and visualization tools.
 """
 
 import copy as copy_module
+import io
 import json
 import base64
 import numpy as np
+from PIL import Image
 from pixelflow.validators import (validate_bbox,
                                   round_to_decimal,
                                   simplify_polygon)
@@ -237,12 +239,12 @@ class Detection:
         Transforms the Detection object into a comprehensive dictionary representation
         suitable for JSON export, API responses, database storage, and data analysis.
         Handles nested KeyPoint objects and maintains data type consistency. Automatically
-        encodes numpy binary masks as base64 strings for JSON compatibility and converts
+        encodes numpy binary masks as base64-wrapped PNGs for JSON compatibility and converts
         all NumPy types to native Python types for JSON serialization.
 
         Returns:
             Dict[str, Any]: Dictionary containing all detection fields with keypoints
-                          converted to dictionaries, numpy masks encoded as base64,
+                          converted to dictionaries, numpy masks PNG-encoded as base64,
                           numpy types converted to native Python types, and proper
                           type formatting for JSON serialization.
 
@@ -270,7 +272,7 @@ class Detection:
 
         Notes:
             - Keypoints are recursively converted to dictionaries using their to_dict() method
-            - Numpy binary masks are automatically encoded as base64 with metadata
+            - Numpy binary masks are PNG-compressed, then base64-encoded, with metadata
             - Polygon masks remain as coordinate lists (already JSON-compatible)
             - All NumPy numeric types (int32, float32, etc.) converted to native Python types
             - All optional fields are included even if None for consistent API responses
@@ -290,16 +292,20 @@ class Detection:
             if isinstance(value, (list, tuple)):
                 return [to_python_type(v) for v in value]
             return value
-        # Process masks - encode numpy arrays as base64, keep polygons as-is
+        # Process masks - PNG-encode numpy arrays, keep polygons as-is
         serializable_masks = None
         if self.masks:
             serializable_masks = []
             for mask in self.masks:
                 if isinstance(mask, np.ndarray):
-                    # Binary mask - encode as base64
+                    # Binary mask - PNG-encode, then base64 for JSON transport.
+                    # PNG compresses masks losslessly; encoding the raw bitmap
+                    # instead costs ~400x the payload on full-frame masks.
+                    buffer = io.BytesIO()
+                    Image.fromarray(mask).save(buffer, format='PNG')
                     serializable_masks.append({
-                        'format': 'base64',
-                        'data': base64.b64encode(mask.tobytes()).decode('utf-8'),
+                        'format': 'png',
+                        'data': base64.b64encode(buffer.getvalue()).decode('utf-8'),
                         'shape': list(mask.shape),
                         'dtype': str(mask.dtype)
                     })
@@ -344,17 +350,17 @@ class Detection:
     @staticmethod
     def decode_mask(mask_dict: Dict[str, Any]) -> Union[np.ndarray, List]:
         """
-        Decode mask from dictionary format (base64 or polygon).
+        Decode mask from dictionary format (png or polygon).
 
         Utility function to decode masks that were serialized using to_dict().
-        Handles both base64-encoded binary masks and polygon coordinate formats.
+        Handles both PNG-encoded binary masks and polygon coordinate formats.
 
         Args:
             mask_dict (Dict[str, Any]): Dictionary with 'format' and 'data' keys.
-                                       Format can be 'base64' or 'polygon'.
+                                       Format can be 'png' or 'polygon'.
 
         Returns:
-            Union[np.ndarray, List]: Decoded mask as numpy array (for base64)
+            Union[np.ndarray, List]: Decoded mask as numpy array (for png)
                                     or list of coordinates (for polygon).
 
         Raises:
@@ -384,16 +390,16 @@ class Detection:
             >>> print(polygon)  # [(0, 0), (100, 0), (100, 100)]
 
         Notes:
-            - For base64 format, requires 'data', 'shape', and 'dtype' keys
+            - For png format, requires 'data' and 'dtype' keys
             - For polygon format, returns the 'data' field directly
-            - Automatically reshapes decoded binary masks to original dimensions
+            - Mask dimensions are carried by the PNG itself; 'shape' is informational
             - Compatible with all masks serialized by to_dict() or to_json()
         """
-        if mask_dict['format'] == 'base64':
-            # Decode base64-encoded binary mask
-            mask_bytes = base64.b64decode(mask_dict['data'])
-            mask = np.frombuffer(mask_bytes, dtype=mask_dict['dtype'])
-            return mask.reshape(mask_dict['shape'])
+        if mask_dict['format'] == 'png':
+            # Decode PNG-encoded binary mask
+            png_bytes = base64.b64decode(mask_dict['data'])
+            mask = np.array(Image.open(io.BytesIO(png_bytes)))
+            return mask.astype(mask_dict['dtype'])
         elif mask_dict['format'] == 'polygon':
             # Polygon format - return as-is
             return mask_dict['data']
