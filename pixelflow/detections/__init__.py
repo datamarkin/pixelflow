@@ -18,7 +18,8 @@ from .converters import (
     from_supervision,
     from_rfdetr,
     from_falcon_perception,
-    from_efficienttam
+    from_efficienttam,
+    from_easyocr
 )
 
 # Import filter functions (now public API)
@@ -59,6 +60,7 @@ __all__ = [
     'from_rfdetr',
     'from_falcon_perception',
     'from_efficienttam',
+    'from_easyocr',
 
     # Filter functions
     'filter_by_confidence',

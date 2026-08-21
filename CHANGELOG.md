@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `Detection.text` — the free-form string an instance carries: what an OCR engine read inside
+  the box, or a region caption. It is a field rather than a `metadata` key because untyped
+  metadata means every annotator, filter and consumer re-invents the key and none can rely on
+  it. It is separate from `class_name` because the two answer different questions: `class_name`
+  is which class out of a vocabulary the model was trained on, `text` is content the model
+  produced that belongs to no vocabulary. Putting a read string in `class_name` — as
+  supervision's `from_easyocr` does — makes that field mean two things, and a detection can
+  legitimately have both.
+- `from_easyocr(reader.readtext(...))`. The quadrilateral EasyOCR read is kept in `segments`,
+  its axis-aligned hull in `bbox`, the string in `text`, and `class_id`/`class_name` stay None.
+  Keeping the quad matters because real-world text is rotated: EasyOCR emits a genuine
+  quadrilateral for any line off the horizontal, and collapsing it to `bbox` throws the
+  orientation away. Since it lives in `segments`, transforms move all four corners and the
+  polygon annotator draws it with no further work.
+  Handles the shapes `readtext` actually returns: the default `(quad, text, confidence)` tuples,
+  the 2-element items from `paragraph=True` (which carries no confidence, so `confidence` is
+  None rather than a fabricated 0), `output_format='dict'`, and the lists the Arabic path
+  produces. `detail=0` and `output_format='json'` return strings with no geometry and raise.
+
+### Fixed
+- **Breaking.** `from_florence2` no longer puts free-form strings in `class_name`.
+  `<DENSE_REGION_CAPTION>` descriptions, `<CAPTION_TO_PHRASE_GROUNDING>` and
+  `<REFERRING_EXPRESSION_SEGMENTATION>` phrases, and `<OCR_WITH_REGION>` reads now populate
+  `text`, with `class_id` and `class_name` left None — the model picked nothing out of a
+  vocabulary, so there is no class to report. `<OD>`, `<REGION_PROPOSAL>` and
+  `<OPEN_VOCABULARY_DETECTION>` genuinely name a class and are unchanged, sequential
+  `class_id`s included.
+  The output shapes cannot tell these apart — `<OD>` and `<DENSE_REGION_CAPTION>` both return
+  `{"bboxes", "labels"}` — so the routing keys off `task_prompt`, which the converter already
+  required. Unrecognised tasks now default to `text`: Florence-2's region tasks emit prose by
+  default, and a category name sitting in `text` is inert, where prose in `class_name` minted
+  a `class_id` per unique caption and leaked into the crossings class-name map.
+  Callers reading `det.class_name` from a captioning task must read `det.text` instead.
+- `from_florence2` supports `<OCR_WITH_REGION>`, which previously raised. Its quadrilaterals
+  are kept in `segments` with the hull in `bbox`, matching `from_easyocr`.
+- `from_florence2` rejects `<REGION_TO_CATEGORY>`, `<REGION_TO_DESCRIPTION>` and
+  `<REGION_TO_OCR>` with the same "text only" error as the other pure-text tasks, rather than
+  the less obvious "unsupported data format".
+- `label()` no longer draws the literal string `"None: 0.87"` for a detection with no
+  `class_name`. It had been formatting None into the label, which anything from `from_sam` or a
+  hand-built box hit. Such detections are now labelled with their confidence alone, so no
+  information is lost.
+
+### Changed
+- `label()` auto-generated labels use `text` when the detection has one, falling back to
+  `class_name`. `{text}` is available as a template placeholder.
+
 ## [0.2.0] - 2026-08-18
 
 ### Changed

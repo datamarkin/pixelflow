@@ -66,8 +66,8 @@ from transformers import pipeline
 detector = pipeline("object-detection")
 detections = pf.detections.from_transformers(detector(image))
 
-# Florence-2
-detections = pf.detections.from_florence2(model_output)
+# Florence-2 - captions and OCR reads land in det.text, <OD> classes in det.class_name
+detections = pf.detections.from_florence2(model_output, task_prompt="<OD>")
 
 # SAM (Segment Anything)
 detections = pf.detections.from_sam(masks, scores)
@@ -77,6 +77,11 @@ detections = pf.detections.from_rfdetr(model_output)
 
 # Supervision
 detections = pf.detections.from_supervision(sv_detections)
+
+# EasyOCR - text lands in det.text, the quad in det.segments
+import easyocr
+reader = easyocr.Reader(['en'])
+detections = pf.detections.from_easyocr(reader.readtext("sign.jpg"))
 
 # Plain arrays (numpy or torch) - no framework container to convert from
 detections = pf.detections.from_arrays(boxes, scores, class_ids, labels=model.class_names)
@@ -328,12 +333,13 @@ report = detections.to_json_with_metrics()
 | Detectron2 | `from_detectron2()` | Boxes, masks, keypoints |
 | Mayaku | `from_mayaku()` | Boxes, masks, keypoints |
 | HuggingFace Transformers | `from_transformers()` | Boxes, scores |
-| Florence-2 | `from_florence2()` | Boxes, polygons, phrases |
+| Florence-2 | `from_florence2()` | Boxes, quads, polygons, captions |
 | SAM | `from_sam()` | Masks, scores |
 | EfficientTAM | `from_efficienttam()` | Masks, scores |
 | RF-DETR | `from_rfdetr()` | Boxes, masks |
 | Supervision | `from_supervision()` | Boxes, masks, keypoints |
 | Falcon Perception | `from_falcon_perception()` | Boxes, masks |
+| EasyOCR | `from_easyocr()` | Quads, text, scores |
 | Datamarkin API | `from_datamarkin()` | Boxes, masks, keypoints |
 
 ## Documentation

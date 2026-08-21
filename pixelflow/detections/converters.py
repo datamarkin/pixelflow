@@ -29,7 +29,8 @@ __all__ = [
     "from_supervision",
     "from_rfdetr",
     "from_falcon_perception",
-    "from_efficienttam"
+    "from_efficienttam",
+    "from_easyocr"
 ]
 
 
@@ -94,6 +95,38 @@ def _get_label_info(labels, class_id):
         return labels[class_id], None
 
     return None, None
+
+
+def _hull_bbox(points):
+    """Axis-aligned hull of an ``[[x, y], ...]`` outline, as ``[x1, y1, x2, y2]``.
+
+    Converters that read richer geometry than a box - polygons, OCR quads - still owe
+    `bbox` a value, because zones, filters and every box annotator read it. One
+    definition keeps the three call sites from drifting on rounding and type.
+    """
+    xs, ys = zip(*points)
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
+def _detection_from_quad(quad, text, confidence=None):
+    """Build a Detection from one text quadrilateral, or None if it is unusable.
+
+    The quad is kept in `segments` because real-world text is rotated and `bbox`
+    alone throws the orientation away; since it lives there, transforms move all
+    four corners and the polygon annotator draws it with no further work.
+
+    Note that the quad is handed to the constructor raw. `Detection.segments` is a
+    validating property, so normalizing it here as well would run the numpy
+    round-trip twice on a per-frame path.
+    """
+    from .detections import Detection
+
+    detection = Detection(segments=quad, text=text, confidence=confidence)
+    if detection.segments is None or len(detection.segments) != 4:
+        return None
+
+    detection.bbox = _hull_bbox(detection.segments)
+    return detection
 
 
 def _flat_coord_lists(nested):
@@ -180,6 +213,56 @@ def from_datamarkin(api_response: Dict[str, Any]):
     return detections_obj
 
 
+# Florence-2 tasks whose `labels` are category names drawn from a vocabulary, so
+# they belong in `class_name`. Every other region task returns a free-form string
+# the model wrote or the caller supplied as a phrase, which belongs in `text`:
+# <DENSE_REGION_CAPTION> describes ("a red car parked"), <OCR_WITH_REGION>
+# transcribes, and <CAPTION_TO_PHRASE_GROUNDING> and
+# <REFERRING_EXPRESSION_SEGMENTATION> hand back the caller's own words located in
+# the image. None of those is a class, and putting them in `class_name` made that
+# field mean two things.
+#
+# The output shapes cannot tell these apart - <OD> and <DENSE_REGION_CAPTION> both
+# return {"bboxes": [...], "labels": [...]} - so this branches on task_prompt,
+# which the caller passes in. Unrecognised tasks fall to `text`: Florence-2 is a
+# captioning model whose region tasks emit prose by default, and a category name
+# sitting in `text` is inert, where prose in `class_name` mints fake class_ids and
+# leaks into the crossings class-name map.
+# <OPEN_VOCABULARY_DETECTION> cannot reach the vocabulary branch yet - it returns
+# `bboxes_labels`/`polygons_labels` rather than `labels`, so it raises before the
+# routing runs. It is listed anyway so that whoever adds that branch gets the
+# routing for free rather than having to rediscover this decision.
+_FLORENCE2_VOCABULARY_TASKS = frozenset((
+    '<OD>',
+    '<REGION_PROPOSAL>',
+    '<OPEN_VOCABULARY_DETECTION>',
+))
+
+# Tasks the processor post-processes as "pure_text": they return a string with no
+# geometry at all, so there is nothing to locate. Declared beside the set above so
+# that everything known about a task prompt lives in one place.
+_FLORENCE2_TEXT_ONLY_TASKS = frozenset((
+    '<CAPTION>',
+    '<DETAILED_CAPTION>',
+    '<MORE_DETAILED_CAPTION>',
+    '<OCR>',  # Pure OCR without regions
+    '<REGION_TO_CATEGORY>',
+    '<REGION_TO_DESCRIPTION>',
+    '<REGION_TO_OCR>',
+))
+
+
+def _florence2_label_fields(label, label_to_id, names_a_class):
+    """Where this task's label belongs on the Detection.
+
+    Both the bboxes and the polygons branch face the same question, so the answer
+    lives once. See _FLORENCE2_VOCABULARY_TASKS for how the task decides.
+    """
+    if names_a_class:
+        return {"class_id": label_to_id[label], "class_name": label}
+    return {"text": label}
+
+
 def from_florence2(
     parsed_result: Dict[str, Any],
     task_prompt: str,
@@ -193,7 +276,8 @@ def from_florence2(
         image_size: Image dimensions as (width, height). Default is None.
 
     Returns:
-        Detections: Bounding boxes, polygon segments, OCR data, and sequential class IDs.
+        Detections: Bounding boxes, polygon segments, quadrilaterals for OCR, and either
+            class names or `text` depending on the task.
 
     Raises:
         ValueError: If task_prompt is not in parsed_result, is a text-only task, or the data
@@ -206,25 +290,33 @@ def from_florence2(
         >>> detections = pf.detections.from_florence2(parsed, task_prompt=task)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.bbox}")
+        >>>
+        >>> # Captioning and OCR tasks fill `text` instead, and leave class_name None
+        >>> task = "<DENSE_REGION_CAPTION>"
+        >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(w, h))
+        >>> for det in pf.detections.from_florence2(parsed, task_prompt=task):
+        ...     print(f"{det.text}: {det.bbox}")
 
     Notes:
-        - Supported tasks: <OD>, <CAPTION_TO_PHRASE_GROUNDING>, <DENSE_REGION_CAPTION>,
-          <REFERRING_EXPRESSION_SEGMENTATION>.
-        - Text-only tasks (<CAPTION>, <OCR>, etc.) raise ValueError.
-        - Sequential class_ids (0, 1, 2, ...) assigned for consistent color mapping.
+        - Supported tasks: <OD>, <REGION_PROPOSAL>, <CAPTION_TO_PHRASE_GROUNDING>,
+          <DENSE_REGION_CAPTION>, <OCR_WITH_REGION>, <REFERRING_EXPRESSION_SEGMENTATION>,
+          <REGION_TO_SEGMENTATION>.
+        - Where the label goes depends on the task. <OD>, <REGION_PROPOSAL> and
+          <OPEN_VOCABULARY_DETECTION> name a class, so their labels become `class_name` with
+          sequential class_ids for stable colouring. Every other task returns a free-form
+          string, which becomes `text` with `class_id` and `class_name` left None -- the model
+          picked nothing out of a vocabulary, so there is no class to report.
+        - <OCR_WITH_REGION> returns quadrilaterals rather than boxes. The four corners are kept
+          in `segments` and the axis-aligned hull in `bbox`, so rotated text keeps its
+          orientation through transforms.
+        - Text-only tasks (<CAPTION>, <OCR>, <REGION_TO_DESCRIPTION>, etc.) raise ValueError.
+        - <OPEN_VOCABULARY_DETECTION> is not supported: it returns `bboxes_labels` and
+          `polygons_labels` rather than `labels` and needs its own branch.
         - Confidence defaults to 1.0 when not provided.
     """
     from .detections import Detections, Detection
 
     detections_obj = Detections()
-
-    # Text-only tasks that should not be converted to Detections
-    TEXT_ONLY_TASKS = {
-        '<CAPTION>',
-        '<DETAILED_CAPTION>',
-        '<MORE_DETAILED_CAPTION>',
-        '<OCR>',  # Pure OCR without regions
-    }
 
     # Validate that task_prompt exists in parsed_result
     if task_prompt not in parsed_result:
@@ -234,41 +326,60 @@ def from_florence2(
         )
 
     # Reject text-only tasks
-    if task_prompt in TEXT_ONLY_TASKS:
+    if task_prompt in _FLORENCE2_TEXT_ONLY_TASKS:
         raise ValueError(
             f"Task '{task_prompt}' returns text only and cannot be converted to Detections. "
-            f"Text-only tasks: {TEXT_ONLY_TASKS}"
+            f"Text-only tasks: {sorted(_FLORENCE2_TEXT_ONLY_TASKS)}"
         )
 
     # Extract the task-specific data
     task_data = parsed_result[task_prompt]
 
+    # Whether this task's labels name a class or are free-form strings. See
+    # _FLORENCE2_VOCABULARY_TASKS for why this branches on the prompt and not the shape.
+    names_a_class = task_prompt in _FLORENCE2_VOCABULARY_TASKS
+
+    # Sequential class IDs give stable colours per class. Only meaningful when the
+    # labels are a vocabulary and repeat; for captions every label is unique, so an
+    # id would just be the row number dressed up as a class.
+    label_to_id = {}
+    if names_a_class:
+        for label in task_data.get('labels') or []:
+            label_to_id.setdefault(label, len(label_to_id))
+
     # Handle different task types based on available data fields
     if 'bboxes' in task_data and 'labels' in task_data:
-        # Detection tasks: <OD>, <CAPTION_TO_PHRASE_GROUNDING>, <DENSE_REGION_CAPTION>, etc.
+        # Detection tasks: <OD>, <REGION_PROPOSAL>, <CAPTION_TO_PHRASE_GROUNDING>,
+        # <DENSE_REGION_CAPTION> - all the same shape, told apart by task_prompt.
         bboxes = task_data['bboxes']
         labels = task_data['labels']
         scores = task_data.get('scores', None)  # Optional confidence scores
 
-        # Assign sequential class IDs for consistent coloring
-        unique_labels = []
-        label_to_id = {}
-        for label in labels:
-            if label not in label_to_id:
-                label_to_id[label] = len(unique_labels)
-                unique_labels.append(label)
-
         for idx, (bbox, label) in enumerate(zip(bboxes, labels)):
-            class_id = label_to_id[label]
             confidence = float(scores[idx]) if scores is not None else 1.0
 
             # Florence-2 bboxes are already in XYXY format [x1, y1, x2, y2]
             detection = Detection(
                 bbox=[float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])],
-                class_id=class_id,
-                class_name=label,
-                confidence=confidence
+                confidence=confidence,
+                **_florence2_label_fields(label, label_to_id, names_a_class)
             )
+            detections_obj.add_detection(detection)
+
+    elif 'quad_boxes' in task_data and 'labels' in task_data:
+        # <OCR_WITH_REGION>: the processor builds labels from inst["text"], and each
+        # quad_box is a flat [x1, y1, x2, y2, x3, y3, x4, y4] run of corners. Same
+        # treatment as from_easyocr - the quad is kept because rotated text is the
+        # normal case and bbox alone throws the orientation away.
+        for quad, label in zip(task_data['quad_boxes'], task_data['labels']):
+            # Pair the flat run into [x, y]; _detection_from_quad rounds and validates.
+            points = [quad[i:i + 2] for i in range(0, len(quad) - 1, 2)]
+            detection = _detection_from_quad(points, label, confidence=1.0)
+            if detection is None:
+                warnings.warn(
+                    f"Skipping Florence-2 OCR region with unusable geometry: {quad!r}"
+                )
+                continue
             detections_obj.add_detection(detection)
 
     elif 'polygons' in task_data and 'labels' in task_data:
@@ -279,17 +390,7 @@ def from_florence2(
         polygons = task_data['polygons']
         labels = task_data['labels']
 
-        # Assign sequential class IDs
-        unique_labels = []
-        label_to_id = {}
-        for label in labels:
-            if label not in label_to_id:
-                label_to_id[label] = len(unique_labels)
-                unique_labels.append(label)
-
-        for idx, (poly_nested, label) in enumerate(zip(polygons, labels)):
-            class_id = label_to_id[label]
-
+        for poly_nested, label in zip(polygons, labels):
             # Every polygon for this instance is kept — an instance split by
             # occlusion has more than one, and dropping the rest loses geometry.
             all_polygons = []
@@ -304,23 +405,13 @@ def from_florence2(
             if not all_polygons:
                 continue
 
-            # bbox is the axis-aligned hull across every polygon of the instance.
-            x_coords = [p[0] for poly in all_polygons for p in poly]
-            y_coords = [p[1] for poly in all_polygons for p in poly]
-            bbox = [
-                float(min(x_coords)),
-                float(min(y_coords)),
-                float(max(x_coords)),
-                float(max(y_coords))
-            ]
-
             detection = Detection(
-                bbox=bbox,
+                # The hull spans every polygon of the instance, not just the first.
+                bbox=_hull_bbox([p for poly in all_polygons for p in poly]),
                 segments=all_polygons[0],  # segments holds a single polygon
                 masks=all_polygons,        # masks keeps every part
-                class_id=class_id,
-                class_name=label,
-                confidence=1.0
+                confidence=1.0,
+                **_florence2_label_fields(label, label_to_id, names_a_class)
             )
             detections_obj.add_detection(detection)
 
@@ -329,7 +420,7 @@ def from_florence2(
         raise ValueError(
             f"Unsupported Florence-2 task format for '{task_prompt}'. "
             f"Available data fields: {list(task_data.keys())}. "
-            f"Expected 'bboxes+labels' or 'polygons+labels'."
+            f"Expected 'bboxes+labels', 'quad_boxes+labels' or 'polygons+labels'."
         )
 
     return detections_obj
@@ -1045,6 +1136,94 @@ def from_rfdetr(
     """
     # Delegate to from_supervision for actual conversion
     return from_supervision(supervision_detections, labels=labels)
+
+
+def from_easyocr(easyocr_results: List[Any]):
+    """Convert EasyOCR readtext() output to a Detections object.
+
+    Args:
+        easyocr_results: The list returned by ``reader.readtext(...)``, called with
+            ``detail=1`` (the default) and ``output_format`` of 'standard', 'free_merge'
+            or 'dict'.
+
+    Returns:
+        Detections: One detection per text region -- the quadrilateral as EasyOCR read it in
+            `segments`, its axis-aligned hull in `bbox`, the recognized string in `text`.
+
+    Raises:
+        ValueError: If the results are plain strings, which carry no geometry to convert.
+
+    Example:
+        >>> import easyocr
+        >>> import pixelflow as pf
+        >>>
+        >>> reader = easyocr.Reader(['en'])
+        >>> detections = pf.detections.from_easyocr(reader.readtext("sign.jpg"))
+        >>> for det in detections:
+        ...     print(det.text, det.bbox)
+
+    Notes:
+        - `class_id` and `class_name` stay None. OCR reads content, it does not pick a class
+          out of a vocabulary, and `text` is where the content belongs.
+        - The quad is kept because real-world text is rotated. For a horizontal line EasyOCR
+          emits the axis-aligned rectangle as four corners, so the quad adds nothing over
+          `bbox`; for a line off the horizontal it is the only record of the orientation.
+          Transforms move all four corners, so it survives rotation and flipping.
+        - `paragraph=True` merges lines and returns no confidence, so `confidence` is None
+          there. Note that confidence filters drop None-confidence detections.
+        - `detail=0` and ``output_format='json'`` both return strings rather than located
+          text and raise.
+        - A region EasyOCR located but read as an empty string is kept: the box was still
+          detected, and whether an empty read is worth keeping is the caller's call.
+        - Results with unusable geometry are skipped with a warning rather than aborting
+          the whole conversion.
+    """
+    from .detections import Detections
+
+    detections_obj = Detections()
+
+    for item in easyocr_results:
+        if isinstance(item, str):
+            raise ValueError(
+                "EasyOCR returned strings, not located text: readtext() was called with "
+                "detail=0 or output_format='json'. pixelflow needs the boxes -- use "
+                "detail=1 with output_format='standard' or 'dict'."
+            )
+
+        if isinstance(item, dict):
+            quad, text, conf = item.get("boxes"), item.get("text"), item.get("confident")
+        else:
+            # 'standard' and 'free_merge' give (quad, text, confidence) tuples. paragraph=True
+            # merges lines and drops the confidence, leaving a 2-element item, and the Arabic
+            # path rebuilds every item as a list -- so index rather than unpack.
+            quad, text = item[0], item[1]
+            conf = item[2] if len(item) > 2 else None
+
+        # The quad arrives in whichever shape EasyOCR used - numpy ints for rotated
+        # boxes, Python ints for horizontal ones - and is normalized on the way in.
+        detection = _detection_from_quad(quad, text, confidence=conf)
+        if detection is None:
+            # One degenerate quad should not cost the other 499 regions, so skip it.
+            # But every quad failing means this is not EasyOCR output at all, and a
+            # silent empty result is a bad way to find that out - see below.
+            warnings.warn(
+                f"Skipping EasyOCR result with unusable geometry: {quad!r}. "
+                "Expected four corner points."
+            )
+            continue
+
+        detections_obj.add_detection(detection)
+
+    if easyocr_results and len(detections_obj) == 0:
+        # Cannot tell "every region was degenerate" from "this is not EasyOCR
+        # output" - both look identical from here - so the message names both.
+        raise ValueError(
+            f"None of the {len(easyocr_results)} results had usable geometry. Either "
+            "every region was degenerate, or this is not EasyOCR output -- expected "
+            "[(quad, text, confidence), ...] from reader.readtext(...)."
+        )
+
+    return detections_obj
 
 
 def _resize_mask(mask: np.ndarray, width: int, height: int) -> np.ndarray:

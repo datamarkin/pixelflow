@@ -172,6 +172,11 @@ class Detection:
         keypoints (Optional[List[KeyPoint]]): List of KeyPoint objects for pose/structure data.
         class_id (Optional[Union[int, str]]): Numeric or string class identifier from model.
         class_name (Optional[str]): Human-readable class name (e.g., "person", "vehicle").
+        text (Optional[str]): Free-form string this instance carries -- what an OCR engine read
+                             inside the box, or a region caption. Distinct from `class_name`,
+                             which names one class from a fixed vocabulary the model was trained
+                             on; `text` is per-instance content the model produced, drawn from no
+                             vocabulary. A detection can have both, either, or neither.
         labels (Optional[List[str]]): Additional classification labels or attributes.
         confidence (Optional[float]): Detection confidence score [0.0-1.0], automatically rounded
                                      to 4 decimal places for consistency.
@@ -251,7 +256,8 @@ class Detection:
                  zone_names: Optional[List[str]] = None,
                  line_crossings: Optional[List[Dict]] = None,
                  first_seen_time: Optional[float] = None,
-                 total_time: float = 0.0):
+                 total_time: float = 0.0,
+                 text: Optional[str] = None):
         self.inference_id = inference_id
         self.bbox = bbox  # goes through the validating property setter below
         self.masks = masks
@@ -259,6 +265,7 @@ class Detection:
         self.keypoints = keypoints if keypoints is not None else None
         self.class_id = class_id
         self.class_name = class_name
+        self.text = text
         self.labels = labels
         self.confidence = round_to_decimal(confidence)
         self.tracker_id = tracker_id
@@ -398,6 +405,7 @@ class Detection:
             "keypoints": [kp.to_dict() for kp in self.keypoints] if self.keypoints is not None else None,
             "class_id": to_python_type(self.class_id),
             "class_name": self.class_name,
+            "text": self.text,
             "labels": self.labels,
             "confidence": to_python_type(self.confidence),
             "tracker_id": to_python_type(self.tracker_id),
@@ -566,6 +574,7 @@ class Detection:
             keypoints=[kp._clone() for kp in self.keypoints] if self.keypoints else None,
             class_id=self.class_id,
             class_name=self.class_name,
+            text=self.text,
             labels=self.labels.copy() if self.labels else None,
             confidence=self.confidence,
             tracker_id=self.tracker_id,

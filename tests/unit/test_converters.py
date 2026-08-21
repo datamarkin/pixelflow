@@ -192,6 +192,99 @@ class TestFlorence2Converter:
         # bbox spans both parts rather than just the first.
         assert detections[0].bbox == [0, 0, 100, 100]
 
+    @pytest.mark.parametrize("task", [
+        "<DENSE_REGION_CAPTION>",       # describes: "a red car parked"
+        "<CAPTION_TO_PHRASE_GROUNDING>",  # locates the caller's own words
+        "<SOME_NEW_TASK>",              # unrecognised: assumed to emit prose
+    ])
+    def test_from_florence2_prose_goes_to_text(self, task):
+        """Tasks that do not name a class fill `text` and leave class_* None.
+
+        Their output shape is identical to <OD>'s, so only task_prompt tells them
+        apart. A caption in class_name would also mint a fake class_id per unique
+        string. Unrecognised tasks default here because Florence-2's region tasks
+        emit prose by default, and a category name sitting in text is inert where
+        prose in class_name leaks into the crossings class-name map.
+        """
+        parsed = {task: {
+            "bboxes": [[10, 10, 50, 50], [60, 60, 90, 90]],
+            "labels": ["a red car parked", "a man in a blue jacket"],
+        }}
+
+        detections = pf.detections.from_florence2(parsed, task_prompt=task)
+
+        assert [d.text for d in detections] == [
+            "a red car parked", "a man in a blue jacket"
+        ]
+        assert [d.class_name for d in detections] == [None, None]
+        assert [d.class_id for d in detections] == [None, None]
+
+    def test_from_florence2_region_proposal_names_a_class(self):
+        """<REGION_PROPOSAL> is a vocabulary task and keeps class_name/class_id."""
+        parsed = {
+            "<REGION_PROPOSAL>": {
+                "bboxes": [[10, 10, 50, 50], [60, 60, 90, 90]],
+                "labels": ["region", "region"],
+            }
+        }
+
+        detections = pf.detections.from_florence2(
+            parsed, task_prompt="<REGION_PROPOSAL>"
+        )
+
+        assert [d.class_name for d in detections] == ["region", "region"]
+        # Repeated labels share an id - that is what makes the id a class and not
+        # a row number.
+        assert [d.class_id for d in detections] == [0, 0]
+        assert [d.text for d in detections] == [None, None]
+
+    def test_from_florence2_ocr_with_region(self):
+        """<OCR_WITH_REGION> returns quads, which are kept as read."""
+        parsed = {
+            "<OCR_WITH_REGION>": {
+                # Flat [x1, y1, x2, y2, x3, y3, x4, y4] per region.
+                "quad_boxes": [[12, 22, 115, 15, 118, 48, 15, 55]],
+                "labels": ["Main St"],
+            }
+        }
+
+        detections = pf.detections.from_florence2(
+            parsed, task_prompt="<OCR_WITH_REGION>"
+        )
+
+        assert len(detections) == 1
+        assert detections[0].text == "Main St"
+        assert detections[0].segments == [[12, 22], [115, 15], [118, 48], [15, 55]]
+        # bbox is the axis-aligned hull, so zones and filters keep working.
+        assert detections[0].bbox == [12, 15, 118, 55]
+        assert detections[0].class_name is None
+
+    def test_from_florence2_referring_expression_goes_to_text(self):
+        """The polygon branch routes labels the same way the bbox branch does."""
+        parsed = {
+            "<REFERRING_EXPRESSION_SEGMENTATION>": {
+                "polygons": [[[10, 20, 50, 20, 50, 60, 10, 60]]],
+                "labels": ["the red car on the left"],
+            }
+        }
+
+        detections = pf.detections.from_florence2(
+            parsed, task_prompt="<REFERRING_EXPRESSION_SEGMENTATION>"
+        )
+
+        assert detections[0].text == "the red car on the left"
+        assert detections[0].class_name is None
+        assert detections[0].class_id is None
+
+    @pytest.mark.parametrize("task", [
+        "<CAPTION>", "<OCR>", "<REGION_TO_CATEGORY>",
+        "<REGION_TO_DESCRIPTION>", "<REGION_TO_OCR>",
+    ])
+    def test_from_florence2_pure_text_tasks_raise(self, task):
+        """Tasks the processor treats as pure_text carry no geometry to locate."""
+        with pytest.raises(ValueError, match="text only"):
+            pf.detections.from_florence2({task: "some string"}, task_prompt=task)
+
     def test_from_florence2_missing_task_prompt_raises(self):
         """A task_prompt absent from the parsed result is an error."""
         with pytest.raises(ValueError):
@@ -955,3 +1048,149 @@ class TestNoBundledVocabulary:
             labels={1: "person", 73: "laptop"},
         )
         assert [d.class_name for d in named] == ["person", "laptop"]
+
+
+# ============================================================================
+# EasyOCR Converter Tests
+# ============================================================================
+
+# What easyocr.Reader.readtext actually returns: horizontal text comes back as the
+# axis-aligned rectangle expressed as four corners, rotated text as a genuine
+# quadrilateral. Module-level so the parametrize decorators below can see them.
+HORIZONTAL = ([[10, 20], [110, 20], [110, 50], [10, 50]], "STOP", 0.9812)
+ROTATED = ([[12, 22], [115, 15], [118, 48], [15, 55]], "Main St", 0.7431)
+
+
+class TestEasyOCRConverter:
+    """Tests for from_easyocr converter."""
+
+    def test_bbox_is_the_hull_of_the_quad(self):
+        """bbox is the axis-aligned hull, so zones and box filters keep working."""
+        detections = pf.detections.from_easyocr([HORIZONTAL, ROTATED])
+
+        assert len(detections) == 2
+        # A horizontal quad's hull is the quad; a rotated one's is strictly larger.
+        assert detections[0].bbox == [10, 20, 110, 50]
+        assert detections[1].bbox == [12, 15, 118, 55]
+
+    @pytest.mark.parametrize("item, expected_text, expected_confidence", [
+        (HORIZONTAL, "STOP", 0.981),
+        (list(HORIZONTAL), "STOP", 0.981),
+        ([HORIZONTAL[0], "STOP AHEAD"], "STOP AHEAD", None),
+        ({"boxes": HORIZONTAL[0], "text": "STOP", "confident": 0.9812}, "STOP", 0.981),
+        ({"boxes": HORIZONTAL[0], "text": "STOP"}, "STOP", None),
+    ], ids=["standard", "arabic-lists", "paragraph", "dict", "dict-paragraph"])
+    def test_readtext_output_shapes(self, item, expected_text, expected_confidence):
+        """Every shape readtext returns converts to the same thing.
+
+        'standard' is the default (quad, text, confidence) tuple; the Arabic path
+        rebuilds each result as a list; paragraph=True merges lines and returns no
+        confidence at all, so it stays None rather than a fabricated 0 claiming the
+        read was certainly wrong; output_format='dict' renames the fields.
+        """
+        detections = pf.detections.from_easyocr([item])
+
+        assert len(detections) == 1
+        assert detections[0].text == expected_text
+        assert detections[0].confidence == expected_confidence
+
+    def test_quad_is_preserved_in_segments(self):
+        """The corners are kept as read, not collapsed into the xyxy hull."""
+        detections = pf.detections.from_easyocr([ROTATED])
+
+        assert detections[0].segments == [[12, 22], [115, 15], [118, 48], [15, 55]]
+
+    def test_no_class_is_invented(self):
+        """OCR reads content; it does not pick a class out of a vocabulary."""
+        detections = pf.detections.from_easyocr([HORIZONTAL])
+
+        assert detections[0].class_id is None
+        assert detections[0].class_name is None
+
+    def test_numpy_coordinates(self):
+        """Rotated boxes arrive with numpy ints, not Python ints."""
+        quad = [[np.int32(12), np.int32(22)], [np.int32(115), np.int32(15)],
+                [np.int32(118), np.int32(48)], [np.int32(15), np.int32(55)]]
+        detections = pf.detections.from_easyocr([(quad, "Main St", np.float32(0.74))])
+
+        assert detections[0].segments == [[12, 22], [115, 15], [118, 48], [15, 55]]
+        assert isinstance(detections[0].bbox[0], float)
+
+    def test_empty_results(self):
+        """No text found is not an error."""
+        assert len(pf.detections.from_easyocr([])) == 0
+
+    def test_empty_read_is_kept(self):
+        """A located region read as '' is still a region the detector found."""
+        detections = pf.detections.from_easyocr([(HORIZONTAL[0], "", 0.12)])
+
+        assert len(detections) == 1
+        assert detections[0].text == ""
+
+    def test_detail_zero_raises(self):
+        """detail=0 returns strings with no geometry to convert."""
+        with pytest.raises(ValueError, match="detail=0"):
+            pf.detections.from_easyocr(["STOP", "Main St"])
+
+    def test_json_output_format_raises(self):
+        """output_format='json' is also a list of strings."""
+        with pytest.raises(ValueError, match="output_format"):
+            pf.detections.from_easyocr(['{"boxes": [], "text": "STOP"}'])
+
+    def test_malformed_geometry_warns_and_skips(self):
+        """One unusable result does not abort the rest of the conversion."""
+        with pytest.warns(UserWarning, match="four corner points"):
+            detections = pf.detections.from_easyocr([
+                ([[10, 20], [110, 50]], "STOP", 0.98),  # two points, not four
+                ROTATED,
+            ])
+
+        assert len(detections) == 1
+        assert detections[0].text == "Main St"
+
+    def test_non_finite_geometry_warns_and_skips(self):
+        """NaN corners are rejected rather than poisoning downstream IoU maths."""
+        with pytest.warns(UserWarning):
+            detections = pf.detections.from_easyocr([
+                ([[10, 20], [float("nan"), 20], [110, 50], [10, 50]], "STOP", 0.98),
+                ROTATED,
+            ])
+
+        assert len(detections) == 1
+        assert detections[0].text == "Main St"
+
+    def test_every_result_unusable_raises(self):
+        """A wrong input type is a bad thing to learn from an empty container.
+
+        One degenerate quad is skipped, but nothing surviving means the caller
+        almost certainly passed something that is not EasyOCR output.
+        """
+        with pytest.raises(ValueError, match="not EasyOCR output"):
+            with pytest.warns(UserWarning):
+                pf.detections.from_easyocr([
+                    ([[10, 20], [110, 50]], "STOP", 0.98),
+                    ([[1, 2]], "Main St", 0.74),
+                ])
+
+    def test_quad_survives_rotation(self):
+        """segments is transform-aware, so the orientation is not lost on rotate."""
+        image = np.zeros((200, 300, 3), dtype=np.uint8)
+        detections = pf.detections.from_easyocr([ROTATED])
+
+        _, rotated = pf.transforms.rotate_detections(image, detections, 30)
+
+        assert len(rotated[0].segments) == 4
+        assert rotated[0].segments != detections[0].segments
+        assert rotated[0].text == "Main St"
+
+    def test_text_survives_copy(self):
+        """copy() must carry text, or transforms silently drop the read."""
+        detections = pf.detections.from_easyocr([HORIZONTAL])
+
+        assert detections.copy()[0].text == "STOP"
+
+    def test_text_is_serialized(self):
+        """to_dict exposes text as its own key, not buried in metadata."""
+        detections = pf.detections.from_easyocr([HORIZONTAL])
+
+        assert detections[0].to_dict()["text"] == "STOP"

@@ -34,8 +34,11 @@ def label(
                                coordinates and optional attributes (class_name, confidence,
                                class_id, tracker_id).
         texts (Optional[Union[str, List[str]]]): Label text specification.
-            - None: Auto-generates labels from detection attributes (class_name: confidence)
-            - str: Template string with placeholders ({class_name}, {confidence}, 
+            - None: Auto-generates labels from detection attributes. Uses `text` when the
+                    detection carries one (OCR reads, region captions), otherwise `class_name`,
+                    formatted as "<caption>: <confidence>". A detection with neither is
+                    labelled with its confidence alone.
+            - str: Template string with placeholders ({class_name}, {text}, {confidence},
                    {class_id}, {tracker_id}, {bbox})
             - List[str]: Custom labels for each detection (length should match detections)
         position (str): Label position relative to bounding box. Options:
@@ -125,13 +128,17 @@ def label(
         # Auto-generate from detection properties
         texts = []
         for detection in detections:
-            class_name = getattr(detection, 'class_name', 'Object')
+            # `text` is what this instance says, `class_name` is which class it is.
+            # An OCR or captioning detection has the former and no vocabulary to
+            # supply the latter, so text takes precedence where both exist.
+            caption = (getattr(detection, 'text', None)
+                       or getattr(detection, 'class_name', None))
             confidence = getattr(detection, 'confidence', None)
-            if confidence is not None:
-                text = f"{class_name}: {confidence:.2f}"
-            else:
-                text = class_name
-            texts.append(text)
+            score = f"{confidence:.2f}" if confidence is not None else ''
+            # Joining the parts that exist rather than formatting both keeps a
+            # missing caption from rendering as the literal "None: 0.87", while
+            # still showing the score - which is all a from_sam detection has.
+            texts.append(': '.join(part for part in (caption, score) if part))
     elif isinstance(texts, str):
         # Template mode - format for each detection
         template = texts
@@ -140,6 +147,7 @@ def label(
             # Build context dict from detection attributes
             context = {
                 'class_name': getattr(detection, 'class_name', 'Unknown'),
+                'text': getattr(detection, 'text', None) or '',
                 'confidence': getattr(detection, 'confidence', 0.0),
                 'class_id': getattr(detection, 'class_id', -1),
                 'tracker_id': getattr(detection, 'tracker_id', ''),

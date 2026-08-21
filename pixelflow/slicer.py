@@ -268,6 +268,7 @@ class SlicedInference:
                 keypoints=pred.keypoints,  # TODO: Shift keypoint coordinates if needed
                 class_id=pred.class_id,
                 class_name=pred.class_name,
+                text=pred.text,
                 confidence=pred.confidence,
                 tracker_id=pred.tracker_id,
                 metadata={'slice_id': slice_id} if pred.metadata is None else {**pred.metadata, 'slice_id': slice_id}
@@ -679,6 +680,7 @@ class SlicedInference:
             bbox=merged_bbox,
             class_id=max_conf_pred.class_id,
             class_name=max_conf_pred.class_name,
+            text=max_conf_pred.text,
             confidence=max_conf_pred.confidence,
             masks=max_conf_pred.masks,
             segments=max_conf_pred.segments,
