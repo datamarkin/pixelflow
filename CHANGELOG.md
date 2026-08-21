@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `from_arrays` takes `texts=` and `segments=`, and `class_ids=` is now optional. Deployment
+  code extracted from a research repository returns arrays rather than a framework container,
+  which is what `from_arrays` exists for — but until now it could carry neither a read string
+  nor a polygon, so a vendored OCR model had to build `Detections` by hand or borrow
+  `from_easyocr`, a converter named after a container it does not use. `texts` fills `text`
+  per detection (an empty read is kept as `""`; only None leaves the field unset), and
+  `segments` fills one polygon per detection, so a text quadrilateral or an oriented box
+  survives instead of being flattened into `bbox`. `class_ids` defaults to None for the models
+  that locate without naming — OCR reads content, SAM segments what it was pointed at — which
+  no existing caller notices, since every one of them passes it.
 - `Detection.text` — the free-form string an instance carries: what an OCR engine read inside
   the box, or a region caption. It is a field rather than a `metadata` key because untyped
   metadata means every annotator, filter and consumer re-invents the key and none can rely on

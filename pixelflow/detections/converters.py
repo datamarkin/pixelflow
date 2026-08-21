@@ -426,7 +426,8 @@ def from_florence2(
     return detections_obj
 
 
-def from_arrays(boxes, scores, class_ids, masks=None, keypoints=None, labels=None):
+def from_arrays(boxes, scores, class_ids=None, masks=None, keypoints=None, labels=None,
+                texts=None, segments=None):
     """Convert plain detection arrays to a Detections object.
 
     The framework-free entry point. Every other converter in this module is named
@@ -442,7 +443,9 @@ def from_arrays(boxes, scores, class_ids, masks=None, keypoints=None, labels=Non
     Args:
         boxes: `(N, 4)` bounding boxes in absolute XYXY pixel coordinates.
         scores: `(N,)` confidence scores.
-        class_ids: `(N,)` integer class IDs.
+        class_ids: Optional `(N,)` integer class IDs. None for a model that locates
+            things without naming them -- OCR reads content, SAM segments whatever it
+            was pointed at, and neither picks a class out of a vocabulary.
         masks: Optional `(N, H, W)` masks, cast to boolean. Instance segmentation only.
         keypoints: Optional `(N, K, 3)` keypoints with `(x, y, score)` columns.
         labels: Optional label definitions for class and keypoint name resolution.
@@ -450,10 +453,17 @@ def from_arrays(boxes, scores, class_ids, masks=None, keypoints=None, labels=Non
             - List[str]: ["person", "car"] — index = class_id
             - Dict[int, str]: {0: "person", 1: "car"} — key = class_id
             - List[dict]: [{"id": 0, "name": "person", "keypoints": [...]}]
+        texts: Optional `(N,)` free-form strings, one per detection -- what an OCR engine
+            read inside the box, or a region caption. An empty string is kept as an empty
+            string; None leaves the field unset.
+        segments: Optional `(N,)` polygons, one per detection, each `(P, 2)` points in
+            absolute pixel coordinates. Pass the shape the model actually produced -- a
+            text quadrilateral, an oriented box -- where `bbox` alone would throw the
+            orientation away.
 
     Returns:
-        Detections: Bounding boxes, masks, keypoints, class IDs and confidence
-        scores in PixelFlow's unified format.
+        Detections: Bounding boxes, polygons, text, masks, keypoints, class IDs and
+        confidence scores in PixelFlow's unified format.
 
     Raises:
         ValueError: If the arrays do not all describe the same number of detections.
@@ -477,6 +487,12 @@ def from_arrays(boxes, scores, class_ids, masks=None, keypoints=None, labels=Non
         - Pass the model's own class names as `labels`. A checkpoint fine-tuned on your
           data has its own vocabulary, and another model's names would mislabel every
           detection rather than fail.
+        - `texts` is not a substitute for `labels`. `class_name` is which class out of a
+          fixed vocabulary the model was trained on; `text` is content it produced that
+          belongs to no vocabulary. A model can supply either, both, or neither.
+        - `boxes` is required even when `segments` is given: the axis-aligned hull is what
+          zones, filters and most annotators read, and only the caller knows whether the
+          polygon or the box is the authoritative geometry.
     """
     from .detections import Detections, Detection
 
@@ -487,29 +503,41 @@ def from_arrays(boxes, scores, class_ids, masks=None, keypoints=None, labels=Non
     class_ids = _to_numpy(class_ids)
     masks = _to_numpy(masks)
     keypoints = _to_numpy(keypoints)
+    # texts and segments stay in whatever sequence they arrived in. numpy would turn
+    # strings into `numpy.str_` and would collapse polygons of differing vertex counts
+    # into an object array, so neither gains anything from the round-trip.
 
     count = len(boxes)
     for name, array in (("scores", scores), ("class_ids", class_ids),
-                        ("masks", masks), ("keypoints", keypoints)):
+                        ("masks", masks), ("keypoints", keypoints),
+                        ("texts", texts), ("segments", segments)):
         if array is not None and len(array) != count:
             raise ValueError(
                 f"{name} describes {len(array)} detections but boxes describes {count}"
             )
 
     for i in range(count):
-        class_id = int(class_ids[i])
+        # A model that locates without naming has no class_id, and `_get_label_info`
+        # already answers (None, None) for one -- so an unnamed detection costs no branch
+        # here beyond not casting None to int.
+        class_id = int(class_ids[i]) if class_ids is not None else None
         class_name, kp_names = _get_label_info(labels, class_id)
 
         kpts = _build_keypoints(keypoints[i], kp_names) if keypoints is not None else None
 
+        # Handed over raw: `Detection.segments` is a validating property, and normalizing
+        # here as well would run the numpy round-trip twice on a per-frame path.
         detections_obj.add_detection(Detection(
             bbox=boxes[i].tolist(),
             masks=[masks[i].astype(bool)] if masks is not None else None,
-            segments=None,
+            segments=segments[i] if segments is not None else None,
             keypoints=kpts,
             class_id=class_id,
             class_name=class_name,
-            confidence=float(scores[i])
+            confidence=float(scores[i]),
+            # str() rather than the value itself, so a caller who did pass a numpy array
+            # of strings gets `str` out. An empty read is content; only None is absence.
+            text=None if texts is None or texts[i] is None else str(texts[i]),
         ))
 
     return detections_obj

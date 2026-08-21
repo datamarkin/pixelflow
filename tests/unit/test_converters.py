@@ -1027,6 +1027,75 @@ class TestArraysConverter:
         )
         assert detections[0].class_name == "b"
 
+    def test_texts_and_segments_ride_along(self):
+        """A vendored OCR model returns arrays, so from_arrays has to carry the read."""
+        quads = [
+            [[10, 20], [110, 22], [108, 60], [8, 58]],
+            [[30, 80], [130, 80], [130, 120], [30, 120]],
+        ]
+        detections = pf.detections.from_arrays(
+            boxes=[[8, 20, 110, 60], [30, 80, 130, 120]],
+            scores=[0.91, 0.55],
+            texts=["Hello", "world"],
+            segments=quads,
+        )
+        assert [d.text for d in detections] == ["Hello", "world"]
+        assert [len(d.segments) for d in detections] == [4, 4]
+        assert detections[0].segments[1] == [110.0, 22.0]
+
+    def test_class_ids_are_optional(self):
+        """OCR reads content; it does not pick a class out of a vocabulary."""
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1]], scores=[0.9], texts=["read"],
+        )
+        assert detections[0].class_id is None
+        assert detections[0].class_name is None
+        assert detections[0].text == "read"
+
+    def test_an_empty_read_is_kept_but_a_missing_one_is_not(self):
+        """A located region that decoded to nothing was still located."""
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], texts=["", None],
+        )
+        assert detections[0].text == ""
+        assert detections[1].text is None
+
+    def test_text_and_class_name_coexist(self):
+        """They answer different questions, so supplying one must not clear the other."""
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1]], scores=[0.9], class_ids=[1],
+            labels=["plate", "sign"], texts=["ABC-123"],
+        )
+        assert detections[0].class_name == "sign"
+        assert detections[0].text == "ABC-123"
+
+    def test_text_survives_to_dict(self):
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1]], scores=[0.9], texts=["Hello"],
+            segments=[[[0, 0], [1, 0], [1, 1], [0, 1]]],
+        )
+        payload = detections[0].to_dict()
+        assert payload["text"] == "Hello"
+        assert len(payload["segments"]) == 4
+
+    def test_mismatched_texts_and_segments_raise(self):
+        with pytest.raises(ValueError, match="texts describes 1"):
+            pf.detections.from_arrays(
+                boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], texts=["one"],
+            )
+        with pytest.raises(ValueError, match="segments describes 1"):
+            pf.detections.from_arrays(
+                boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8],
+                segments=[[[0, 0], [1, 0], [1, 1]]],
+            )
+
+    def test_numpy_strings_become_str(self):
+        """A caller who did hand over a numpy array should not get numpy.str_ back."""
+        detections = pf.detections.from_arrays(
+            boxes=[[0, 0, 1, 1]], scores=[0.9], texts=np.array(["Hello"]),
+        )
+        assert type(detections[0].text) is str
+
 
 class TestNoBundledVocabulary:
     """pixelflow holds no dataset's class names. Callers state their model's vocabulary."""
