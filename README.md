@@ -39,6 +39,12 @@ pip install pixelflow
 
 ## Core Concepts
 
+### Two Result Types
+
+Every model output becomes one of two things. **Detections** for anything that localises — detection, segmentation, keypoints, OCR. **Classifications** for anything that only names.
+
+They are peers, not variants of each other: three detections are three objects, while three classifications are three competing answers about one image.
+
 ### Detections - One Format, Every Framework
 
 Convert outputs from any ML framework into a unified format:

@@ -8,6 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`Classifications`, a result type alongside `Detections`.** A detection row is an independent
+  instance — three rows mean three objects. A classification row is a competing hypothesis about
+  one image — three rows mean three candidate answers for the same picture. Most of `Detections`
+  is wrong for the second kind: `filter_by_size`, `filter_by_position`, `filter_overlapping`,
+  `remove_duplicates` and `update_zones` all read geometry a classifier never produced, and
+  `from_arrays` requires `boxes`, which would force a whole-image rectangle that reads to every
+  downstream consumer as a localisation the model never performed.
+  `Classification` carries `class_id`, `class_name`, `confidence` and `metadata`, and no geometry
+  of any kind. `Classifications` implements the same container protocols as `Detections` and adds
+  the two operations the type actually needs: `top1`/`top_k(n)` for ranking, and
+  `filter_by_confidence(t)` for thresholding. `top1` is defined as the highest-scoring row rather
+  than the first, so row order is never load-bearing.
+  Confidence rounds through `round_to_decimal` in `pixelflow.validators` — the same policy
+  `Detection` uses, imported rather than copied. A test pins the two together directly, because a
+  private copy of that policy drifting out of step is exactly the failure this shares it to avoid.
+  Unlike `Detection.confidence`, the value is not treated as `[0, 1]`: CLIP cosine similarity is
+  legitimately negative and raw logits are unbounded.
+- **`from_scores(scores, class_ids=None, labels=None)`.** The framework-free entry point, and the
+  one every classifier can reach — a CLIP zero-shot run is a matrix multiply and a list of
+  prompts, a vendored ResNet is a forward pass and a tensor, and neither has a container to name a
+  converter after. `class_ids` defaults to each score's own position, which is what a full score
+  vector means: `scores[i]` is the score for class `i`. Pass them explicitly for a partial vector,
+  such as a top-5 slice the caller already extracted.
+  Scores pass through untouched. Nothing normalises, re-softmaxes, or assumes they sum to 1,
+  because both conventions are real and the arrays look identical — an ImageNet head emits a
+  softmax over a fixed class list, CLIP zero-shot emits an independent similarity per prompt. Only
+  the caller knows which they have, so only the caller may transform it.
+- **`from_ultralytics_classification(results, labels=None, top_k=None)`.** The counterpart to
+  `from_ultralytics` for `-cls` checkpoints. Every class the model scored is returned by default —
+  ~1000 rows for an ImageNet head — with `top_k` as the escape hatch on per-frame paths. Passing
+  more than one image's results raises rather than silently reporting only the first; the
+  one-element list `model.predict()` returns for a single image is the normal case and is
+  unwrapped.
+- **`pf.annotate.classification(image, classifications, top_k=1, position='top_left')`.** A
+  classification describes the whole image and has nowhere to anchor the way a box label does, so
+  it draws as a stacked panel in a corner, each row in its own class colour. A row with no
+  `class_name` falls back to its `class_id`, which is meaningful even when no vocabulary was
+  supplied.
+- **`pixelflow.arrays.to_numpy`.** Torch-tensor and list flattening, shared by both converter
+  packages. It began as a private copy in each, on the reasoning that detaching a tensor is
+  plumbing rather than policy and duplicating six lines was cheaper than coupling them. The two
+  copies disagreed about `None` within two days, which is the same failure the shared rounding
+  policy exists to prevent, so there is now one definition.
+- **`pixelflow.labels.get_label_info`.** Class-name resolution, moved out of
+  `detections/converters.py` so both result types share one rule. The three label formats a caller
+  may supply — `List[str]`, `Dict[int, str]`, `List[dict]` — are the same either way, and so is the
+  behaviour when a name cannot be found: the id is carried and `class_name` stays None. A name is
+  never invented.
+
 - `from_arrays` takes `texts=` and `segments=`, and `class_ids=` is now optional. Deployment
   code extracted from a research repository returns arrays rather than a framework container,
   which is what `from_arrays` exists for — but until now it could carry neither a read string
@@ -62,6 +111,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   information is lost.
 
 ### Changed
+- **Breaking.** Converters and result types are top-level: `pf.from_ultralytics(...)` rather than
+  `pf.detections.from_ultralytics(...)`, and `pf.Detections` rather than `pf.detections.Detections`.
+  The middle segment carried no information at the call site — of course a YOLO detector produces
+  detections — and it stuttered against the type it contained. The `from_` prefix stays leading so
+  the whole family groups under `pf.from_<tab>`.
+  Detection is the unmarked case because it genuinely is the majority: segmentation, pose, OBB,
+  SAM, RF-DETR, Florence-2, EasyOCR, Detectron2 and supervision all produce `Detections`.
+  Classification is the one real fork, so it is the one name that takes a suffix. `from_scores` is
+  named for what it takes rather than suffixed, because it and `from_arrays` share no input shape
+  at all — one requires boxes, the other has no geometry by definition.
+- **Breaking.** `from_ultralytics` raises on a classification `Result` instead of returning one
+  boxless `Detection` with the remaining predictions buried in `metadata['top5_*']`. That shape
+  failed quietly in the place it mattered most: `label()` skips a detection with no `bbox`, so
+  annotating a classification returned an unchanged image with no error. `len(result) == 1` also
+  misreported a thousand hypotheses as one object. The error names
+  `pf.from_ultralytics_classification`.
+- Filters are no longer exported as free functions from `pixelflow.detections`. Every one of them
+  is attached to `Detections` as a method, and two ways to call the same thing is one too many.
+- `Detection.confidence` is documented as rounding to the shared `CONFIDENCE_DECIMALS` precision.
+  It had said "4 decimal places" while the constant was 3 — a docstring disagreeing with the
+  policy is how a private copy of that policy starts.
+- Docstring examples across the library referenced `pf.results.from_ultralytics`, a namespace that
+  had not existed for some time. They now use the flat names.
 - `label()` auto-generated labels use `text` when the detection has one, falling back to
   `class_name`. `{text}` is available as a template placeholder.
 
