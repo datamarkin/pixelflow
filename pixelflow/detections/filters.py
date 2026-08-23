@@ -14,7 +14,7 @@ __all__ = [
     "filter_by_size", "filter_by_dimensions", "filter_by_aspect_ratio",
     "filter_by_zones", "filter_by_position", "filter_by_relative_size",
     "filter_by_tracking_duration", "filter_by_first_seen_time", "filter_tracked_objects",
-    "remove_duplicates", "filter_overlapping", "_calculate_iou"
+    "remove_duplicates", "filter_overlapping"
 ]
 
 
@@ -752,11 +752,11 @@ def _calculate_iou(bbox1: List[float], bbox2: List[float]) -> float:
     Example:
         >>> bbox_a = [100, 100, 200, 200]  # 100x100 box
         >>> bbox_b = [150, 150, 250, 250]  # Overlapping 100x100 box
-        >>> iou = pf.detections._calculate_iou(bbox_a, bbox_b)
+        >>> iou = _calculate_iou(bbox_a, bbox_b)
         >>> print(f"IoU: {iou:.3f}")  # IoU: 0.143
         >>> 
         >>> # Perfect overlap
-        >>> identical_iou = pf.detections._calculate_iou(bbox_a, bbox_a)
+        >>> identical_iou = _calculate_iou(bbox_a, bbox_a)
         >>> print(f"Identical IoU: {identical_iou}")  # 1.0
     
     Notes:

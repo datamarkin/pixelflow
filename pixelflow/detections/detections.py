@@ -921,7 +921,6 @@ from .filters import (
     filter_tracked_objects,
     remove_duplicates,
     filter_overlapping,
-    _calculate_iou
 )
 
 
@@ -940,4 +939,3 @@ Detections.filter_by_first_seen_time = filter_by_first_seen_time
 Detections.filter_tracked_objects = filter_tracked_objects
 Detections.remove_duplicates = remove_duplicates
 Detections.filter_overlapping = filter_overlapping
-Detections._calculate_iou = lambda self, bbox1, bbox2: _calculate_iou(bbox1, bbox2)
