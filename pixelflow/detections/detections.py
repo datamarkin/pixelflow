@@ -178,8 +178,9 @@ class Detection:
                              on; `text` is per-instance content the model produced, drawn from no
                              vocabulary. A detection can have both, either, or neither.
         labels (Optional[List[str]]): Additional classification labels or attributes.
-        confidence (Optional[float]): Detection confidence score [0.0-1.0], automatically rounded
-                                     to 4 decimal places for consistency.
+        confidence (Optional[float]): Detection confidence score [0.0-1.0], rounded by
+                                     `round_to_decimal` to the shared CONFIDENCE_DECIMALS
+                                     precision so every result type reports it identically.
         tracker_id (Optional[int]): Unique tracking identifier for multi-frame object tracking.
         metadata (Optional[Dict[str, Any]]): Additional custom metadata and framework-specific data.
         zones (Optional[List[str]]): List of zone identifiers the detection intersects.
