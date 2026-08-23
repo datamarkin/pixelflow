@@ -9,6 +9,7 @@ different ML frameworks and visualization tools.
 
 import copy as copy_module
 import io
+import math
 import json
 import base64
 import numpy as np
@@ -661,12 +662,17 @@ class Detections:
         Appends a Detection instance to the internal collection, enabling batch
         processing and filtering operations on the complete detection set.
         
+        A detection that does not describe an object is dropped rather than stored:
+        one whose `bbox` is None -- never set, or rejected by `validate_bbox` as
+        non-finite, inverted or enclosing no pixels -- and one whose confidence is
+        NaN, which no threshold can compare against and which strict JSON parsers
+        refuse. Dropping at the boundary is what lets every consumer downstream
+        assume a detection has a box, rather than each re-deciding what to do
+        about one that does not.
+
         Args:
             detection (Detection): Detection object to add to the collection.
                                  Must be a valid Detection instance.
-        
-        Raises:
-            TypeError: If detection is not a Detection instance.
         
         Example:
             >>> import pixelflow as pf
@@ -681,8 +687,32 @@ class Detections:
             >>> detections.add_detection(detection2)
             >>> print(f"Total detections: {len(detections)}")
         """
+        # Geometry was already judged by validate_bbox on assignment, which leaves
+        # None for anything that does not enclose pixels.
+        if detection.bbox is None:
+            return
+        if detection.confidence is not None and math.isnan(detection.confidence):
+            return
+
         self.detections.append(detection)
     
+    def _drop_boxless(self) -> "Detections":
+        """
+        Remove detections whose box was invalidated by an in-place update.
+
+        `add_detection` judges a detection on the way in, but a transform rewrites
+        `bbox` on detections already stored, where nothing re-checks them. One that
+        shrinks a box to nothing - padding by a negative fraction, a box rebuilt
+        from a single keypoint - leaves it None, and the detection would otherwise
+        stay in the collection: still counted, with no geometry, and fatal to any
+        consumer that assumes it has one.
+
+        Returns:
+            Detections: This collection, for chaining.
+        """
+        self.detections = [d for d in self.detections if d.bbox is not None]
+        return self
+
     def update_zones(self, zone_manager: Any) -> 'Detections':
         """
         Update all detections with zone intersection information for spatial analytics.

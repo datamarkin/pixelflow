@@ -743,7 +743,9 @@ def update_bbox_from_keypoints(
                 'keypoint_names': keypoint_names
             })
 
-    return detections
+    # A box rebuilt to nothing is no longer a detection; dropping it here keeps
+    # the collection's guarantee that every member has geometry.
+    return detections._drop_boxless()
 
 
 def add_padding(
@@ -851,4 +853,6 @@ def add_padding(
                 'reference': reference
             })
 
-    return detections
+    # A box rebuilt to nothing is no longer a detection; dropping it here keeps
+    # the collection's guarantee that every member has geometry.
+    return detections._drop_boxless()

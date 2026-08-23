@@ -59,9 +59,20 @@ def validate_bbox(bbox):
         # Unpacking checks iterability and length in one step; round_coord
         # checks that each element is a finite number.
         x1, y1, x2, y2 = bbox
-        return [round_coord(v) for v in (x1, y1, x2, y2)]
+        x1, y1 = round_coord(x1), round_coord(y1)
+        x2, y2 = round_coord(x2), round_coord(y2)
     except (TypeError, ValueError):
         return None
+
+    # A box has to enclose pixels to describe an object. Inverted corners are the
+    # dangerous case rather than the obvious one: they compute a positive area
+    # from two negative sides, so they pass every size filter, while scoring zero
+    # IoU against everything - a detection that inflates counts and that no
+    # deduplication can ever remove.
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    return [x1, y1, x2, y2]
 
 
 def validate_segments(segments):
