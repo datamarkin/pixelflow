@@ -1,0 +1,62 @@
+name: Publish to PyPI
+
+# Publishing is driven by the tag, so releasing is `git tag vX.Y.Z && git push --tags`
+# and nothing else. A version can never be re-uploaded to PyPI, so everything that
+# could reject the release runs before the upload step.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    environment: pypi
+
+    permissions:
+      # Required for Trusted Publishing: the runner mints a short-lived OIDC token
+      # that PyPI verifies. No API token is stored anywhere.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system libraries for OpenCV
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgl1 libglib2.0-0
+
+      - name: Install package and test dependencies
+        run: pip install -e ".[dev]"
+
+      # A tag pushed straight to a release does not trigger the branch CI, so the
+      # suite runs here too rather than trusting that main was green.
+      - name: Run tests
+        run: pytest
+
+      - name: Check the tag matches __version__
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION="$(python -c 'import pixelflow; print(pixelflow.__version__)')"
+          echo "tag=$TAG  __version__=$VERSION"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag $TAG does not match __version__ $VERSION"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: |
+          pip install build
+          python -m build
+
+      - name: Check the artifacts are well formed
+        run: |
+          pip install twine
+          twine check dist/*
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
