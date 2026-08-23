@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`smooth()` no longer emits the same `tracker_id` twice in one frame.** A tracker missing
+  from the frame being smoothed but present either side of it was claimed by both halves of the
+  function: the smoothing pass, which happily works without a current-frame detection, and the
+  interpolation pass, which exists precisely for that case. One object came back as two rows
+  sharing an id, which breaks the one-id-one-instance-per-frame guarantee everything downstream
+  keys on -- zones and crossings would have counted the object twice for exactly the frames it
+  was occluded. Both halves now split on a single definition of "present in this frame", so they
+  cannot disagree about who owns a tracker.
+- **`smooth()` warns instead of silently dropping untracked detections.** Smoothing matches a
+  detection to itself across frames, which only a `tracker_id` can establish, so detections
+  without one grouped into nothing and the function returned empty. Callers who forgot to run
+  the tracker lost every detection with no error and no warning. It now warns and returns the
+  frame unsmoothed, matching how `crossings.update()` already reports the same mistake.
+
+### Added
+- Unit and scenario tests for `tracker` and `smoother`, the two least covered modules in the
+  library (`bytetrack.py` 12%, `matching.py` 15%, `smoother.py` 73%). The tracker tests drive
+  whole sequences and assert on identity rather than internals -- occlusion, crossing objects,
+  re-entry, crowding, and the second association stage -- because a tracker can pass every unit
+  test and still switch identities the moment two objects cross.
+  One test is marked `xfail`: association is IoU-only, so once frame-to-frame displacement
+  exceeds roughly 0.6x the box width the first match never happens, velocity is never learned,
+  and no track is ever confirmed. That is the camera-motion-compensation gap, recorded rather
+  than hidden.
+
+## [0.3.1] - 2026-08-23
+
+### Added
+- **Continuous integration.** The suite runs on push to `main` and on every pull request across
+  Python 3.9 through 3.12. The workflow installs `libgl1` before anything else: `opencv-python`
+  links against libGL, which the runner image does not carry, so `import cv2` fails before a
+  single test runs without it.
+- **Tag-driven PyPI publishing.** Releasing is `git tag vX.Y.Z && git push --tags`. A version can
+  never be re-uploaded to PyPI, so everything that could reject a release runs first -- the test
+  suite, a check that the tag matches `__version__`, and `twine check` on the built artifacts.
+  Upload goes through Trusted Publishing, which mints a short-lived OIDC token per run rather
+  than keeping an API token in repository secrets.
+
+### Fixed
+- The README badge advertised Python 3.8 while `pyproject.toml` has required 3.9 since 0.2.0.
+
 ## [0.3.0] - 2026-08-23
 
 ### Added
