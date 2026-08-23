@@ -15,6 +15,8 @@ import cv2
 import warnings
 import numpy as np
 from typing import (List, Dict, Any, Union, Optional)
+from pixelflow.arrays import to_numpy
+from pixelflow.labels import get_label_info
 from pixelflow.validators import round_coord, validate_segments
 
 __all__ = [
@@ -32,15 +34,6 @@ __all__ = [
     "from_efficienttam",
     "from_easyocr"
 ]
-
-
-def _to_numpy(array):
-    """Return `array` as numpy, detaching torch tensors and passing None through."""
-    if array is None:
-        return None
-    if hasattr(array, "detach"):
-        array = array.detach().cpu()
-    return np.asarray(array)
 
 
 def _build_keypoints(kpt_data, kp_names):
@@ -61,40 +54,6 @@ def _build_keypoints(kpt_data, kp_names):
         )
         for idx, kpt in enumerate(kpt_data)
     ]
-
-
-def _get_label_info(labels, class_id):
-    """Extract class name and keypoint names from various label formats.
-
-    Supports:
-        List[str]      — ["person", "car"] — index = class_id
-        Dict[int, str] — {0: "person", 1: "car"} — key = class_id
-        List[dict]     — [{"id": 0, "name": "person", "keypoints": [...]}] — search by "id" field
-
-    Returns:
-        tuple: (class_name, kp_names) where kp_names is List[str] or None.
-    """
-    if labels is None or class_id is None:
-        return None, None
-
-    # Rich label format: List[dict] with "id"/"name" keys
-    if isinstance(labels, list) and labels and isinstance(labels[0], dict):
-        for label in labels:
-            if label["id"] == class_id:
-                name = label["name"]
-                kp_names = [kp["name"] for kp in label.get("keypoints", [])] or None
-                return name, kp_names
-        return None, None
-
-    # Dict format: {int: str}
-    if isinstance(labels, dict):
-        return labels.get(class_id), None
-
-    # Simple list format: ["person", "car"]
-    if isinstance(labels, list) and class_id < len(labels):
-        return labels[class_id], None
-
-    return None, None
 
 
 def _hull_bbox(points):
@@ -498,11 +457,11 @@ def from_arrays(boxes, scores, class_ids=None, masks=None, keypoints=None, label
 
     detections_obj = Detections()
 
-    boxes = _to_numpy(boxes)
-    scores = _to_numpy(scores)
-    class_ids = _to_numpy(class_ids)
-    masks = _to_numpy(masks)
-    keypoints = _to_numpy(keypoints)
+    boxes = to_numpy(boxes)
+    scores = to_numpy(scores)
+    class_ids = to_numpy(class_ids)
+    masks = to_numpy(masks)
+    keypoints = to_numpy(keypoints)
     # texts and segments stay in whatever sequence they arrived in. numpy would turn
     # strings into `numpy.str_` and would collapse polygons of differing vertex counts
     # into an object array, so neither gains anything from the round-trip.
@@ -517,11 +476,11 @@ def from_arrays(boxes, scores, class_ids=None, masks=None, keypoints=None, label
             )
 
     for i in range(count):
-        # A model that locates without naming has no class_id, and `_get_label_info`
+        # A model that locates without naming has no class_id, and `get_label_info`
         # already answers (None, None) for one -- so an unnamed detection costs no branch
         # here beyond not casting None to int.
         class_id = int(class_ids[i]) if class_ids is not None else None
-        class_name, kp_names = _get_label_info(labels, class_id)
+        class_name, kp_names = get_label_info(labels, class_id)
 
         kpts = _build_keypoints(keypoints[i], kp_names) if keypoints is not None else None
 
@@ -612,7 +571,7 @@ def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
         class_id = int(classes[i]) if classes is not None else None
 
         # Extract class name and keypoint names from labels
-        class_name, kp_names = _get_label_info(labels, class_id)
+        class_name, kp_names = get_label_info(labels, class_id)
 
         # Handle segmentation masks
         mask = None
@@ -731,7 +690,7 @@ def from_mayaku(mayaku_instances, labels=None):
         confidence = float(scores[i]) if scores is not None else None
         class_id = int(classes[i]) if classes is not None else None
 
-        class_name, kp_names = _get_label_info(labels, class_id)
+        class_name, kp_names = get_label_info(labels, class_id)
 
         mask = None
         if masks is not None:
@@ -887,7 +846,7 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
         # Extract class name — labels overrides result.names when provided
         class_name = None
         if labels is not None:
-            class_name, _ = _get_label_info(labels, class_id)
+            class_name, _ = get_label_info(labels, class_id)
         elif hasattr(result, 'names') and result.names:
             if class_id in result.names:
                 class_name = result.names[class_id]
@@ -944,7 +903,7 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
         keypoints_list = None
         if has_keypoints and keypoints_data is not None:
             # keypoints_data[i] has shape (K, 3): x, y, confidence
-            _, kpt_names = _get_label_info(labels, class_id)
+            _, kpt_names = get_label_info(labels, class_id)
             keypoints_list = _build_keypoints(keypoints_data[i], kpt_names)
 
         # Create detection object
@@ -997,13 +956,8 @@ def from_efficienttam(masks, scores):
 
     detections_obj = Detections()
 
-    if hasattr(masks, 'cpu'):
-        masks = masks.cpu().numpy()
-    if hasattr(scores, 'cpu'):
-        scores = scores.cpu().numpy()
-
-    masks = np.asarray(masks)
-    scores = np.asarray(scores)
+    masks = to_numpy(masks)
+    scores = to_numpy(scores)
 
     if masks.shape[0] == 0:
         return detections_obj
@@ -1099,7 +1053,7 @@ def from_supervision(
         cid = int(class_id[i]) if class_id is not None else None
 
         # Resolve class_name from labels
-        class_name, _ = _get_label_info(labels, cid)
+        class_name, _ = get_label_info(labels, cid)
         if class_name is None and cid is not None:
             class_name = str(cid)
 

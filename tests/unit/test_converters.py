@@ -685,63 +685,63 @@ class TestMayakuConverter:
 
 
 # ============================================================================
-# _get_label_info Helper Tests
+# get_label_info Helper Tests
 # ============================================================================
 
 class TestGetLabelInfo:
-    """Tests for _get_label_info helper function."""
+    """Tests for get_label_info helper function."""
 
     def test_list_format(self):
-        from pixelflow.detections.converters import _get_label_info
-        name, kp_names = _get_label_info(["person", "car", "dog"], 1)
+        from pixelflow.labels import get_label_info
+        name, kp_names = get_label_info(["person", "car", "dog"], 1)
         assert name == "car"
         assert kp_names is None
 
     def test_dict_format(self):
-        from pixelflow.detections.converters import _get_label_info
-        name, kp_names = _get_label_info({0: "person", 5: "car"}, 5)
+        from pixelflow.labels import get_label_info
+        name, kp_names = get_label_info({0: "person", 5: "car"}, 5)
         assert name == "car"
         assert kp_names is None
 
     def test_dict_nonsequential_keys(self):
-        from pixelflow.detections.converters import _get_label_info
-        name, kp_names = _get_label_info({0: "person", 91: "banana"}, 91)
+        from pixelflow.labels import get_label_info
+        name, kp_names = get_label_info({0: "person", 91: "banana"}, 91)
         assert name == "banana"
 
     def test_rich_format(self):
-        from pixelflow.detections.converters import _get_label_info
+        from pixelflow.labels import get_label_info
         labels = [{"id": 0, "name": "person", "keypoints": [{"id": 0, "name": "nose"}]}]
-        name, kp_names = _get_label_info(labels, 0)
+        name, kp_names = get_label_info(labels, 0)
         assert name == "person"
         assert kp_names == ["nose"]
 
     def test_rich_format_no_keypoints(self):
-        from pixelflow.detections.converters import _get_label_info
+        from pixelflow.labels import get_label_info
         labels = [{"id": 1, "name": "bicycle"}]
-        name, kp_names = _get_label_info(labels, 1)
+        name, kp_names = get_label_info(labels, 1)
         assert name == "bicycle"
         assert kp_names is None
 
     def test_missing_id_returns_none(self):
-        from pixelflow.detections.converters import _get_label_info
-        name, kp_names = _get_label_info(["person", "car"], 99)
+        from pixelflow.labels import get_label_info
+        name, kp_names = get_label_info(["person", "car"], 99)
         assert name is None
         assert kp_names is None
 
     def test_none_labels(self):
-        from pixelflow.detections.converters import _get_label_info
-        name, kp_names = _get_label_info(None, 0)
+        from pixelflow.labels import get_label_info
+        name, kp_names = get_label_info(None, 0)
         assert name is None
         assert kp_names is None
 
     def test_none_class_id(self):
-        from pixelflow.detections.converters import _get_label_info
-        name, kp_names = _get_label_info(["person"], None)
+        from pixelflow.labels import get_label_info
+        name, kp_names = get_label_info(["person"], None)
         assert name is None
 
     def test_empty_list(self):
-        from pixelflow.detections.converters import _get_label_info
-        name, kp_names = _get_label_info([], 0)
+        from pixelflow.labels import get_label_info
+        name, kp_names = get_label_info([], 0)
         assert name is None
 
 
