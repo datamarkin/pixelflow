@@ -12,10 +12,18 @@ from . import timer
 from . import tracker
 from . import assets
 
-# Converters are flat -- pf.from_ultralytics(...) -- and the subpackage owns its own
-# export list, so a new one is declared once rather than re-typed here.
+# Result types and their converters. Every model output PixelFlow understands becomes
+# one of two things: Detections for anything that localises, Classifications for
+# anything that only names. They are peers, not variants of each other.
+#
+# Converters are flat -- pf.from_ultralytics(...) -- and each subpackage owns its own
+# export list, so a new one is declared once rather than re-typed here. Detection is
+# the unmarked case because almost every model that produces a container localises
+# something; only classification needs the suffix.
 from .detections import *
 from .detections import __all__ as _DETECTION_EXPORTS
+from .classifications import *
+from .classifications import __all__ as _CLASSIFICATION_EXPORTS
 
 # Import specific functions for top-level access
 from .media import (
@@ -32,8 +40,9 @@ from .timer import TimeTracker
 
 # Define the public API
 __all__ = [
-    # Result types and converters, declared by the subpackage that owns them
+    # Result types and converters, declared by the subpackages that own them
     *_DETECTION_EXPORTS,
+    *_CLASSIFICATION_EXPORTS,
 
     # Visual components
     "annotate",
