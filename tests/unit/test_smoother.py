@@ -13,20 +13,7 @@ import numpy as np
 import pytest
 
 import pixelflow as pf
-
-
-def blank():
-    return np.zeros((240, 320, 3), dtype=np.uint8)
-
-
-def detections(boxes, tracker_ids=None):
-    """Detections at `boxes`, optionally carrying tracker ids."""
-    boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
-    result = pf.from_arrays(boxes, scores=[0.9] * len(boxes), class_ids=[0] * len(boxes))
-    if tracker_ids is not None:
-        for detection, tracker_id in zip(result, tracker_ids):
-            detection.tracker_id = tracker_id
-    return result
+from tests.helpers import black_canvas as blank, make_detections as detections
 
 
 def fill(buffer, frames):
@@ -53,7 +40,7 @@ class TestGapHandling:
         frames = []
         for i in range(12):
             x = 100 + 10 * i
-            frames.append(detections([[x, 50, x + 40, 90]], [1]) if i != 5
+            frames.append(detections([[x, 50, x + 40, 90]], tracker_ids=[1]) if i != 5
                           else detections([]))
 
         for raw, smoothed in fill(buffer, frames):
@@ -66,7 +53,7 @@ class TestGapHandling:
         frames = []
         for i in range(12):
             x = 100 + 10 * i
-            frames.append(detections([[x, 50, x + 40, 90]], [1]) if i != 5
+            frames.append(detections([[x, 50, x + 40, 90]], tracker_ids=[1]) if i != 5
                           else detections([]))
 
         recovered = [(len(raw), len(smoothed)) for raw, smoothed in fill(buffer, frames)]
@@ -82,7 +69,7 @@ class TestGapHandling:
                 boxes.append([100 + 10 * i, 50, 140 + 10 * i, 90]); ids.append(1)
             if i not in (11, 12):
                 boxes.append([300 - 8 * i, 150, 340 - 8 * i, 190]); ids.append(2)
-            frames.append(detections(boxes, ids))
+            frames.append(detections(boxes, tracker_ids=ids))
 
         for _, smoothed in fill(buffer, frames):
             ids = [d.tracker_id for d in smoothed]
@@ -115,7 +102,7 @@ class TestUntrackedDetections:
         """The warning fires on the real mistake only."""
         buffer = pf.Buffer(frames=5)
         for i in range(7):
-            buffer.update(detections([[100 + 5 * i, 50, 140 + 5 * i, 90]], [1]), blank())
+            buffer.update(detections([[100 + 5 * i, 50, 140 + 5 * i, 90]], tracker_ids=[1]), blank())
 
         with warnings.catch_warnings():
             warnings.simplefilter("error")
@@ -130,7 +117,7 @@ class TestSmoothing:
         buffer = pf.Buffer(frames=5)
         true_x = [100 + 10 * i for i in range(12)]
         jitter = [0, 6, -6, 5, -5, 6, -6, 5, -5, 6, -6, 0]
-        frames = [detections([[x + j, 50, x + j + 40, 90]], [1])
+        frames = [detections([[x + j, 50, x + j + 40, 90]], tracker_ids=[1])
                   for x, j in zip(true_x, jitter)]
 
         results = fill(buffer, frames)
@@ -142,7 +129,7 @@ class TestSmoothing:
     def test_partial_buffer_returns_raw_results(self):
         """Before the window fills there is no temporal context to smooth with."""
         buffer = pf.Buffer(frames=5)
-        buffer.update(detections([[0, 0, 10, 10]], [1]), blank())
+        buffer.update(detections([[0, 0, 10, 10]], tracker_ids=[1]), blank())
         assert len(pf.smooth(buffer)) == 0
 
     def test_rejects_out_of_range_decay(self):

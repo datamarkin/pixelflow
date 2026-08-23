@@ -560,3 +560,101 @@ class TestTransformEdgeCases:
         except (ValueError, AssertionError):
             # Expected to fail with zero-area crop
             pass
+
+
+# ============================================================================
+# The invariant transforms must not break
+# ============================================================================
+
+class TestTransformsPreserveBoxValidity:
+    """A transform relocates a detection; it must never invalidate one.
+
+    `add_detection` guards the way into a container, but transforms assign
+    `detection.bbox` on detections already inside one, where nothing re-checks
+    them. An invalid box assigned there becomes None and the detection stays --
+    still counted, with no geometry, and fatal to the next annotator.
+
+    Today the arithmetic preserves validity: a flip maps x1 < x2 to
+    w - x2 < w - x1, a rotation takes the hull of the rotated corners, and
+    cropping drops a box that falls outside rather than clipping it away. That
+    holds by construction rather than by enforcement, so these tests are what
+    would notice if a new transform stopped honouring it.
+    """
+
+    # Shapes chosen to sit on the edges where the arithmetic could invert or
+    # collapse: the frame boundary, one-pixel extents, and slivers.
+    ADVERSARIAL = [
+        [10, 10, 60, 60],        # ordinary
+        [0, 0, 300, 200],        # exactly the whole frame
+        [-40, -40, 20, 20],      # overlapping the top-left corner
+        [280, 180, 340, 240],    # overlapping the bottom-right corner
+        [1, 1, 2, 2],            # one pixel at the origin
+        [150, 100, 151, 101],    # one pixel mid-frame
+        [0, 0, 1, 200],          # a full-height sliver
+        [299, 199, 300, 200],    # the far corner pixel
+    ]
+
+    @staticmethod
+    def _frame():
+        return np.zeros((200, 300, 3), dtype=np.uint8)
+
+    def _assert_all_valid(self, detections, case):
+        for i, detection in enumerate(detections):
+            assert detection.bbox is not None, f"{case}: detection {i} lost its box"
+            x1, y1, x2, y2 = detection.bbox
+            assert x2 > x1 and y2 > y1, f"{case}: detection {i} became {detection.bbox}"
+
+    @pytest.mark.parametrize("angle", [0, 1, 45, 90, 179, 270, 359, -37])
+    def test_rotation(self, angle):
+        for bbox in self.ADVERSARIAL:
+            source = pf.from_arrays([bbox], scores=[0.9], class_ids=[0])
+            _, out = pf.transform.rotate_detections(self._frame(), source, angle=angle)
+            self._assert_all_valid(out, f"rotate({bbox}, {angle})")
+
+    @pytest.mark.parametrize("flip", [
+        pf.transform.flip_horizontal_detections,
+        pf.transform.flip_vertical_detections,
+    ])
+    def test_flips(self, flip):
+        for bbox in self.ADVERSARIAL:
+            source = pf.from_arrays([bbox], scores=[0.9], class_ids=[0])
+            _, out = flip(self._frame(), source)
+            self._assert_all_valid(out, f"{flip.__name__}({bbox})")
+
+    @pytest.mark.parametrize("crop", [
+        [0, 0, 100, 100], [50, 50, 300, 200], [0, 0, 1, 1],
+        [299, 199, 300, 200], [100, 0, 200, 200],
+    ])
+    def test_cropping(self, crop):
+        for bbox in self.ADVERSARIAL:
+            source = pf.from_arrays([bbox], scores=[0.9], class_ids=[0])
+            _, out = pf.transform.crop_detections(self._frame(), source, bbox=crop)
+            self._assert_all_valid(out, f"crop({bbox}, {crop})")
+
+    def test_a_round_trip_survives(self):
+        """Chained transforms are where a near-degenerate box would finally collapse."""
+        for bbox in self.ADVERSARIAL:
+            source = pf.from_arrays([bbox], scores=[0.9], class_ids=[0])
+            frame = self._frame()
+            frame, out = pf.transform.flip_horizontal_detections(frame, source)
+            frame, out = pf.transform.rotate_detections(frame, out, angle=90)
+            frame, out = pf.transform.flip_vertical_detections(frame, out)
+            self._assert_all_valid(out, f"round trip({bbox})")
+
+    @pytest.mark.parametrize("padding", [0.2, 0.0, -0.1, -0.49, -0.6, -2.0])
+    def test_padding_never_leaves_a_boxless_detection(self, padding):
+        """Regression: padding by a negative fraction shrank the box to nothing and
+        left the detection in the collection, counted and geometry-less."""
+        for bbox in self.ADVERSARIAL:
+            source = pf.from_arrays([bbox], scores=[0.9], class_ids=[0])
+            self._assert_all_valid(pf.transform.add_padding(source, padding=padding),
+                                   f"add_padding({bbox}, {padding})")
+
+    @pytest.mark.parametrize("count", [1, 2, 3, 8])
+    def test_bbox_from_keypoints_never_leaves_a_boxless_detection(self, count):
+        """Regression: a box rebuilt from a single keypoint is a point, not a box."""
+        source = pf.from_arrays([[10, 10, 60, 60]], scores=[0.9], class_ids=[0])
+        source[0].keypoints = [pf.KeyPoint(x=30 + i, y=30 + i, id=i, name=f"k{i}",
+                                           confidence=0.9) for i in range(count)]
+        self._assert_all_valid(pf.transform.update_bbox_from_keypoints(source),
+                               f"update_bbox_from_keypoints({count} keypoints)")

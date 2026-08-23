@@ -252,6 +252,8 @@ class TestDetection:
         assert det.bbox is None
 
     def test_detection_bbox_accepts_none(self):
+        # Legal on a Detection, which is the mid-build state a converter passes
+        # through; a Detections container rejects it. See TestDetectionValidity.
         """Clearing the box stays legal."""
         det = pf.Detection(bbox=[0, 0, 10, 10])
         det.bbox = None
@@ -400,3 +402,73 @@ class TestDetectionEdgeCases:
         subset = sample_detections[1:3]
         # Slicing should work like a list
         assert len(subset) == 2
+
+
+# ============================================================================
+# What counts as a detection at all
+# ============================================================================
+
+class TestDetectionValidity:
+    """Garbage geometry never becomes a detection.
+
+    Every consumer downstream -- filters, zones, annotators, the tracker --
+    assumes a detection has a box that encloses pixels. That assumption is only
+    safe because nothing else can get in, so this is where it is pinned.
+    """
+
+    @pytest.mark.parametrize("bbox,reason", [
+        ([float("nan"), 10, 60, 60], "non-finite coordinate"),
+        ([60, 60, 10, 10], "inverted corners"),
+        ([60, 10, 10, 60], "inverted on x only"),
+        ([50, 50, 50, 90], "zero width"),
+        ([50, 50, 90, 50], "zero height"),
+        ([50, 50, 50, 50], "zero area"),
+    ])
+    def test_invalid_geometry_never_becomes_a_detection(self, bbox, reason):
+        """Regression: an inverted box computed a positive area from two negative
+        sides, so it passed every size filter while scoring zero IoU against
+        everything -- a detection that inflated counts and that no deduplication
+        could remove."""
+        detections = pf.Detections()
+        detections.add_detection(pf.Detection(bbox=bbox, confidence=0.9))
+        assert len(detections) == 0, f"{reason} was accepted"
+
+    @pytest.mark.parametrize("bbox", [
+        [10, 10, 60, 60],
+        [-20, -20, 30, 30],      # partly off-frame is legitimate
+        [0, 0, 1e6, 1e6],        # a full-frame detection is legitimate
+        [10.5, 10.5, 60.25, 60.25],
+    ])
+    def test_valid_geometry_is_kept(self, bbox):
+        detections = pf.Detections()
+        detections.add_detection(pf.Detection(bbox=bbox, confidence=0.9))
+        assert len(detections) == 1
+
+    def test_nan_confidence_never_becomes_a_detection(self):
+        """NaN compares False against every threshold and is not valid JSON."""
+        detections = pf.Detections()
+        detections.add_detection(pf.Detection(bbox=[10, 10, 60, 60],
+                                              confidence=float("nan")))
+        assert len(detections) == 0
+
+    def test_missing_confidence_is_kept(self):
+        """Absent is not the same as corrupt: from_easyocr paragraphs have none."""
+        detections = pf.Detections()
+        detections.add_detection(pf.Detection(bbox=[10, 10, 60, 60]))
+        assert len(detections) == 1
+
+    @pytest.mark.parametrize("confidence", [1.5, -0.2])
+    def test_out_of_range_confidence_is_kept(self, confidence):
+        """A miscalibrated score is a scoring problem, not a reason to discard
+        an object the model genuinely located."""
+        detections = pf.Detections()
+        detections.add_detection(pf.Detection(bbox=[10, 10, 60, 60],
+                                              confidence=confidence))
+        assert len(detections) == 1
+
+    def test_converters_drop_invalid_rows(self):
+        """The boundary holds for the path real callers use."""
+        result = pf.from_arrays([[10, 10, 60, 60], [60, 60, 10, 10], [50, 50, 50, 50]],
+                                scores=[0.9, 0.9, 0.9], class_ids=[0, 0, 0])
+        assert len(result) == 1
+        assert result[0].bbox == [10.0, 10.0, 60.0, 60.0]
