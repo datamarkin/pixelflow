@@ -759,41 +759,14 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
         # Already a single result object
         result = ultralytics_results
 
-    # Handle classification models (no boxes, only probs)
-    if hasattr(result, 'probs') and result.probs is not None:
-        probs = result.probs
-
-        # Get top-1 prediction
-        top1_idx = int(probs.top1)
-        top1_conf = float(probs.top1conf)
-
-        # Get class name
-        class_name = None
-        if hasattr(result, 'names') and result.names:
-            class_name = result.names.get(top1_idx, str(top1_idx))
-
-        # Get top-5 predictions for metadata
-        top5_indices = [int(idx) for idx in probs.top5]
-        top5_confs = probs.top5conf.cpu().numpy().tolist()
-        top5_names = []
-        if hasattr(result, 'names') and result.names:
-            top5_names = [result.names.get(idx, str(idx)) for idx in top5_indices]
-
-        # Create single detection for classification result
-        detection = Detection(
-            bbox=None,  # Classification has no bbox
-            class_id=top1_idx,
-            class_name=class_name,
-            confidence=top1_conf,
-            metadata={
-                'task': 'classification',
-                'top5_indices': top5_indices,
-                'top5_confidences': top5_confs,
-                'top5_names': top5_names
-            }
+    # A classification model localises nothing, so it has no detections to report.
+    # Saying so beats returning an empty Detections, which reads as "the model found
+    # nothing" when the model was never asked to find anything.
+    if getattr(result, 'probs', None) is not None:
+        raise ValueError(
+            "this Result carries class probabilities rather than boxes, so it came "
+            "from a classification model. Use pf.from_ultralytics_classification()."
         )
-        detections_obj.add_detection(detection)
-        return detections_obj
 
     # Handle case where there are no detections
     if result.boxes is None or len(result.boxes) == 0:

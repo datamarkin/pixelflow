@@ -372,6 +372,15 @@ class TestFromUltralyticsClassification:
             pf.from_ultralytics_classification(detection_result)
 
 
+class TestDetectionConverterRejectsClassification:
+    """The other half of the split."""
+
+    def test_from_ultralytics_raises_on_probs(self, mock_classification_result):
+        """Classification no longer arrives as a boxless Detection."""
+        with pytest.raises(ValueError, match="from_ultralytics_classification"):
+            pf.from_ultralytics(mock_classification_result)
+
+
 # ============================================================================
 # Annotator
 # ============================================================================
