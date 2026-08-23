@@ -85,7 +85,7 @@ def keypoint_skeleton(
         >>> image = cv2.imread("person.jpg")
         >>> model = YOLO("yolo11n-pose.pt")
         >>> outputs = model.predict(image)
-        >>> detections = pf.detections.from_ultralytics(outputs)
+        >>> detections = pf.from_ultralytics(outputs)
         >>>
         >>> # Draw COCO skeleton (default for human pose)
         >>> annotated = pf.annotate.keypoint_skeleton(image, detections)

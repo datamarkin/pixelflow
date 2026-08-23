@@ -71,7 +71,7 @@ def anchors(
         >>> image = cv2.imread("path/to/image.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> detections = pf.results.from_ultralytics(outputs)
+        >>> detections = pf.from_ultralytics(outputs)
         >>> 
         >>> # Draw all main anchor points (default)
         >>> annotated = pf.annotators.anchors(image, detections)

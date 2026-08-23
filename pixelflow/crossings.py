@@ -93,7 +93,7 @@ class Crossing:
         >>> # Process video frame with crossing detection
         >>> image = cv2.imread("frame.jpg")
         >>> outputs = model.predict(image)
-        >>> results = pf.results.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> tracked_results = tracker.update(results)
         >>> crossed_in, crossed_out = crossing.trigger(tracked_results)
         >>> print(f"In: {crossing.in_count}, Out: {crossing.out_count}")
@@ -668,7 +668,7 @@ class Crossing:
             >>> # Process single frame with crossing detection
             >>> image = cv2.imread("surveillance_frame.jpg")
             >>> outputs = model.predict(image)
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> tracked_results = tracker.update(results)  # Required for crossing detection
             >>> crossed_in, crossed_out = crossing.trigger(tracked_results)
             >>> print(f"Objects entered: {crossed_in.sum()}, Objects exited: {crossed_out.sum()}")
@@ -1067,7 +1067,7 @@ class Crossings:
         >>> # Process video with unified crossing detection
         >>> image = cv2.imread("surveillance_frame.jpg")
         >>> outputs = model.predict(image)
-        >>> results = pf.results.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> tracked_results = tracker.update(results)
         >>> annotated_results = crossings.update(tracked_results)
         >>> 
@@ -1411,7 +1411,7 @@ class Crossings:
             >>> # Process frame with unified crossing detection
             >>> image = cv2.imread("security_frame.jpg")
             >>> outputs = model.predict(image)
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> tracked_results = tracker.update(results)  # Required for crossing detection
             >>> annotated_results = crossings.update(tracked_results)
             >>> 

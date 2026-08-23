@@ -49,7 +49,7 @@ class TimeTracker:
         >>> # Process video frame
         >>> frame = cv2.imread("frame.jpg")
         >>> outputs = model.track(frame)  # Enable tracking
-        >>> results = pf.results.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> 
         >>> # Update timing (modifies detections in-place)
         >>> time_tracker.update(results)
@@ -62,7 +62,7 @@ class TimeTracker:
         >>>     ret, frame = cap.read()
         >>>     if not ret: break
         >>>     outputs = model.track(frame)
-        >>>     results = pf.results.from_ultralytics(outputs)
+        >>>     results = pf.from_ultralytics(outputs)
         >>>     time_tracker.update(results)  # Automatically tracks frame-based timing
         >>> 
         >>> # Get detailed statistics for analysis
@@ -179,7 +179,7 @@ class TimeTracker:
             >>> cap = cv2.VideoCapture("video.mp4")
             >>> ret, frame = cap.read()
             >>> outputs = model.track(frame)  # Enable tracking for consistent IDs
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> 
             >>> # Update timing (modifies results in-place)
             >>> tracker.update(results)
@@ -280,7 +280,7 @@ class TimeTracker:
             >>> # Process frame with zone detection
             >>> frame = cv2.imread("frame.jpg")
             >>> outputs = model.track(frame)
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> tracker.update(results)  # Update timing first
             >>> 
             >>> # Get comprehensive statistics
@@ -611,7 +611,7 @@ class TimeTracker:
             >>>     
             >>>     # Process frame
             >>>     outputs = model.track(frame)
-            >>>     results = pf.results.from_ultralytics(outputs)
+            >>>     results = pf.from_ultralytics(outputs)
             >>>     tracker.update(results)
             >>>     
             >>>     # Periodic cleanup to prevent memory growth

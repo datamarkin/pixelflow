@@ -39,7 +39,7 @@ class TestFilterChaining:
                  .filter_by_position("center", frame_width=640, frame_height=480))
 
         # All filters should be applied
-        assert isinstance(result, pf.detections.Detections)
+        assert isinstance(result, pf.Detections)
 
     def test_chain_preserves_immutability(self, sample_detections):
         """Test that chaining doesn't modify original."""
@@ -62,7 +62,7 @@ class TestFilterChaining:
                  .filter_by_position("center", frame_width=640,
                                       frame_height=480))  # Position
 
-        assert isinstance(result, pf.detections.Detections)
+        assert isinstance(result, pf.Detections)
 
     def test_empty_chain_result(self, sample_detections):
         """Test chain that results in empty detections."""
@@ -142,7 +142,7 @@ class TestZoneFilterChaining:
                  .filter_by_zones(["zone1", "zone2"])
                  .filter_by_confidence(0.7))
 
-        assert isinstance(result, pf.detections.Detections)
+        assert isinstance(result, pf.Detections)
 
 
 # ============================================================================
@@ -186,7 +186,7 @@ class TestSerialization:
         assert "shape" in data["masks"][0]
 
         # Decode
-        decoded_mask = pf.detections.Detection.decode_mask(data["masks"][0])
+        decoded_mask = pf.Detection.decode_mask(data["masks"][0])
 
         # Should match original
         assert decoded_mask.shape == sample_detection_with_mask.masks[0].shape
@@ -338,9 +338,9 @@ class TestEdgeCaseWorkflows:
 
     def test_workflow_with_none_values(self):
         """Test workflow handles None values gracefully."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
 
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[100, 100, 200, 200],
             confidence=None,
             class_id=None

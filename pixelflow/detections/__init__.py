@@ -1,11 +1,8 @@
 # detections/__init__.py
-# Export all detection classes and functions for public API
+# Export the detection result type and its converters
 
-# Import core classes
 from .detections import KeyPoint, Detection, Detections
 
-
-# Import converter functions
 from .converters import (
     from_datamarkin,
     from_florence2,
@@ -22,25 +19,9 @@ from .converters import (
     from_easyocr
 )
 
-# Import filter functions (now public API)
-from .filters import (
-    filter_by_confidence,
-    filter_by_class_id,
-    remap_class_ids,
-    filter_by_size,
-    filter_by_dimensions,
-    filter_by_aspect_ratio,
-    filter_by_zones,
-    filter_by_position,
-    filter_by_relative_size,
-    filter_by_tracking_duration,
-    filter_by_first_seen_time,
-    filter_tracked_objects,
-    remove_duplicates,
-    filter_overlapping
-)
+# Filters are not exported as free functions: every one of them is attached to
+# Detections as a method, and two ways to call the same thing is one too many.
 
-# All public exports - maintains exact same API as before
 __all__ = [
     # Core classes
     'KeyPoint',
@@ -61,20 +42,4 @@ __all__ = [
     'from_falcon_perception',
     'from_efficienttam',
     'from_easyocr',
-
-    # Filter functions
-    'filter_by_confidence',
-    'filter_by_class_id',
-    'remap_class_ids',
-    'filter_by_size',
-    'filter_by_dimensions',
-    'filter_by_aspect_ratio',
-    'filter_by_zones',
-    'filter_by_position',
-    'filter_by_relative_size',
-    'filter_by_tracking_duration',
-    'filter_by_first_seen_time',
-    'filter_tracked_objects',
-    'remove_duplicates',
-    'filter_overlapping'
 ]

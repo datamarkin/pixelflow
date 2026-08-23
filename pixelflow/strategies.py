@@ -156,7 +156,7 @@ def get_anchor_position(bbox: List[float], strategy: str) -> Tuple[float, float]
         >>> image = cv2.imread("person_detection.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> results = pf.results.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> 
         >>> # Extract center point for each detection
         >>> for detection in results:
@@ -273,7 +273,7 @@ def check_detection_in_region(
         >>> image = cv2.imread("traffic_scene.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> results = pf.results.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> 
         >>> # Define region of interest (e.g., crosswalk area)
         >>> crosswalk_region = Polygon([(100, 200), (400, 200), (400, 300), (100, 300)])

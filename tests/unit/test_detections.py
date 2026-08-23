@@ -20,7 +20,7 @@ class TestKeyPoint:
 
     def test_keypoint_creation(self):
         """Test basic keypoint creation."""
-        kp = pf.detections.KeyPoint(x=100, y=200, id=0, name="nose", confidence=0.9)
+        kp = pf.KeyPoint(x=100, y=200, id=0, name="nose", confidence=0.9)
         assert kp.x == 100
         assert kp.y == 200
         assert kp.name == "nose"
@@ -38,7 +38,7 @@ class TestKeyPoint:
 
     def test_keypoint_numpy_conversion(self):
         """Test keypoint with numpy numeric types."""
-        kp = pf.detections.KeyPoint(
+        kp = pf.KeyPoint(
             x=np.int64(150),
             y=np.float32(250.5),
             name="point",
@@ -53,7 +53,7 @@ class TestKeyPoint:
 
     def test_keypoint_preserves_subpixel_precision(self):
         """Landmarks keep their fraction; truncating biased them toward the origin."""
-        kp = pf.detections.KeyPoint(x=10.7, y=20.3, id=0)
+        kp = pf.KeyPoint(x=10.7, y=20.3, id=0)
         assert (kp.x, kp.y) == (10.7, 20.3)
 
     @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
@@ -64,7 +64,7 @@ class TestKeyPoint:
         guard against, so this raises instead of degrading.
         """
         with pytest.raises(ValueError):
-            pf.detections.KeyPoint(x=bad, y=0.0, id=0)
+            pf.KeyPoint(x=bad, y=0.0, id=0)
 
 
 # ============================================================================
@@ -76,7 +76,7 @@ class TestDetection:
 
     def test_detection_creation_minimal(self):
         """Test detection with minimal required fields."""
-        det = pf.detections.Detection(bbox=[100, 100, 200, 200])
+        det = pf.Detection(bbox=[100, 100, 200, 200])
         assert det.bbox == [100, 100, 200, 200]
         assert det.confidence is None
         assert det.class_id is None
@@ -84,7 +84,7 @@ class TestDetection:
 
     def test_detection_creation_full(self):
         """Test detection with all common fields."""
-        det = pf.detections.Detection(
+        det = pf.Detection(
             bbox=[100, 100, 200, 200],
             confidence=0.95,
             class_id=0,
@@ -101,7 +101,7 @@ class TestDetection:
         """Test detection with binary mask."""
         mask = np.zeros((100, 100), dtype=bool)
         mask[20:80, 20:80] = True
-        det = pf.detections.Detection(
+        det = pf.Detection(
             bbox=[100, 100, 200, 200],
             masks=[mask]
         )
@@ -111,7 +111,7 @@ class TestDetection:
 
     def test_detection_with_keypoints(self, sample_keypoints):
         """Test detection with keypoints."""
-        det = pf.detections.Detection(
+        det = pf.Detection(
             bbox=[50, 50, 150, 200],
             keypoints=sample_keypoints
         )
@@ -121,7 +121,7 @@ class TestDetection:
 
     def test_detection_with_tracking(self):
         """Test detection with tracking information."""
-        det = pf.detections.Detection(
+        det = pf.Detection(
             bbox=[100, 100, 200, 200],
             tracker_id=42,
             first_seen_time=1.5,
@@ -155,18 +155,18 @@ class TestDetection:
         original_mask = np.zeros((50, 50), dtype=bool)
         original_mask[10:40, 10:40] = True
 
-        det = pf.detections.Detection(bbox=[0, 0, 50, 50], masks=[original_mask])
+        det = pf.Detection(bbox=[0, 0, 50, 50], masks=[original_mask])
         data = det.to_dict()
 
         # Decode mask
-        decoded_mask = pf.detections.Detection.decode_mask(data["masks"][0])
+        decoded_mask = pf.Detection.decode_mask(data["masks"][0])
         assert decoded_mask.shape == original_mask.shape
         assert decoded_mask.dtype == bool
         assert np.array_equal(decoded_mask, original_mask)
 
     def test_detection_mask_uses_png_format(self):
         """Masks serialize as PNG, not a raw bitmap."""
-        det = pf.detections.Detection(
+        det = pf.Detection(
             bbox=[0, 0, 50, 50], masks=[np.zeros((50, 50), dtype=bool)]
         )
         assert det.to_dict()["masks"][0]["format"] == "png"
@@ -176,8 +176,8 @@ class TestDetection:
         original_mask = np.zeros((40, 60), dtype=np.uint8)
         original_mask[5:35, 10:50] = 255
 
-        det = pf.detections.Detection(bbox=[0, 0, 60, 40], masks=[original_mask])
-        decoded_mask = pf.detections.Detection.decode_mask(det.to_dict()["masks"][0])
+        det = pf.Detection(bbox=[0, 0, 60, 40], masks=[original_mask])
+        decoded_mask = pf.Detection.decode_mask(det.to_dict()["masks"][0])
 
         assert decoded_mask.dtype == np.uint8
         assert np.array_equal(decoded_mask, original_mask)
@@ -204,9 +204,9 @@ class TestDetection:
         if mask.size:
             mask = (rng.random(mask.shape) * 200).astype(mask.dtype)
 
-        det = pf.detections.Detection(bbox=[0, 0, 30, 20], masks=[mask])
+        det = pf.Detection(bbox=[0, 0, 30, 20], masks=[mask])
         encoded = det.to_dict()["masks"][0]
-        decoded = pf.detections.Detection.decode_mask(encoded)
+        decoded = pf.Detection.decode_mask(encoded)
 
         assert encoded["format"] == expected_format
         assert decoded.shape == mask.shape
@@ -221,7 +221,7 @@ class TestDetection:
         mask = np.zeros((height, width), dtype=bool)
         mask[100:900, 200:1500] = True
 
-        det = pf.detections.Detection(bbox=[200, 100, 1500, 900], masks=[mask])
+        det = pf.Detection(bbox=[200, 100, 1500, 900], masks=[mask])
         payload = det.to_dict()["masks"][0]["data"]
 
         # A raw bitmap would base64 to ~2.8 MB; PNG must stay far below that.
@@ -241,19 +241,19 @@ class TestDetection:
         Transforms rewrite this attribute in place, so validating only in
         __init__ would let transformed boxes escape the precision contract.
         """
-        det = pf.detections.Detection(bbox=[0, 0, 10, 10])
+        det = pf.Detection(bbox=[0, 0, 10, 10])
         det.bbox = [1.23456, 2.0, 3.0, 4.0]
         assert det.bbox == [1.23, 2.0, 3.0, 4.0]
 
     def test_detection_bbox_rejects_non_finite_on_reassignment(self):
         """A non-finite coordinate written post-construction is rejected too."""
-        det = pf.detections.Detection(bbox=[0, 0, 10, 10])
+        det = pf.Detection(bbox=[0, 0, 10, 10])
         det.bbox = [0.0, 0.0, float("nan"), 10.0]
         assert det.bbox is None
 
     def test_detection_bbox_accepts_none(self):
         """Clearing the box stays legal."""
-        det = pf.detections.Detection(bbox=[0, 0, 10, 10])
+        det = pf.Detection(bbox=[0, 0, 10, 10])
         det.bbox = None
         assert det.bbox is None
 
@@ -272,23 +272,23 @@ class TestDetection:
         Callers used to branch on which of the three they had been handed, and
         the branches disagreed - one raised, one silently dropped the polygon.
         """
-        det = pf.detections.Detection(bbox=[0, 0, 60, 60], segments=raw)
+        det = pf.Detection(bbox=[0, 0, 60, 60], segments=raw)
         assert det.segments == [[10.7, 20.3], [50.9, 60.4]]
 
     def test_detection_segments_validate_on_reassignment(self):
         """Transforms rewrite this attribute, so writes validate like bbox writes."""
-        det = pf.detections.Detection(bbox=[0, 0, 60, 60], segments=[[1.0, 2.0]])
+        det = pf.Detection(bbox=[0, 0, 60, 60], segments=[[1.0, 2.0]])
         det.segments = np.array([[10.7, 20.3]], dtype=np.float32)
         assert det.segments == [[10.7, 20.3]]
 
     def test_detection_bbox_is_json_safe(self):
         """A validated bbox always survives a strict JSON encoder."""
-        det = pf.detections.Detection(bbox=[10.7, 20.3, 110.9, 220.4])
+        det = pf.Detection(bbox=[10.7, 20.3, 110.9, 220.4])
         assert json.dumps(det.to_dict()["bbox"], allow_nan=False) == "[10.7, 20.3, 110.9, 220.4]"
 
     def test_detection_bbox_survives_copy(self):
         """copy() round-trips through the property without losing precision."""
-        det = pf.detections.Detection(bbox=[10.7, 20.3, 110.9, 220.4])
+        det = pf.Detection(bbox=[10.7, 20.3, 110.9, 220.4])
         assert det.copy().bbox == [10.7, 20.3, 110.9, 220.4]
 
 
@@ -301,7 +301,7 @@ class TestDetections:
 
     def test_detections_creation_empty(self):
         """Test creating empty Detections container."""
-        dets = pf.detections.Detections()
+        dets = pf.Detections()
         assert len(dets) == 0
 
     def test_detections_add_detection(self, empty_detections, sample_detection):
@@ -313,14 +313,14 @@ class TestDetections:
         """Test iterating over detections."""
         count = 0
         for det in sample_detections:
-            assert isinstance(det, pf.detections.Detection)
+            assert isinstance(det, pf.Detection)
             count += 1
         assert count == 4
 
     def test_detections_indexing(self, sample_detections):
         """Test accessing detections by index."""
         first = sample_detections[0]
-        assert isinstance(first, pf.detections.Detection)
+        assert isinstance(first, pf.Detection)
         assert first.bbox == [100, 100, 200, 200]
 
     def test_detections_len(self, sample_detections):
@@ -375,7 +375,7 @@ class TestDetectionEdgeCases:
 
     def test_detection_with_none_values(self):
         """Test detection with explicitly None values."""
-        det = pf.detections.Detection(
+        det = pf.Detection(
             bbox=[0, 0, 10, 10],
             confidence=None,
             class_id=None,
@@ -387,12 +387,12 @@ class TestDetectionEdgeCases:
 
     def test_detection_empty_masks_list(self):
         """Test detection with empty masks list."""
-        det = pf.detections.Detection(bbox=[0, 0, 10, 10], masks=[])
+        det = pf.Detection(bbox=[0, 0, 10, 10], masks=[])
         assert det.masks == []
 
     def test_detection_empty_keypoints_list(self):
         """Test detection with empty keypoints list."""
-        det = pf.detections.Detection(bbox=[0, 0, 10, 10], keypoints=[])
+        det = pf.Detection(bbox=[0, 0, 10, 10], keypoints=[])
         assert det.keypoints == []
 
     def test_detections_slicing(self, sample_detections):

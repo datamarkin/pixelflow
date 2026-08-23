@@ -53,7 +53,7 @@ def pixelate(
         >>> image = cv2.imread("street_scene.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)  # Raw YOLO outputs
-        >>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> results = pf.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Basic usage with adaptive pixel size
         >>> pixelated_image = pf.annotators.pixelate(image, results)

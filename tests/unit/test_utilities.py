@@ -346,8 +346,8 @@ class TestSmoother:
 
     @staticmethod
     def _dets(bbox, tracker_id=1):
-        dets = pf.detections.Detections()
-        dets.add_detection(pf.detections.Detection(
+        dets = pf.Detections()
+        dets.add_detection(pf.Detection(
             bbox=bbox, class_id=0, confidence=0.9, tracker_id=tracker_id
         ))
         return dets
@@ -359,7 +359,7 @@ class TestSmoother:
 
         result = pf.smooth(buffer)
 
-        assert isinstance(result, pf.detections.Detections)
+        assert isinstance(result, pf.Detections)
 
     def test_smooth_averages_jitter_across_frames(self, sample_image):
         """A jittery box is pulled toward its temporal neighbours."""
@@ -393,9 +393,9 @@ class TestTimer:
 
     @staticmethod
     def _dets(tracker_ids):
-        dets = pf.detections.Detections()
+        dets = pf.Detections()
         for tid in tracker_ids:
-            dets.add_detection(pf.detections.Detection(
+            dets.add_detection(pf.Detection(
                 bbox=[100, 100, 200, 200], class_id=0, confidence=0.9, tracker_id=tid
             ))
         return dets

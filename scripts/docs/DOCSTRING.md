@@ -68,7 +68,7 @@ def function_name(
         >>> # [Comment describing the setup]
         >>> image = cv2.imread("path/to/image.jpg")
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> results = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> results = pf.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # [Comment describing basic usage]
         >>> result = pf.module.function_name(param1, results)
@@ -106,7 +106,7 @@ def function_name(
 - Explain what "None" means for optional parameters
 
 ### 2. **Examples Section**
-- **Always show PixelFlow workflow** (for functions using results): `outputs -> pf.results.from_*() -> function`
+- **Always show PixelFlow workflow** (for functions using results): `outputs -> pf.from_*() -> function`
 - **Functions Template**: Provide 3-4 examples showing:
   - Basic usage with defaults
   - Advanced usage with custom parameters  
@@ -151,7 +151,7 @@ Always show the two-step process in examples:
 >>> image = cv2.imread("image.jpg") # or from pillow or other library read image
 >>> model = YOLO("yolo11l.pt")
 >>> outputs = model.predict(image)  # Raw framework output
->>> results = pf.results.from_ultralytics(outputs)  # or from_detectron2() or from_transformers() Convert to PixelFlow unified
+>>> results = pf.from_ultralytics(outputs)  # or from_detectron2() or from_transformers() Convert to PixelFlow unified
 >>> processed = pf.annotators.function_name(image, results)
 ```
 
@@ -176,7 +176,7 @@ Document automatic validation behaviors:
 - [ ] Raises section covers relevant exceptions
 - [ ] No unused imports in typing section
 - [ ] Follows Python 3.9+ compatibility requirements
-- [ ] Examples show PixelFlow workflow (`outputs -> pf.results.from_*()`) when applicable
+- [ ] Examples show PixelFlow workflow (`outputs -> pf.from_*()`) when applicable
 - [ ] 3-4 examples covering different use cases
 - [ ] Notes section explains implementation details
 - [ ] Performance notes included if computationally intensive

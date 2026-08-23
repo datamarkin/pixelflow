@@ -34,7 +34,7 @@ class SlicedInference:
         >>> # Define detector function
         >>> def detector_func(image):
         ...     outputs = model.predict(image)
-        ...     return pf.results.from_ultralytics(outputs)
+        ...     return pf.from_ultralytics(outputs)
         >>> 
         >>> # Run sliced inference on large image
         >>> large_image = cv2.imread("large_image.jpg")  # e.g., 4000x3000
@@ -735,7 +735,7 @@ class SlicedInference:
             >>> # Define detector function
             >>> def detector(image, conf=0.5):
             ...     outputs = model.predict(image, conf=conf)
-            ...     return pf.results.from_ultralytics(outputs)
+            ...     return pf.from_ultralytics(outputs)
             >>> 
             >>> # Run sliced inference  
             >>> slicer = pf.SlicedInference(slice_height=640, slice_width=640)

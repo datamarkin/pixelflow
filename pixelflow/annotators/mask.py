@@ -51,7 +51,7 @@ def mask(
         >>> image = cv2.imread("path/to/image.jpg")
         >>> model = YOLO("yolo11n-seg.pt")  # Segmentation model
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Apply masks with default semi-transparent overlay
         >>> annotated = pf.annotators.mask(image, detections)

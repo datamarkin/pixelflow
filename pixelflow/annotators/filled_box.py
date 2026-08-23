@@ -57,7 +57,7 @@ def filled_box(
         >>> image = cv2.imread("people.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)  # Raw YOLO outputs
-        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Draw filled boxes with automatic opacity (recommended for most cases)
         >>> annotated = pf.annotate.filled_box(image, detections)

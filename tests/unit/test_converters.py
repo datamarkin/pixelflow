@@ -128,7 +128,7 @@ class TestFlorence2Converter:
             }
         }
 
-        detections = pf.detections.from_florence2(parsed, task_prompt="<OD>")
+        detections = pf.from_florence2(parsed, task_prompt="<OD>")
 
         assert len(detections) == 2
         assert detections[0].bbox == [10, 10, 50, 50]
@@ -152,7 +152,7 @@ class TestFlorence2Converter:
             }
         }
 
-        detections = pf.detections.from_florence2(
+        detections = pf.from_florence2(
             parsed, task_prompt="<REFERRING_EXPRESSION_SEGMENTATION>"
         )
 
@@ -170,7 +170,7 @@ class TestFlorence2Converter:
         """Florence-2 nests polygons inconsistently; all depths must parse."""
         parsed = {"<SEG>": {"polygons": polygons, "labels": ["cat"]}}
 
-        detections = pf.detections.from_florence2(parsed, task_prompt="<SEG>")
+        detections = pf.from_florence2(parsed, task_prompt="<SEG>")
 
         assert len(detections) == 1
         assert detections[0].bbox == [10, 10, 50, 50]
@@ -185,7 +185,7 @@ class TestFlorence2Converter:
             }
         }
 
-        detections = pf.detections.from_florence2(parsed, task_prompt="<SEG>")
+        detections = pf.from_florence2(parsed, task_prompt="<SEG>")
 
         assert len(detections) == 1
         assert len(detections[0].masks) == 2
@@ -211,7 +211,7 @@ class TestFlorence2Converter:
             "labels": ["a red car parked", "a man in a blue jacket"],
         }}
 
-        detections = pf.detections.from_florence2(parsed, task_prompt=task)
+        detections = pf.from_florence2(parsed, task_prompt=task)
 
         assert [d.text for d in detections] == [
             "a red car parked", "a man in a blue jacket"
@@ -228,7 +228,7 @@ class TestFlorence2Converter:
             }
         }
 
-        detections = pf.detections.from_florence2(
+        detections = pf.from_florence2(
             parsed, task_prompt="<REGION_PROPOSAL>"
         )
 
@@ -248,7 +248,7 @@ class TestFlorence2Converter:
             }
         }
 
-        detections = pf.detections.from_florence2(
+        detections = pf.from_florence2(
             parsed, task_prompt="<OCR_WITH_REGION>"
         )
 
@@ -268,7 +268,7 @@ class TestFlorence2Converter:
             }
         }
 
-        detections = pf.detections.from_florence2(
+        detections = pf.from_florence2(
             parsed, task_prompt="<REFERRING_EXPRESSION_SEGMENTATION>"
         )
 
@@ -283,19 +283,19 @@ class TestFlorence2Converter:
     def test_from_florence2_pure_text_tasks_raise(self, task):
         """Tasks the processor treats as pure_text carry no geometry to locate."""
         with pytest.raises(ValueError, match="text only"):
-            pf.detections.from_florence2({task: "some string"}, task_prompt=task)
+            pf.from_florence2({task: "some string"}, task_prompt=task)
 
     def test_from_florence2_missing_task_prompt_raises(self):
         """A task_prompt absent from the parsed result is an error."""
         with pytest.raises(ValueError):
-            pf.detections.from_florence2({"<OD>": {}}, task_prompt="<CAPTION>")
+            pf.from_florence2({"<OD>": {}}, task_prompt="<CAPTION>")
 
     def test_from_florence2_unsupported_data_shape_raises(self):
         """Data without a recognised field combination raises ValueError."""
         parsed = {"<OD>": {"something_else": []}}
 
         with pytest.raises(ValueError):
-            pf.detections.from_florence2(parsed, task_prompt="<OD>")
+            pf.from_florence2(parsed, task_prompt="<OD>")
 
 
 # ============================================================================
@@ -307,7 +307,7 @@ class TestUltralyticsConverter:
 
     def test_from_ultralytics_basic(self, mock_ultralytics_result):
         """Test basic Ultralytics conversion."""
-        detections = pf.detections.from_ultralytics(mock_ultralytics_result)
+        detections = pf.from_ultralytics(mock_ultralytics_result)
 
         assert len(detections) == 2
         assert detections[0].bbox == [100, 100, 200, 200]
@@ -318,8 +318,8 @@ class TestUltralyticsConverter:
     def test_from_ultralytics_multiple_results(self, mock_ultralytics_result):
         """Test conversion with multiple result objects."""
         # Simulate batch processing
-        detections = pf.detections.from_ultralytics(mock_ultralytics_result)
-        assert isinstance(detections, pf.detections.Detections)
+        detections = pf.from_ultralytics(mock_ultralytics_result)
+        assert isinstance(detections, pf.Detections)
 
     def test_from_ultralytics_empty(self):
         """Test conversion with empty results."""
@@ -335,7 +335,7 @@ class TestUltralyticsConverter:
                 self.names = {}
                 self.probs = None
 
-        detections = pf.detections.from_ultralytics([MockResult()])
+        detections = pf.from_ultralytics([MockResult()])
         assert len(detections) == 0
 
     def test_from_ultralytics_segments_keep_subpixel_precision(self, mock_ultralytics_result):
@@ -349,14 +349,14 @@ class TestUltralyticsConverter:
         result = mock_ultralytics_result[0]
         result.masks = SimpleNamespace(xy=[polygon, polygon])  # one per detection
 
-        detections = pf.detections.from_ultralytics([result])
+        detections = pf.from_ultralytics([result])
 
         assert detections[0].segments[0] == [10.7, 20.3]
 
     def test_from_ultralytics_with_labels(self, mock_ultralytics_result):
         """Test that labels parameter overrides result.names."""
         labels = {0: "human", 2: "vehicle"}
-        detections = pf.detections.from_ultralytics(mock_ultralytics_result, labels=labels)
+        detections = pf.from_ultralytics(mock_ultralytics_result, labels=labels)
         assert detections[0].class_name == "human"
         assert detections[1].class_name == "vehicle"
 
@@ -366,7 +366,7 @@ class TestUltralyticsConverter:
             {"id": 0, "name": "person"},
             {"id": 2, "name": "car"},
         ]
-        detections = pf.detections.from_ultralytics(mock_ultralytics_result, labels=labels)
+        detections = pf.from_ultralytics(mock_ultralytics_result, labels=labels)
         assert detections[0].class_name == "person"
         assert detections[1].class_name == "car"
 
@@ -380,7 +380,7 @@ class TestDetectron2Converter:
 
     def test_from_detectron2_basic(self, mock_detectron2_output):
         """Test basic Detectron2 conversion."""
-        detections = pf.detections.from_detectron2(mock_detectron2_output)
+        detections = pf.from_detectron2(mock_detectron2_output)
 
         assert len(detections) == 2
         assert detections[0].confidence == 0.95
@@ -389,7 +389,7 @@ class TestDetectron2Converter:
     def test_from_detectron2_with_labels_dict(self, mock_detectron2_output):
         """Test Detectron2 conversion with Dict[int, str] labels."""
         labels = {0: "person", 2: "car"}
-        detections = pf.detections.from_detectron2(
+        detections = pf.from_detectron2(
             mock_detectron2_output, labels=labels
         )
         assert detections[0].class_name == "person"
@@ -398,7 +398,7 @@ class TestDetectron2Converter:
     def test_from_detectron2_with_labels_list(self, mock_detectron2_output):
         """Test Detectron2 conversion with List[str] labels."""
         labels = ["person", "bicycle", "car"]
-        detections = pf.detections.from_detectron2(
+        detections = pf.from_detectron2(
             mock_detectron2_output, labels=labels
         )
         assert detections[0].class_name == "person"
@@ -410,7 +410,7 @@ class TestDetectron2Converter:
             {"id": 0, "name": "person", "keypoints": [{"id": 0, "name": "nose"}]},
             {"id": 2, "name": "car"},
         ]
-        detections = pf.detections.from_detectron2(
+        detections = pf.from_detectron2(
             mock_detectron2_output, labels=labels
         )
         assert detections[0].class_name == "person"
@@ -467,7 +467,7 @@ class TestDetectron2Converter:
             {"id": 2, "name": "right_eye"},
         ]}]
 
-        detections = pf.detections.from_detectron2(
+        detections = pf.from_detectron2(
             {"instances": MockInstances()}, labels=labels
         )
         assert len(detections) == 1
@@ -497,7 +497,7 @@ class TestMayakuConverter:
 
     def test_from_mayaku_basic(self, mock_mayaku_output):
         """Test basic Mayaku conversion."""
-        detections = pf.detections.from_mayaku(mock_mayaku_output)
+        detections = pf.from_mayaku(mock_mayaku_output)
 
         assert len(detections) == 2
         assert detections[0].bbox == [100, 100, 200, 200]
@@ -508,14 +508,14 @@ class TestMayakuConverter:
     def test_from_mayaku_with_labels_dict(self, mock_mayaku_output):
         """Test Mayaku conversion with Dict[int, str] labels."""
         labels = {0: "person", 2: "car"}
-        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=labels)
+        detections = pf.from_mayaku(mock_mayaku_output, labels=labels)
         assert detections[0].class_name == "person"
         assert detections[1].class_name == "car"
 
     def test_from_mayaku_with_labels_list(self, mock_mayaku_output):
         """Test Mayaku conversion with List[str] labels."""
         labels = ["person", "bicycle", "car"]
-        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=labels)
+        detections = pf.from_mayaku(mock_mayaku_output, labels=labels)
         assert detections[0].class_name == "person"
         assert detections[1].class_name == "car"
 
@@ -530,7 +530,7 @@ class TestMayakuConverter:
         # Truncated stand-in for predictor.class_names.
         class_names = ["Person", "Sneakers", "Chair", "Other Shoes", "Hat", "Car"]
 
-        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=class_names)
+        detections = pf.from_mayaku(mock_mayaku_output, labels=class_names)
 
         assert detections[0].class_id == 0
         assert detections[0].class_name == "Person"
@@ -564,7 +564,7 @@ class TestMayakuConverter:
 
         # Passing a COCO-sized vocabulary to a 365-class model is the mistake
         # this guards against: it must degrade to None rather than raise.
-        detections = pf.detections.from_mayaku(MockInstances(), labels=["person", "car"])
+        detections = pf.from_mayaku(MockInstances(), labels=["person", "car"])
 
         assert len(detections) == 1
         assert detections[0].class_id == 364
@@ -576,7 +576,7 @@ class TestMayakuConverter:
             {"id": 0, "name": "person", "keypoints": [{"id": 0, "name": "nose"}]},
             {"id": 2, "name": "car"},
         ]
-        detections = pf.detections.from_mayaku(mock_mayaku_output, labels=labels)
+        detections = pf.from_mayaku(mock_mayaku_output, labels=labels)
         assert detections[0].class_name == "person"
         assert detections[1].class_name == "car"
 
@@ -590,7 +590,7 @@ class TestMayakuConverter:
             def __len__(self):
                 return 0
 
-        detections = pf.detections.from_mayaku(MockInstances())
+        detections = pf.from_mayaku(MockInstances())
         assert len(detections) == 0
 
     def test_from_mayaku_with_keypoints(self):
@@ -631,7 +631,7 @@ class TestMayakuConverter:
             {"id": 2, "name": "right_eye"},
         ]}]
 
-        detections = pf.detections.from_mayaku(MockInstances(), labels=labels)
+        detections = pf.from_mayaku(MockInstances(), labels=labels)
         assert len(detections) == 1
         assert detections[0].keypoints is not None
         assert len(detections[0].keypoints) == 3
@@ -673,7 +673,7 @@ class TestMayakuConverter:
             def __len__(self):
                 return 1
 
-        detections = pf.detections.from_mayaku(MockInstances())
+        detections = pf.from_mayaku(MockInstances())
         assert len(detections) == 1
         assert detections[0].masks is not None
         assert len(detections[0].masks) == 1
@@ -760,7 +760,7 @@ class TestSAMConverter:
         ])
         scores = np.array([0.95, 0.87])
 
-        detections = pf.detections.from_sam(masks, scores)
+        detections = pf.from_sam(masks, scores)
 
         assert len(detections) == 1  # second mask is empty, skipped
         assert detections[0].masks is not None
@@ -774,7 +774,7 @@ class TestSAMConverter:
         masks[1, 5:15, 0:10] = True
         scores = np.array([0.92, 0.85, 0.73])
 
-        detections = pf.detections.from_efficienttam(masks, scores)
+        detections = pf.from_efficienttam(masks, scores)
 
         assert len(detections) == 2  # third mask is empty
         assert detections[0].confidence == 0.92
@@ -787,7 +787,7 @@ class TestSAMConverter:
         masks = np.zeros((0, 100, 100), dtype=bool)
         scores = np.zeros(0)
 
-        detections = pf.detections.from_efficienttam(masks, scores)
+        detections = pf.from_efficienttam(masks, scores)
         assert len(detections) == 0
 
     def test_from_efficienttam_mask_is_bool(self):
@@ -795,7 +795,7 @@ class TestSAMConverter:
         masks = np.ones((1, 50, 50), dtype=np.uint8)
         scores = np.array([0.9])
 
-        detections = pf.detections.from_efficienttam(masks, scores)
+        detections = pf.from_efficienttam(masks, scores)
         assert detections[0].masks[0].dtype == bool
 
 
@@ -825,7 +825,7 @@ class TestDatamarkinAPIConverter:
             }
         }
 
-        detections = pf.detections.from_datamarkin(api_response)
+        detections = pf.from_datamarkin(api_response)
 
         assert len(detections) == 2
         assert detections[0].bbox == [100, 100, 200, 200]
@@ -851,7 +851,7 @@ class TestDatamarkinAPIConverter:
             }
         }
 
-        detections = pf.detections.from_datamarkin(api_response)
+        detections = pf.from_datamarkin(api_response)
 
         assert len(detections[0].keypoints) == 2
         assert detections[0].keypoints[0].name == "nose"
@@ -878,14 +878,14 @@ class TestConverterEdgeCases:
             }
         }
 
-        detections = pf.detections.from_datamarkin(api_response)
+        detections = pf.from_datamarkin(api_response)
         assert len(detections) == 1
         assert detections[0].confidence is None
 
     def test_converter_empty_input(self):
         """Test converters with empty input."""
-        assert len(pf.detections.from_datamarkin({})) == 0
-        assert len(pf.detections.from_datamarkin({"predictions": {"objects": []}})) == 0
+        assert len(pf.from_datamarkin({})) == 0
+        assert len(pf.from_datamarkin({"predictions": {"objects": []}})) == 0
 
 
 # ============================================================================
@@ -908,7 +908,7 @@ class TestFalconPerceptionConverter:
             {"x": 0.5, "y": 0.5},
             {"h": 0.2, "w": 0.4},
         ])
-        detections = pf.detections.from_falcon_perception(
+        detections = pf.from_falcon_perception(
             output, image_size=(100, 100), label="cat"
         )
         assert len(detections) == 1
@@ -927,7 +927,7 @@ class TestFalconPerceptionConverter:
             {"x": 0.3, "y": 0.3},  # incomplete — no size dict
         ])
         with pytest.warns(UserWarning, match="odd length"):
-            detections = pf.detections.from_falcon_perception(
+            detections = pf.from_falcon_perception(
                 output, image_size=(100, 100), label="cat"
             )
         assert len(detections) == 1
@@ -935,7 +935,7 @@ class TestFalconPerceptionConverter:
     def test_empty_bboxes_raw_returns_zero_detections(self):
         """Empty bboxes_raw returns 0 detections without warning."""
         output = MockAuxOutput(bboxes_raw=[])
-        detections = pf.detections.from_falcon_perception(
+        detections = pf.from_falcon_perception(
             output, image_size=(100, 100), label="cat"
         )
         assert len(detections) == 0
@@ -944,7 +944,7 @@ class TestFalconPerceptionConverter:
         """Single entry (just center, no size) warns and returns 0 detections."""
         output = MockAuxOutput(bboxes_raw=[{"x": 0.5, "y": 0.5}])
         with pytest.warns(UserWarning, match="odd length"):
-            detections = pf.detections.from_falcon_perception(
+            detections = pf.from_falcon_perception(
                 output, image_size=(100, 100), label="cat"
             )
         assert len(detections) == 0
@@ -954,7 +954,7 @@ class TestArraysConverter:
     """Tests for from_arrays, the framework-free converter."""
 
     def test_boxes_scores_and_classes(self):
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[10, 20, 110, 220], [30, 40, 130, 240]],
             scores=[0.9, 0.8],
             class_ids=[0, 2],
@@ -965,14 +965,14 @@ class TestArraysConverter:
         assert detections[1].class_id == 2
 
     def test_labels_resolve_class_names(self):
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 1, 1]], scores=[0.5], class_ids=[2],
             labels=["person", "bike", "car"],
         )
         assert detections[0].class_name == "car"
 
     def test_numpy_input(self):
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=np.array([[0.0, 0.0, 5.0, 5.0]]),
             scores=np.array([0.7]),
             class_ids=np.array([1]),
@@ -981,7 +981,7 @@ class TestArraysConverter:
         assert detections[0].class_id == 1
 
     def test_masks_are_cast_to_bool(self):
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 4, 4]], scores=[0.6], class_ids=[0],
             masks=np.ones((1, 4, 4), dtype=np.float32),
         )
@@ -991,7 +991,7 @@ class TestArraysConverter:
     def test_keypoints_carry_id_and_score(self):
         keypoints = np.zeros((1, 17, 3), dtype=np.float32)
         keypoints[0, 0] = [5, 6, 0.9]
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 10, 10]], scores=[0.8], class_ids=[0], keypoints=keypoints,
         )
         first = detections[0].keypoints[0]
@@ -1002,7 +1002,7 @@ class TestArraysConverter:
     def test_keypoints_are_unnamed_without_labels(self):
         """A model whose vocabulary nobody stated gets ids, not COCO's pose names."""
         keypoints = np.zeros((1, 21, 3), dtype=np.float32)
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 10, 10]], scores=[0.8], class_ids=[0], keypoints=keypoints,
         )
         kps = detections[0].keypoints
@@ -1011,15 +1011,15 @@ class TestArraysConverter:
         assert all(kp.name is None for kp in kps)
 
     def test_empty_input(self):
-        assert len(pf.detections.from_arrays(boxes=[], scores=[], class_ids=[])) == 0
+        assert len(pf.from_arrays(boxes=[], scores=[], class_ids=[])) == 0
 
     def test_mismatched_lengths_raise(self):
         with pytest.raises(ValueError, match="scores describes 2"):
-            pf.detections.from_arrays(boxes=[[0, 0, 1, 1]], scores=[0.5, 0.6], class_ids=[0])
+            pf.from_arrays(boxes=[[0, 0, 1, 1]], scores=[0.5, 0.6], class_ids=[0])
 
     def test_torch_tensors_are_detached(self):
         torch = pytest.importorskip("torch")
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=torch.tensor([[1.0, 2.0, 3.0, 4.0]], requires_grad=True),
             scores=torch.tensor([0.5]),
             class_ids=torch.tensor([1]),
@@ -1033,7 +1033,7 @@ class TestArraysConverter:
             [[10, 20], [110, 22], [108, 60], [8, 58]],
             [[30, 80], [130, 80], [130, 120], [30, 120]],
         ]
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[8, 20, 110, 60], [30, 80, 130, 120]],
             scores=[0.91, 0.55],
             texts=["Hello", "world"],
@@ -1045,7 +1045,7 @@ class TestArraysConverter:
 
     def test_class_ids_are_optional(self):
         """OCR reads content; it does not pick a class out of a vocabulary."""
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 1, 1]], scores=[0.9], texts=["read"],
         )
         assert detections[0].class_id is None
@@ -1054,7 +1054,7 @@ class TestArraysConverter:
 
     def test_an_empty_read_is_kept_but_a_missing_one_is_not(self):
         """A located region that decoded to nothing was still located."""
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], texts=["", None],
         )
         assert detections[0].text == ""
@@ -1062,7 +1062,7 @@ class TestArraysConverter:
 
     def test_text_and_class_name_coexist(self):
         """They answer different questions, so supplying one must not clear the other."""
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 1, 1]], scores=[0.9], class_ids=[1],
             labels=["plate", "sign"], texts=["ABC-123"],
         )
@@ -1070,7 +1070,7 @@ class TestArraysConverter:
         assert detections[0].text == "ABC-123"
 
     def test_text_survives_to_dict(self):
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 1, 1]], scores=[0.9], texts=["Hello"],
             segments=[[[0, 0], [1, 0], [1, 1], [0, 1]]],
         )
@@ -1080,18 +1080,18 @@ class TestArraysConverter:
 
     def test_mismatched_texts_and_segments_raise(self):
         with pytest.raises(ValueError, match="texts describes 1"):
-            pf.detections.from_arrays(
+            pf.from_arrays(
                 boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], texts=["one"],
             )
         with pytest.raises(ValueError, match="segments describes 1"):
-            pf.detections.from_arrays(
+            pf.from_arrays(
                 boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8],
                 segments=[[[0, 0], [1, 0], [1, 1]]],
             )
 
     def test_numpy_strings_become_str(self):
         """A caller who did hand over a numpy array should not get numpy.str_ back."""
-        detections = pf.detections.from_arrays(
+        detections = pf.from_arrays(
             boxes=[[0, 0, 1, 1]], scores=[0.9], texts=np.array(["Hello"]),
         )
         assert type(detections[0].text) is str
@@ -1106,13 +1106,13 @@ class TestNoBundledVocabulary:
 
     def test_names_come_only_from_the_caller(self):
         ids = [1, 73]
-        unnamed = pf.detections.from_arrays(
+        unnamed = pf.from_arrays(
             boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], class_ids=ids,
         )
         assert [d.class_id for d in unnamed] == ids
         assert all(d.class_name is None for d in unnamed)
 
-        named = pf.detections.from_arrays(
+        named = pf.from_arrays(
             boxes=[[0, 0, 1, 1], [2, 2, 3, 3]], scores=[0.9, 0.8], class_ids=ids,
             labels={1: "person", 73: "laptop"},
         )
@@ -1135,7 +1135,7 @@ class TestEasyOCRConverter:
 
     def test_bbox_is_the_hull_of_the_quad(self):
         """bbox is the axis-aligned hull, so zones and box filters keep working."""
-        detections = pf.detections.from_easyocr([HORIZONTAL, ROTATED])
+        detections = pf.from_easyocr([HORIZONTAL, ROTATED])
 
         assert len(detections) == 2
         # A horizontal quad's hull is the quad; a rotated one's is strictly larger.
@@ -1157,7 +1157,7 @@ class TestEasyOCRConverter:
         confidence at all, so it stays None rather than a fabricated 0 claiming the
         read was certainly wrong; output_format='dict' renames the fields.
         """
-        detections = pf.detections.from_easyocr([item])
+        detections = pf.from_easyocr([item])
 
         assert len(detections) == 1
         assert detections[0].text == expected_text
@@ -1165,13 +1165,13 @@ class TestEasyOCRConverter:
 
     def test_quad_is_preserved_in_segments(self):
         """The corners are kept as read, not collapsed into the xyxy hull."""
-        detections = pf.detections.from_easyocr([ROTATED])
+        detections = pf.from_easyocr([ROTATED])
 
         assert detections[0].segments == [[12, 22], [115, 15], [118, 48], [15, 55]]
 
     def test_no_class_is_invented(self):
         """OCR reads content; it does not pick a class out of a vocabulary."""
-        detections = pf.detections.from_easyocr([HORIZONTAL])
+        detections = pf.from_easyocr([HORIZONTAL])
 
         assert detections[0].class_id is None
         assert detections[0].class_name is None
@@ -1180,18 +1180,18 @@ class TestEasyOCRConverter:
         """Rotated boxes arrive with numpy ints, not Python ints."""
         quad = [[np.int32(12), np.int32(22)], [np.int32(115), np.int32(15)],
                 [np.int32(118), np.int32(48)], [np.int32(15), np.int32(55)]]
-        detections = pf.detections.from_easyocr([(quad, "Main St", np.float32(0.74))])
+        detections = pf.from_easyocr([(quad, "Main St", np.float32(0.74))])
 
         assert detections[0].segments == [[12, 22], [115, 15], [118, 48], [15, 55]]
         assert isinstance(detections[0].bbox[0], float)
 
     def test_empty_results(self):
         """No text found is not an error."""
-        assert len(pf.detections.from_easyocr([])) == 0
+        assert len(pf.from_easyocr([])) == 0
 
     def test_empty_read_is_kept(self):
         """A located region read as '' is still a region the detector found."""
-        detections = pf.detections.from_easyocr([(HORIZONTAL[0], "", 0.12)])
+        detections = pf.from_easyocr([(HORIZONTAL[0], "", 0.12)])
 
         assert len(detections) == 1
         assert detections[0].text == ""
@@ -1199,17 +1199,17 @@ class TestEasyOCRConverter:
     def test_detail_zero_raises(self):
         """detail=0 returns strings with no geometry to convert."""
         with pytest.raises(ValueError, match="detail=0"):
-            pf.detections.from_easyocr(["STOP", "Main St"])
+            pf.from_easyocr(["STOP", "Main St"])
 
     def test_json_output_format_raises(self):
         """output_format='json' is also a list of strings."""
         with pytest.raises(ValueError, match="output_format"):
-            pf.detections.from_easyocr(['{"boxes": [], "text": "STOP"}'])
+            pf.from_easyocr(['{"boxes": [], "text": "STOP"}'])
 
     def test_malformed_geometry_warns_and_skips(self):
         """One unusable result does not abort the rest of the conversion."""
         with pytest.warns(UserWarning, match="four corner points"):
-            detections = pf.detections.from_easyocr([
+            detections = pf.from_easyocr([
                 ([[10, 20], [110, 50]], "STOP", 0.98),  # two points, not four
                 ROTATED,
             ])
@@ -1220,7 +1220,7 @@ class TestEasyOCRConverter:
     def test_non_finite_geometry_warns_and_skips(self):
         """NaN corners are rejected rather than poisoning downstream IoU maths."""
         with pytest.warns(UserWarning):
-            detections = pf.detections.from_easyocr([
+            detections = pf.from_easyocr([
                 ([[10, 20], [float("nan"), 20], [110, 50], [10, 50]], "STOP", 0.98),
                 ROTATED,
             ])
@@ -1236,7 +1236,7 @@ class TestEasyOCRConverter:
         """
         with pytest.raises(ValueError, match="not EasyOCR output"):
             with pytest.warns(UserWarning):
-                pf.detections.from_easyocr([
+                pf.from_easyocr([
                     ([[10, 20], [110, 50]], "STOP", 0.98),
                     ([[1, 2]], "Main St", 0.74),
                 ])
@@ -1244,7 +1244,7 @@ class TestEasyOCRConverter:
     def test_quad_survives_rotation(self):
         """segments is transform-aware, so the orientation is not lost on rotate."""
         image = np.zeros((200, 300, 3), dtype=np.uint8)
-        detections = pf.detections.from_easyocr([ROTATED])
+        detections = pf.from_easyocr([ROTATED])
 
         _, rotated = pf.transforms.rotate_detections(image, detections, 30)
 
@@ -1254,12 +1254,12 @@ class TestEasyOCRConverter:
 
     def test_text_survives_copy(self):
         """copy() must carry text, or transforms silently drop the read."""
-        detections = pf.detections.from_easyocr([HORIZONTAL])
+        detections = pf.from_easyocr([HORIZONTAL])
 
         assert detections.copy()[0].text == "STOP"
 
     def test_text_is_serialized(self):
         """to_dict exposes text as its own key, not buried in metadata."""
-        detections = pf.detections.from_easyocr([HORIZONTAL])
+        detections = pf.from_easyocr([HORIZONTAL])
 
         assert detections[0].to_dict()["text"] == "STOP"

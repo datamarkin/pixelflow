@@ -75,7 +75,7 @@ def label(
         >>> image = cv2.imread("people.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> detections = pf.results.from_ultralytics(outputs)
+        >>> detections = pf.from_ultralytics(outputs)
         >>> 
         >>> # Basic auto-generated labels
         >>> labeled_image = pf.annotators.label(image, detections)

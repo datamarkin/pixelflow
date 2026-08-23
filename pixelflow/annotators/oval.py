@@ -62,7 +62,7 @@ def oval(
         >>> image = cv2.imread("pedestrians.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> results = pf.results.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> 
         >>> # Basic footprint annotation with adaptive sizing
         >>> annotated = pf.annotators.oval(image, results)

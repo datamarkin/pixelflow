@@ -69,10 +69,10 @@ class KeyPoint:
         >>> import pixelflow as pf
         >>>
         >>> # Named, because the caller knew the vocabulary
-        >>> nose = pf.detections.KeyPoint(x=320, y=240, id=0, name="nose", confidence=0.98)
+        >>> nose = pf.KeyPoint(x=320, y=240, id=0, name="nose", confidence=0.98)
         >>>
         >>> # Unnamed: the index still identifies it exactly
-        >>> fifth = pf.detections.KeyPoint(x=150, y=200, id=5, confidence=0.12)
+        >>> fifth = pf.KeyPoint(x=150, y=200, id=5, confidence=0.12)
         >>> fifth.name is None
         True
 
@@ -136,7 +136,7 @@ class KeyPoint:
 
         Example:
             >>> import pixelflow as pf
-            >>> pf.detections.KeyPoint(100, 200, 0, "nose", 0.9).to_dict()
+            >>> pf.KeyPoint(100, 200, 0, "nose", 0.9).to_dict()
             {'x': 100.0, 'y': 200.0, 'id': 0, 'name': 'nose', 'confidence': 0.9}
         """
         return {
@@ -205,17 +205,17 @@ class Detection:
         >>> image = cv2.imread("image.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> results = pf.detections.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> 
         >>> # Create basic detection with bounding box
-        >>> detection = pf.detections.Detection(
+        >>> detection = pf.Detection(
         ...     bbox=[100, 50, 200, 150],
         ...     class_name="person",
         ...     confidence=0.85
         ... )
         >>> 
         >>> # Create detection with tracking and zones
-        >>> tracked_detection = pf.detections.Detection(
+        >>> tracked_detection = pf.Detection(
         ...     bbox=[150, 75, 250, 175],
         ...     class_name="vehicle",
         ...     confidence=0.92,
@@ -225,8 +225,8 @@ class Detection:
         ... )
         >>> 
         >>> # Detection with keypoints for pose estimation
-        >>> nose_point = pf.detections.KeyPoint(250, 120, id=0, name="nose", confidence=0.98)
-        >>> pose_detection = pf.detections.Detection(
+        >>> nose_point = pf.KeyPoint(250, 120, id=0, name="nose", confidence=0.98)
+        >>> pose_detection = pf.Detection(
         ...     bbox=[200, 100, 300, 400],
         ...     class_name="person",
         ...     keypoints=[nose_point]
@@ -326,14 +326,14 @@ class Detection:
             >>> import pixelflow as pf
             >>>
             >>> # Basic detection serialization
-            >>> detection = pf.detections.Detection(bbox=[100, 50, 200, 150], class_name="car")
+            >>> detection = pf.Detection(bbox=[100, 50, 200, 150], class_name="car")
             >>> data = detection.to_dict()
             >>> import json
             >>> json_str = json.dumps(data, indent=2)  # Now JSON-safe!
             >>>
             >>> # Detection with keypoints serialization
-            >>> keypoint = pf.detections.KeyPoint(250, 120, id=0, name="nose", confidence=0.98)
-            >>> detection_with_pose = pf.detections.Detection(
+            >>> keypoint = pf.KeyPoint(250, 120, id=0, name="nose", confidence=0.98)
+            >>> detection_with_pose = pf.Detection(
             ...     bbox=[200, 100, 300, 400],
             ...     keypoints=[keypoint],
             ...     tracker_id=42
@@ -443,7 +443,7 @@ class Detection:
             >>> import json
             >>>
             >>> # Serialize detection with mask
-            >>> detection = pf.detections.Detection(masks=[np.ones((100, 100), dtype=bool)])
+            >>> detection = pf.Detection(masks=[np.ones((100, 100), dtype=bool)])
             >>> data = detection.to_dict()
             >>>
             >>> # Export to JSON and load back
@@ -452,12 +452,12 @@ class Detection:
             >>>
             >>> # Decode mask
             >>> mask_dict = loaded_data['masks'][0]
-            >>> decoded_mask = pf.detections.Detection.decode_mask(mask_dict)
+            >>> decoded_mask = pf.Detection.decode_mask(mask_dict)
             >>> print(decoded_mask.shape)  # (100, 100)
             >>>
             >>> # Polygon mask decoding
             >>> polygon_dict = {'format': 'polygon', 'data': [(0, 0), (100, 0), (100, 100)]}
-            >>> polygon = pf.detections.Detection.decode_mask(polygon_dict)
+            >>> polygon = pf.Detection.decode_mask(polygon_dict)
             >>> print(polygon)  # [(0, 0), (100, 0), (100, 100)]
 
         Notes:
@@ -508,7 +508,7 @@ class Detection:
             >>> 
             >>> # Create detection with complex polygon mask
             >>> complex_polygon = [[100, 100], [101, 100], [102, 101], [200, 200]]
-            >>> detection = pf.detections.Detection(masks=[complex_polygon])
+            >>> detection = pf.Detection(masks=[complex_polygon])
             >>> 
             >>> # Simplify with default settings
             >>> detection.simplify_masks()
@@ -550,7 +550,7 @@ class Detection:
             >>> import pixelflow as pf
             >>>
             >>> # Create and copy detection
-            >>> detection = pf.detections.Detection(bbox=[100, 50, 200, 150], class_name="car")
+            >>> detection = pf.Detection(bbox=[100, 50, 200, 150], class_name="car")
             >>> copied = detection.copy()
             >>>
             >>> # Modifications don't affect original
@@ -612,12 +612,12 @@ class Detections:
         >>> image = cv2.imread("image.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> detections = pf.detections.from_ultralytics(outputs)
+        >>> detections = pf.from_ultralytics(outputs)
         >>> 
         >>> # Manual creation and management
-        >>> detections = pf.detections.Detections()
-        >>> detection1 = pf.detections.Detection(bbox=[100, 50, 200, 150], class_name="person")
-        >>> detection2 = pf.detections.Detection(bbox=[300, 100, 400, 200], class_name="car")
+        >>> detections = pf.Detections()
+        >>> detection1 = pf.Detection(bbox=[100, 50, 200, 150], class_name="person")
+        >>> detection2 = pf.Detection(bbox=[300, 100, 400, 200], class_name="car")
         >>> detections.add_detection(detection1)
         >>> detections.add_detection(detection2)
         >>> 
@@ -672,12 +672,12 @@ class Detections:
             >>> import pixelflow as pf
             >>> 
             >>> # Create container and add detection
-            >>> detections = pf.detections.Detections()
-            >>> detection = pf.detections.Detection(bbox=[100, 50, 200, 150])
+            >>> detections = pf.Detections()
+            >>> detection = pf.Detection(bbox=[100, 50, 200, 150])
             >>> detections.add_detection(detection)
             >>> 
             >>> # Add multiple detections
-            >>> detection2 = pf.detections.Detection(bbox=[200, 100, 300, 200], class_name="car")
+            >>> detection2 = pf.Detection(bbox=[200, 100, 300, 200], class_name="car")
             >>> detections.add_detection(detection2)
             >>> print(f"Total detections: {len(detections)}")
         """

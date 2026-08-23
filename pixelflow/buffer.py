@@ -56,7 +56,7 @@ class Buffer:
         ...         
         ...     # Get raw model outputs and convert to PixelFlow format
         ...     outputs = model.predict(frame)
-        ...     results = pf.detections.from_ultralytics(outputs)
+        ...     results = pf.from_ultralytics(outputs)
         ...     
         ...     # Update buffer and get temporally-delayed frame
         ...     buffered_results, buffered_frame = buffer.update(results, frame)
@@ -172,7 +172,7 @@ class Buffer:
             >>> # Process single frame
             >>> frame = cv2.imread("frame001.jpg")
             >>> outputs = model.predict(frame)
-            >>> results = pf.detections.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> buffered_results, buffered_frame = buffer.update(results, frame)
             >>> 
             >>> # Process video stream with temporal buffering
@@ -180,7 +180,7 @@ class Buffer:
             >>> for frame_idx in range(100):
             ...     ret, frame = cap.read()
             ...     outputs = model.predict(frame)
-            ...     results = pf.detections.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     
             ...     # Get temporally-buffered frame (delayed by buffer_size//2)
             ...     delayed_results, delayed_frame = buffer.update(results, frame)
@@ -255,7 +255,7 @@ class Buffer:
             >>> for i in range(10):
             ...     frame = cv2.imread(f"frame{i:03d}.jpg")
             ...     outputs = model.predict(frame)
-            ...     results = pf.detections.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     buffer.update(results, frame)
             >>> 
             >>> # Get all buffer contents for analysis
@@ -310,7 +310,7 @@ class Buffer:
             >>> for _ in range(10):
             ...     ret, frame = cap.read()
             ...     outputs = model.predict(frame)
-            ...     results = pf.detections.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     buffer.update(results, frame)
             >>> 
             >>> # Get temporal context for analysis

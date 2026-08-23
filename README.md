@@ -19,7 +19,7 @@ zones = pf.Zones()
 zones.add_zone([(100, 400), (500, 400), (500, 600), (100, 600)], zone_id="entrance")
 
 for frame in video:
-    detections = pf.detections.from_ultralytics(model.predict(frame))
+    detections = pf.from_ultralytics(model.predict(frame))
     detections = tracker.update(detections)
     zones.update(detections)
 
@@ -49,42 +49,80 @@ import pixelflow as pf
 # Ultralytics YOLO
 from ultralytics import YOLO
 model = YOLO("yolo11n.pt")
-detections = pf.detections.from_ultralytics(model.predict(image))
+detections = pf.from_ultralytics(model.predict(image))
 
 # Detectron2
 from detectron2.engine import DefaultPredictor
 predictor = DefaultPredictor(cfg)
-detections = pf.detections.from_detectron2(predictor(image), labels=["person", "car"])
+detections = pf.from_detectron2(predictor(image), labels=["person", "car"])
 
 # Mayaku (returns Instances directly; take labels from the checkpoint)
 from mayaku import from_pretrained
 predictor = from_pretrained("mayaku-n-det")
-detections = pf.detections.from_mayaku(predictor("photo.jpg"), labels=predictor.class_names)
+detections = pf.from_mayaku(predictor("photo.jpg"), labels=predictor.class_names)
 
 # HuggingFace Transformers
 from transformers import pipeline
 detector = pipeline("object-detection")
-detections = pf.detections.from_transformers(detector(image))
+detections = pf.from_transformers(detector(image))
 
 # Florence-2 - captions and OCR reads land in det.text, <OD> classes in det.class_name
-detections = pf.detections.from_florence2(model_output, task_prompt="<OD>")
+detections = pf.from_florence2(model_output, task_prompt="<OD>")
 
 # SAM (Segment Anything)
-detections = pf.detections.from_sam(masks, scores)
+detections = pf.from_sam(masks, scores)
 
 # RF-DETR
-detections = pf.detections.from_rfdetr(model_output)
+detections = pf.from_rfdetr(model_output)
 
 # Supervision
-detections = pf.detections.from_supervision(sv_detections)
+detections = pf.from_supervision(sv_detections)
 
 # EasyOCR - text lands in det.text, the quad in det.segments
 import easyocr
 reader = easyocr.Reader(['en'])
-detections = pf.detections.from_easyocr(reader.readtext("sign.jpg"))
+detections = pf.from_easyocr(reader.readtext("sign.jpg"))
 
 # Plain arrays (numpy or torch) - no framework container to convert from
-detections = pf.detections.from_arrays(boxes, scores, class_ids, labels=model.class_names)
+detections = pf.from_arrays(boxes, scores, class_ids, labels=model.class_names)
+```
+
+### Classifications - When the Model Only Names
+
+A classifier localises nothing, so its result carries no geometry at all:
+
+```python
+import pixelflow as pf
+
+# Ultralytics -cls checkpoints
+from ultralytics import YOLO
+model = YOLO("yolo11n-cls.pt")
+result = pf.from_ultralytics_classification(model.predict("dog.jpg"))
+
+result.top1.class_name              # 'golden retriever'
+result.top_k(5)                     # -> Classifications, best first
+result.to_json()
+
+# Plain scores - CLIP zero-shot, a vendored ResNet, anything with a score vector
+prompts = ["a photo of a cat", "a photo of a dog"]
+result = pf.from_scores(similarities, labels=prompts)
+
+# Multi-label: however many labels genuinely match, not a fixed count
+matches = result.filter_by_confidence(0.3)
+
+# Draw it
+frame = pf.annotate.classification(frame, result, top_k=3)
+```
+
+Scores are reported exactly as the model emitted them. PixelFlow does not normalise,
+re-softmax, or assume they sum to 1, so a softmax over a fixed class list and an
+independent per-label similarity both survive intact. A model emitting logits should
+be converted by the caller, who is the only one who knows which convention applies.
+
+Per-frame paths can skip building a row per class:
+
+```python
+result = pf.from_ultralytics_classification(model.predict(frame), top_k=5)
 ```
 
 ### Powerful Filtering
@@ -198,7 +236,7 @@ import pixelflow as pf
 tracker = pf.tracker.ByteTracker()
 
 for frame in media.frames:
-    detections = pf.detections.from_ultralytics(model.predict(frame))
+    detections = pf.from_ultralytics(model.predict(frame))
     detections = tracker.update(detections)
 
     for det in detections:
@@ -278,7 +316,7 @@ slicer = pf.SlicedInference(
 )
 
 def detector(image):
-    return pf.detections.from_ultralytics(model.predict(image))
+    return pf.from_ultralytics(model.predict(image))
 
 # Run on 4K image - automatically slices, detects, and merges
 large_image = cv2.imread("satellite.jpg")  # 4000x3000
@@ -301,7 +339,7 @@ crossings.add_line(
 )
 
 for frame in media.frames:
-    detections = tracker.update(pf.detections.from_ultralytics(model.predict(frame)))
+    detections = tracker.update(pf.from_ultralytics(model.predict(frame)))
     crossings.update(detections)
 
     print(f"Crossed: {crossings.get_counts()}")

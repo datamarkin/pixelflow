@@ -180,15 +180,15 @@ class TestTransformPipeline:
         img, dets = pf.transform.crop_detections(img, dets, [100, 100, 400, 400])
 
         # Simulate new detections in transformed space
-        new_dets = pf.detections.Detections()
-        new_dets.add_detection(pf.detections.Detection(
+        new_dets = pf.Detections()
+        new_dets.add_detection(pf.Detection(
             bbox=[50, 50, 100, 100]
         ))
 
         # Apply inverse (if tracking is enabled)
         try:
             original_coords = pf.transform.inverse_transforms(new_dets)
-            assert isinstance(original_coords, pf.detections.Detections)
+            assert isinstance(original_coords, pf.Detections)
         except (AttributeError, NotImplementedError):
             # Inverse transforms may not be fully implemented
             pass
@@ -209,8 +209,8 @@ class TestVideoProcessingPipeline:
         processed_count = 0
         for frame in video:
             # Create mock detections
-            detections = pf.detections.Detections()
-            detections.add_detection(pf.detections.Detection(
+            detections = pf.Detections()
+            detections.add_detection(pf.Detection(
                 bbox=[100, 100, 200, 200],
                 confidence=0.9,
                 class_id=0
@@ -228,7 +228,7 @@ class TestVideoProcessingPipeline:
         """Test video processing with frame buffering."""
         video = pf.VideoReader(temp_video_path)
         buffer = pf.Buffer(frames=5)
-        results = pf.detections.Detections()
+        results = pf.Detections()
 
         for frame in video:
             buffer.update(results, frame)
@@ -245,8 +245,8 @@ class TestVideoProcessingPipeline:
         frame_count = 0
         for frame in video:
             # Simulate tracked detections
-            detections = pf.detections.Detections()
-            detections.add_detection(pf.detections.Detection(
+            detections = pf.Detections()
+            detections.add_detection(pf.Detection(
                 bbox=[100 + frame_count * 5, 100, 200 + frame_count * 5, 200],
                 confidence=0.9,
                 class_id=0,
@@ -304,7 +304,7 @@ class TestComplexPipelines:
             overlap_ratio_w=0.2
         )
 
-        all_detections = pf.detections.Detections()
+        all_detections = pf.Detections()
 
         # Process each slice
         slices = slicer.generate_slices(
@@ -316,7 +316,7 @@ class TestComplexPipelines:
         for x1, y1, x2, y2, _slice_id in slices:
             x_offset, y_offset = x1, y1
             # Mock detection in slice
-            slice_det = pf.detections.Detection(
+            slice_det = pf.Detection(
                 bbox=[10, 10, 50, 50],
                 confidence=0.9
             )
@@ -329,7 +329,7 @@ class TestComplexPipelines:
                 slice_det.bbox[3] + y_offset
             ]
 
-            all_detections.add_detection(pf.detections.Detection(
+            all_detections.add_detection(pf.Detection(
                 bbox=adjusted_bbox,
                 confidence=slice_det.confidence
             ))
@@ -352,10 +352,10 @@ class TestPerformance:
     def test_large_batch_processing(self, sample_image):
         """Test processing large batch of detections."""
         # Create many detections
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
 
         for i in range(100):
-            detections.add_detection(pf.detections.Detection(
+            detections.add_detection(pf.Detection(
                 bbox=[i * 5, i * 4, i * 5 + 50, i * 4 + 50],
                 confidence=0.9,
                 class_id=i % 3
@@ -381,8 +381,8 @@ class TestPerformance:
 
         for frame in video:
             # Mock detection
-            dets = pf.detections.Detections()
-            dets.add_detection(pf.detections.Detection(
+            dets = pf.Detections()
+            dets.add_detection(pf.Detection(
                 bbox=[100, 100, 200, 200]
             ))
 
@@ -415,8 +415,8 @@ class TestErrorHandling:
     def test_pipeline_with_invalid_data(self, sample_image):
         """Test pipeline handles invalid data gracefully."""
         # Detection with None values
-        detections = pf.detections.Detections()
-        detections.add_detection(pf.detections.Detection(
+        detections = pf.Detections()
+        detections.add_detection(pf.Detection(
             bbox=[100, 100, 200, 200],
             confidence=None,
             class_id=None

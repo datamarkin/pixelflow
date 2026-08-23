@@ -137,7 +137,7 @@ class TestZoneDetectionUpdate:
         updated = sample_zones.update(sample_detections)
 
         # Should return Detections instance
-        assert isinstance(updated, pf.detections.Detections)
+        assert isinstance(updated, pf.Detections)
         # Should have same number of detections
         assert len(updated) == len(sample_detections)
 
@@ -185,7 +185,7 @@ class TestZoneDetectionUpdate:
         updated = zones.update(sample_detections)
         # Bottom center of first detection would be at (150, 200)
 
-        assert isinstance(updated, pf.detections.Detections)
+        assert isinstance(updated, pf.Detections)
 
 
 # ============================================================================
@@ -204,9 +204,9 @@ class TestTriggerStrategies:
             trigger_strategy="center"
         )
 
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         # Detection with center at (150, 150) - inside zone
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[125, 125, 175, 175]
         ))
 
@@ -222,9 +222,9 @@ class TestTriggerStrategies:
             trigger_strategy="overlap"
         )
 
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         # Detection partially overlapping zone
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[150, 150, 250, 250]
         ))
 
@@ -241,9 +241,9 @@ class TestTriggerStrategies:
             overlap_threshold=0.5
         )
 
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         # Detection with >50% overlap
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[120, 120, 180, 180]
         ))
 
@@ -259,9 +259,9 @@ class TestTriggerStrategies:
             trigger_strategy="contains"
         )
 
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         # Detection fully inside zone
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[100, 100, 150, 150]
         ))
 
@@ -366,17 +366,17 @@ class TestCrossingDetection:
 
         # Create detections simulating movement across line
         # This would require tracking data
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
 
         # Detection below line (y=250)
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[150, 250, 200, 300],
             tracker_id=1
         ))
 
         updated = crossings.update(detections)
 
-        assert isinstance(updated, pf.detections.Detections)
+        assert isinstance(updated, pf.Detections)
 
     def test_crossing_count_updates(self):
         """Test that crossing counts update."""
@@ -431,7 +431,7 @@ class TestZoneCrossingEdgeCases:
         updated = crossings.update(sample_detections)
 
         # Should handle gracefully
-        assert isinstance(updated, pf.detections.Detections)
+        assert isinstance(updated, pf.Detections)
 
     def test_zone_update_preserves_detections(self, sample_zones, sample_detections):
         """Test that zone update preserves detection properties."""

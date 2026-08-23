@@ -44,27 +44,27 @@ def small_image() -> np.ndarray:
 # ============================================================================
 
 @pytest.fixture
-def sample_keypoint() -> pf.detections.KeyPoint:
+def sample_keypoint() -> pf.KeyPoint:
     """Create a sample keypoint."""
-    return pf.detections.KeyPoint(x=100, y=200, id=0, name="nose", confidence=0.9)
+    return pf.KeyPoint(x=100, y=200, id=0, name="nose", confidence=0.9)
 
 
 @pytest.fixture
-def sample_keypoints() -> List[pf.detections.KeyPoint]:
+def sample_keypoints() -> List[pf.KeyPoint]:
     """Create a list of sample keypoints for pose estimation."""
     return [
-        pf.detections.KeyPoint(x=100, y=100, id=0, name="nose", confidence=0.9),
-        pf.detections.KeyPoint(x=90, y=110, id=1, name="left_eye", confidence=0.9),
-        pf.detections.KeyPoint(x=110, y=110, id=2, name="right_eye", confidence=0.9),
-        pf.detections.KeyPoint(x=80, y=130, id=3, name="left_ear", confidence=0.0),
-        pf.detections.KeyPoint(x=120, y=130, id=4, name="right_ear", confidence=0.9),
+        pf.KeyPoint(x=100, y=100, id=0, name="nose", confidence=0.9),
+        pf.KeyPoint(x=90, y=110, id=1, name="left_eye", confidence=0.9),
+        pf.KeyPoint(x=110, y=110, id=2, name="right_eye", confidence=0.9),
+        pf.KeyPoint(x=80, y=130, id=3, name="left_ear", confidence=0.0),
+        pf.KeyPoint(x=120, y=130, id=4, name="right_ear", confidence=0.9),
     ]
 
 
 @pytest.fixture
-def sample_detection() -> pf.detections.Detection:
+def sample_detection() -> pf.Detection:
     """Create a single sample detection."""
-    return pf.detections.Detection(
+    return pf.Detection(
         bbox=[100, 100, 200, 200],
         confidence=0.95,
         class_id=0,
@@ -73,7 +73,7 @@ def sample_detection() -> pf.detections.Detection:
 
 
 @pytest.fixture
-def sample_detection_with_mask() -> pf.detections.Detection:
+def sample_detection_with_mask() -> pf.Detection:
     """Create a detection with a binary mask.
 
     The mask is full-frame (480x640, matching blank_image/sample_image) because
@@ -81,7 +81,7 @@ def sample_detection_with_mask() -> pf.detections.Detection:
     """
     mask = np.zeros((480, 640), dtype=bool)
     mask[100:200, 100:200] = True  # matches the bbox below
-    return pf.detections.Detection(
+    return pf.Detection(
         bbox=[100, 100, 200, 200],
         confidence=0.9,
         class_id=0,
@@ -91,9 +91,9 @@ def sample_detection_with_mask() -> pf.detections.Detection:
 
 
 @pytest.fixture
-def sample_detection_with_keypoints(sample_keypoints) -> pf.detections.Detection:
+def sample_detection_with_keypoints(sample_keypoints) -> pf.Detection:
     """Create a detection with keypoints."""
-    return pf.detections.Detection(
+    return pf.Detection(
         bbox=[50, 50, 150, 200],
         confidence=0.88,
         class_id=0,
@@ -103,19 +103,19 @@ def sample_detection_with_keypoints(sample_keypoints) -> pf.detections.Detection
 
 
 @pytest.fixture
-def sample_detections() -> pf.detections.Detections:
+def sample_detections() -> pf.Detections:
     """Create a Detections container with multiple detections."""
-    detections = pf.detections.Detections()
+    detections = pf.Detections()
 
     # Add person detections
-    detections.add_detection(pf.detections.Detection(
+    detections.add_detection(pf.Detection(
         bbox=[100, 100, 200, 200],
         confidence=0.95,
         class_id=0,
         class_name="person"
     ))
 
-    detections.add_detection(pf.detections.Detection(
+    detections.add_detection(pf.Detection(
         bbox=[300, 150, 400, 280],
         confidence=0.87,
         class_id=0,
@@ -123,7 +123,7 @@ def sample_detections() -> pf.detections.Detections:
     ))
 
     # Add car detection
-    detections.add_detection(pf.detections.Detection(
+    detections.add_detection(pf.Detection(
         bbox=[450, 300, 580, 420],
         confidence=0.92,
         class_id=2,
@@ -131,7 +131,7 @@ def sample_detections() -> pf.detections.Detections:
     ))
 
     # Add low confidence detection
-    detections.add_detection(pf.detections.Detection(
+    detections.add_detection(pf.Detection(
         bbox=[50, 50, 100, 100],
         confidence=0.45,
         class_id=1,
@@ -142,9 +142,9 @@ def sample_detections() -> pf.detections.Detections:
 
 
 @pytest.fixture
-def empty_detections() -> pf.detections.Detections:
+def empty_detections() -> pf.Detections:
     """Create an empty Detections container."""
-    return pf.detections.Detections()
+    return pf.Detections()
 
 
 # ============================================================================
@@ -195,11 +195,11 @@ def sample_zones() -> pf.Zones:
 # ============================================================================
 
 @pytest.fixture
-def tracked_detections() -> pf.detections.Detections:
+def tracked_detections() -> pf.Detections:
     """Create detections with tracking IDs."""
-    detections = pf.detections.Detections()
+    detections = pf.Detections()
 
-    detections.add_detection(pf.detections.Detection(
+    detections.add_detection(pf.Detection(
         bbox=[100, 100, 200, 200],
         confidence=0.95,
         class_id=0,
@@ -208,7 +208,7 @@ def tracked_detections() -> pf.detections.Detections:
         total_time=5.0
     ))
 
-    detections.add_detection(pf.detections.Detection(
+    detections.add_detection(pf.Detection(
         bbox=[300, 150, 400, 280],
         confidence=0.87,
         class_id=0,

@@ -61,7 +61,7 @@ def blur(
         >>> image = cv2.imread("faces_in_crowd.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Apply blur with default adaptive settings
         >>> blurred_image = pf.annotators.blur(image, detections)

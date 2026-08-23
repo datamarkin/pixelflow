@@ -1,20 +1,21 @@
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "Datamarkin"
 
 # Import core modules
-from . import detections
-
 from . import media
 from . import annotators as annotate
 from . import transforms as transform
 from . import colors
-# from . import zones
-# from . import crossings
 from . import slicer
 from . import smoother
 from . import timer
 from . import tracker
 from . import assets
+
+# Converters are flat -- pf.from_ultralytics(...) -- and the subpackage owns its own
+# export list, so a new one is declared once rather than re-typed here.
+from .detections import *
+from .detections import __all__ as _DETECTION_EXPORTS
 
 # Import specific functions for top-level access
 from .media import (
@@ -31,8 +32,8 @@ from .timer import TimeTracker
 
 # Define the public API
 __all__ = [
-    # Core data structures
-    "detections",
+    # Result types and converters, declared by the subpackage that owns them
+    *_DETECTION_EXPORTS,
 
     # Visual components
     "annotate",
@@ -74,8 +75,6 @@ __all__ = [
     "timer",
     "TimeTracker",
     "tracker",
-
-    # Constants
 
     # Metadata
     "__version__",

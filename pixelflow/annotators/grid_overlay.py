@@ -68,7 +68,7 @@ def grid_overlay(
         >>> image = cv2.imread("path/to/image.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>> 
         >>> # Draw grids with automatic sizing based on box dimensions
         >>> annotated = pf.annotate.grid_overlay(image, detections)

@@ -176,13 +176,13 @@ class TestDetectionRotation:
 
         # Should return both image and detections
         assert isinstance(rotated_img, np.ndarray)
-        assert isinstance(rotated_dets, pf.detections.Detections)
+        assert isinstance(rotated_dets, pf.Detections)
         # Should have same number of detections
         assert len(rotated_dets) == len(sample_detections)
 
     def test_rotate_detections_90(self, sample_image, sample_detection):
         """Test 90 degree rotation with detection."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         rotated_img, rotated_dets = pf.transform.rotate_detections(
@@ -196,7 +196,7 @@ class TestDetectionRotation:
 
     def test_rotate_detections_with_keypoints(self, sample_image, sample_detection_with_keypoints):
         """Test rotation with keypoints."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection_with_keypoints)
 
         rotated_img, rotated_dets = pf.transform.rotate_detections(
@@ -269,15 +269,15 @@ class TestDetectionCropping:
 
     def test_crop_detections_filters_outside(self, sample_image):
         """Test that cropping filters out detections outside crop region."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
 
         # Detection inside crop region
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[100, 100, 150, 150]
         ))
 
         # Detection outside crop region
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[400, 400, 500, 500]
         ))
 
@@ -292,7 +292,7 @@ class TestDetectionCropping:
 
     def test_crop_around_detections(self, sample_image, sample_detection):
         """Test cropping around specific detections."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         # Returns one crop per detection (a list), not an (image, detections)
@@ -316,7 +316,7 @@ class TestDetectionPadding:
 
     def test_add_padding_basic(self, sample_detection):
         """Test adding padding to detection bbox."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         padded_dets = pf.transform.add_padding(detections, padding=0.1)
@@ -342,7 +342,7 @@ class TestKeypointAlignment:
 
     def test_rotate_to_align(self, sample_image, sample_detection_with_keypoints):
         """Test rotating to align keypoints horizontally."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection_with_keypoints)
 
         aligned_img, aligned_dets = pf.transform.rotate_to_align(
@@ -362,7 +362,7 @@ class TestBboxFromKeypoints:
 
     def test_update_bbox_from_keypoints(self, sample_detection_with_keypoints):
         """Test updating bbox to encompass keypoints."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection_with_keypoints)
 
         updated_dets = pf.transform.update_bbox_from_keypoints(
@@ -393,10 +393,10 @@ class TestInverseTransforms:
         The rest of the suite uses whole-number boxes, which cannot tell a
         precision-preserving transform apart from a truncating one.
         """
-        dets = pf.detections.Detections()
-        dets.add_detection(pf.detections.Detection(
+        dets = pf.Detections()
+        dets.add_detection(pf.Detection(
             bbox=list(FRACTIONAL_BBOX), confidence=0.9, class_id=0, class_name="person",
-            keypoints=[pf.detections.KeyPoint(*FRACTIONAL_KEYPOINT, id=0, name="nose")],
+            keypoints=[pf.KeyPoint(*FRACTIONAL_KEYPOINT, id=0, name="nose")],
             segments=[list(FRACTIONAL_KEYPOINT), [50.9, 60.4]],
         ))
         return dets
@@ -482,8 +482,8 @@ class TestInverseTransforms:
         )
 
         # Create new detections in transformed space
-        new_dets = pf.detections.Detections()
-        new_dets.add_detection(pf.detections.Detection(
+        new_dets = pf.Detections()
+        new_dets.add_detection(pf.Detection(
             bbox=[50, 50, 100, 100]
         ))
 
@@ -491,7 +491,7 @@ class TestInverseTransforms:
         original_coords = pf.transform.inverse_transforms(new_dets)
 
         # Should return detections in original coordinate space
-        assert isinstance(original_coords, pf.detections.Detections)
+        assert isinstance(original_coords, pf.Detections)
 
     def test_inverse_with_multiple_transforms(self, sample_image, sample_detections):
         """Test inverse transforms with complex chain."""
@@ -503,13 +503,13 @@ class TestInverseTransforms:
         img, dets = pf.transform.crop_detections(img, dets, bbox=[100, 100, 400, 400])
 
         # New detections in transformed space
-        new_dets = pf.detections.Detections()
-        new_dets.add_detection(pf.detections.Detection(bbox=[50, 50, 100, 100]))
+        new_dets = pf.Detections()
+        new_dets.add_detection(pf.Detection(bbox=[50, 50, 100, 100]))
 
         # Inverse should undo all transforms
         original = pf.transform.inverse_transforms(new_dets)
 
-        assert isinstance(original, pf.detections.Detections)
+        assert isinstance(original, pf.Detections)
 
 
 # ============================================================================
@@ -536,7 +536,7 @@ class TestTransformEdgeCases:
         sample_detection.class_id = 5
         sample_detection.class_name = "test"
 
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         _, transformed = pf.transform.rotate_detections(sample_image, detections, 30)

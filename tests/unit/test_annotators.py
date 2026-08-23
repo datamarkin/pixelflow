@@ -29,7 +29,7 @@ class TestBoxAnnotator:
 
     def test_box_with_thickness(self, blank_image, sample_detection):
         """Test box with custom thickness."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated = pf.annotate.box(
@@ -42,7 +42,7 @@ class TestBoxAnnotator:
 
     def test_box_with_color(self, blank_image, sample_detection):
         """Test box with custom color."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated = pf.annotate.box(
@@ -84,7 +84,7 @@ class TestLabelAnnotator:
     def test_label_with_custom_labels(self, blank_image, sample_detection):
         """Test labels with custom text."""
         sample_detection.label = "Custom Label"
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated = pf.annotate.label(blank_image.copy(), detections)
@@ -92,7 +92,7 @@ class TestLabelAnnotator:
 
     def test_label_position(self, blank_image, sample_detection):
         """Test label with different positions."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         # Top position
@@ -127,7 +127,7 @@ class TestMaskAnnotator:
 
     def test_mask_basic(self, blank_image, sample_detection_with_mask):
         """Test basic mask annotation."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection_with_mask)
 
         annotated = pf.annotate.mask(blank_image.copy(), detections)
@@ -137,7 +137,7 @@ class TestMaskAnnotator:
 
     def test_mask_with_opacity(self, blank_image, sample_detection_with_mask):
         """Test mask with different opacity values."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection_with_mask)
 
         annotated_low = pf.annotate.mask(
@@ -157,7 +157,7 @@ class TestMaskAnnotator:
 
     def test_mask_no_masks(self, blank_image, sample_detection):
         """Test mask annotator with detections without masks."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)  # No mask
 
         annotated = pf.annotate.mask(blank_image.copy(), detections)
@@ -183,7 +183,7 @@ class TestBlurAnnotator:
 
     def test_blur_strength(self, sample_image, sample_detection):
         """Test blur with different strengths."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated_weak = pf.annotate.blur(
@@ -223,7 +223,7 @@ class TestPixelateAnnotator:
 
     def test_pixelate_pixel_size(self, sample_image, sample_detection):
         """Test pixelate with different pixel sizes."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated_small = pf.annotate.pixelate(
@@ -258,11 +258,11 @@ class TestPolygonAnnotator:
         """Test basic polygon annotation."""
         # Create detection with polygon segments
         polygon = [(100, 100), (200, 100), (200, 200), (100, 200)]
-        det = pf.detections.Detection(
+        det = pf.Detection(
             bbox=[100, 100, 200, 200],
             segments=polygon
         )
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(det)
 
         annotated = pf.annotate.polygon(blank_image.copy(), detections)
@@ -273,8 +273,8 @@ class TestPolygonAnnotator:
     def test_polygon_thickness(self, blank_image):
         """Test polygon with custom thickness."""
         polygon = [(100, 100), (200, 100), (200, 200), (100, 200)]
-        det = pf.detections.Detection(bbox=[100, 100, 200, 200], segments=polygon)
-        detections = pf.detections.Detections()
+        det = pf.Detection(bbox=[100, 100, 200, 200], segments=polygon)
+        detections = pf.Detections()
         detections.add_detection(det)
 
         annotated = pf.annotate.polygon(
@@ -287,7 +287,7 @@ class TestPolygonAnnotator:
 
     def test_polygon_no_segments(self, blank_image, sample_detection):
         """Test polygon with detections without segments."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)  # No segments
 
         annotated = pf.annotate.polygon(blank_image.copy(), detections)
@@ -311,7 +311,7 @@ class TestOvalAnnotator:
 
     def test_oval_thickness(self, blank_image, sample_detection):
         """Test oval with custom thickness."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated = pf.annotate.oval(
@@ -324,7 +324,7 @@ class TestOvalAnnotator:
 
     def test_oval_filled(self, blank_image, sample_detection):
         """Test filled oval."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated = pf.annotate.oval(
@@ -352,7 +352,7 @@ class TestAnchorsAnnotator:
 
     def test_anchors_radius(self, blank_image, sample_detection):
         """Test anchors with custom radius."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         annotated = pf.annotate.anchors(
@@ -449,7 +449,7 @@ class TestMultiLayerAnnotation:
 
     def test_layer_mask_box_label(self, blank_image, sample_detection_with_mask):
         """Test layering mask, box, and label."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection_with_mask)
 
         # Layer annotations
@@ -492,8 +492,8 @@ class TestAnnotatorEdgeCases:
     def test_annotator_with_small_image(self, small_image, sample_detection):
         """Test annotators on very small images."""
         # Adjust detection to fit small image
-        det = pf.detections.Detection(bbox=[10, 10, 90, 90])
-        detections = pf.detections.Detections()
+        det = pf.Detection(bbox=[10, 10, 90, 90])
+        detections = pf.Detections()
         detections.add_detection(det)
 
         # Should handle small images gracefully
@@ -503,8 +503,8 @@ class TestAnnotatorEdgeCases:
     def test_annotator_with_out_of_bounds_bbox(self, blank_image):
         """Test annotator with bbox outside image boundaries."""
         # Detection extending beyond image
-        det = pf.detections.Detection(bbox=[600, 450, 700, 550])
-        detections = pf.detections.Detections()
+        det = pf.Detection(bbox=[600, 450, 700, 550])
+        detections = pf.Detections()
         detections.add_detection(det)
 
         # Should handle gracefully without crashing
@@ -513,7 +513,7 @@ class TestAnnotatorEdgeCases:
 
     def test_annotator_modifies_copy_not_original(self, blank_image, sample_detection):
         """Test that annotators don't modify original if copy is passed."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
         detections.add_detection(sample_detection)
 
         original = blank_image.copy()

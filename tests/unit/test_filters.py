@@ -280,15 +280,15 @@ class TestDuplicateFilters:
 
     def test_remove_duplicates_basic(self):
         """Test removing duplicate detections."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
 
         # Add overlapping detections of same class
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[100, 100, 200, 200],
             confidence=0.95,
             class_id=0
         ))
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[105, 105, 205, 205],  # Slightly overlapping
             confidence=0.85,
             class_id=0
@@ -300,13 +300,13 @@ class TestDuplicateFilters:
 
     def test_filter_overlapping_basic(self):
         """Test filtering overlapping detections."""
-        detections = pf.detections.Detections()
+        detections = pf.Detections()
 
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[100, 100, 200, 200],
             class_id=0
         ))
-        detections.add_detection(pf.detections.Detection(
+        detections.add_detection(pf.Detection(
             bbox=[150, 150, 250, 250],  # Overlaps with first
             class_id=0
         ))

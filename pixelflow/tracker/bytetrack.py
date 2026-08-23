@@ -53,7 +53,7 @@ class TrackerMetrics:
             >>> 
             >>> for frame in pf.video.get_video_frames(video_path):
             ...     outputs = model.predict(frame)
-            ...     results = pf.results.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     tracked_results = tracker.update(results)
             >>> 
             >>> # Export metrics
@@ -123,7 +123,7 @@ class ByteTracker:
         >>> # Process video frames
         >>> for frame in pf.video.get_video_frames(video_path):
         ...     outputs = model.predict(frame)
-        ...     results = pf.results.from_ultralytics(outputs)
+        ...     results = pf.from_ultralytics(outputs)
         ...     tracked_results = tracker.update(results)
         ...     print(f"Frame has {len(tracked_results)} tracked objects")
         >>> 
@@ -290,7 +290,7 @@ class ByteTracker:
             >>> model = YOLO("yolo11n.pt")
             >>> image = cv2.imread("frame.jpg")
             >>> outputs = model.predict(image)
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> tracked_results = tracker.update(results)
             >>> print(f"Tracked {len(tracked_results)} objects with IDs")
             >>> 
@@ -301,7 +301,7 @@ class ByteTracker:
             ...     if not ret:
             ...         break
             ...     outputs = model.predict(frame)
-            ...     results = pf.results.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     tracked_results = tracker.update(results)
             ...     # Process tracked results...
             >>> cap.release()
@@ -310,13 +310,13 @@ class ByteTracker:
             >>> video_path = "path/to/video.mp4"
             >>> for frame in pf.video.get_video_frames(video_path):
             ...     outputs = model.predict(frame)
-            ...     results = pf.results.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     tracked_results = tracker.update(results)
             >>> metrics = tracker.get_metrics()
             >>> print(f"Total tracks: {metrics['total_tracks']}")
             >>> 
             >>> # Handle empty detections gracefully
-            >>> empty_results = pf.results.Results(detections=[])
+            >>> empty_results = pf.Detections()
             >>> tracked_empty = tracker.update(empty_results)
             >>> # Tracker continues to predict existing tracks
         
@@ -810,7 +810,7 @@ class ByteTracker:
             >>> 
             >>> for frame in pf.video.get_video_frames("video.mp4"):
             ...     outputs = model.predict(frame)
-            ...     results = pf.results.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     tracked_results = tracker.update(results)
             >>> 
             >>> # Get performance summary

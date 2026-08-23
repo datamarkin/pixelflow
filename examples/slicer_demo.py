@@ -76,7 +76,7 @@ def yolo_detector_wrapper(image: np.ndarray, model, confidence=0.25) -> Results:
         detections = model(image, conf=confidence, verbose=False)
         
         # Convert to PixelFlow format
-        results = pf.results.from_ultralytics(detections)
+        results = pf.from_ultralytics(detections)
         return results
     
     except Exception as e:
@@ -101,7 +101,7 @@ def detectron2_detector_wrapper(image: np.ndarray, predictor, confidence=0.25) -
         outputs = predictor(image)
         
         # Convert to PixelFlow format
-        results = pf.results.from_detectron2(outputs)
+        results = pf.from_detectron2(outputs)
         
         # Apply confidence filtering
         results = results.filter_by_confidence(confidence)

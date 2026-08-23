@@ -51,7 +51,7 @@ def polygon(
         >>> image = cv2.imread("path/to/image.jpg")
         >>> model = YOLO("yolo11n-seg.pt")  # Segmentation model
         >>> outputs = model.predict(image)
-        >>> results = pf.results.from_ultralytics(outputs)
+        >>> results = pf.from_ultralytics(outputs)
         >>> 
         >>> # Draw polygon outlines with default settings
         >>> annotated = pf.annotators.polygon(image, results)

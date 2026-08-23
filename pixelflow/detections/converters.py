@@ -122,7 +122,7 @@ def from_datamarkin(api_response: Dict[str, Any]):
 
     Example:
         >>> import pixelflow as pf
-        >>> detections = pf.detections.from_datamarkin(api_response)
+        >>> detections = pf.from_datamarkin(api_response)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
@@ -246,14 +246,14 @@ def from_florence2(
         >>> import pixelflow as pf
         >>> task = "<OD>"
         >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(w, h))
-        >>> detections = pf.detections.from_florence2(parsed, task_prompt=task)
+        >>> detections = pf.from_florence2(parsed, task_prompt=task)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.bbox}")
         >>>
         >>> # Captioning and OCR tasks fill `text` instead, and leave class_name None
         >>> task = "<DENSE_REGION_CAPTION>"
         >>> parsed = processor.post_process_generation(outputs, task=task, image_size=(w, h))
-        >>> for det in pf.detections.from_florence2(parsed, task_prompt=task):
+        >>> for det in pf.from_florence2(parsed, task_prompt=task):
         ...     print(f"{det.text}: {det.bbox}")
 
     Notes:
@@ -430,7 +430,7 @@ def from_arrays(boxes, scores, class_ids=None, masks=None, keypoints=None, label
     Example:
         >>> import pixelflow as pf
         >>> boxes = [[10, 20, 110, 220], [30, 40, 130, 240]]
-        >>> detections = pf.detections.from_arrays(
+        >>> detections = pf.from_arrays(
         ...     boxes, scores=[0.9, 0.8], class_ids=[0, 2], labels=["person", "bike", "car"]
         ... )
         >>> len(detections)
@@ -519,7 +519,7 @@ def from_detectron2(detectron2_results: Dict[str, Any], labels=None):
     Example:
         >>> import pixelflow as pf
         >>> outputs = predictor(image)
-        >>> detections = pf.detections.from_detectron2(outputs, labels=predictor.class_names)
+        >>> detections = pf.from_detectron2(outputs, labels=predictor.class_names)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
@@ -635,7 +635,7 @@ def from_mayaku(mayaku_instances, labels=None):
         >>> instances = predictor("photo.jpg")
         >>>
         >>> # Take the vocabulary from the checkpoint, not a hardcoded list.
-        >>> detections = pf.detections.from_mayaku(
+        >>> detections = pf.from_mayaku(
         ...     instances, labels=predictor.class_names
         ... )
         >>> for det in detections:
@@ -734,13 +734,13 @@ def from_ultralytics(ultralytics_results: Union[Any, List[Any]], labels=None):
         >>> from ultralytics import YOLO
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)
-        >>> detections = pf.detections.from_ultralytics(outputs)
+        >>> detections = pf.from_ultralytics(outputs)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}, bbox={det.bbox}")
 
     Notes:
         - tracker_id is set when using model.track() with persist=True.
-        - Classification models produce a single detection with top-5 predictions in metadata.
+        - Classification results raise; they belong to pf.from_ultralytics_classification().
         - Binary masks are resized to original image dimensions with letterbox padding removed.
     """
     from .detections import Detections, Detection
@@ -1020,7 +1020,7 @@ def from_supervision(
 
     Example:
         >>> import pixelflow as pf
-        >>> detections = pf.detections.from_supervision(sv_detections, labels=model.class_names)
+        >>> detections = pf.from_supervision(sv_detections, labels=model.class_names)
         >>> for det in detections:
         ...     print(f"{det.class_name}: {det.confidence:.2f}")
 
@@ -1108,7 +1108,7 @@ def from_rfdetr(
         >>> rfdetr_output = model.predict(image, threshold=0.5)
         >>>
         >>> # Convert with COCO labels for meaningful names
-        >>> pf_detections = pf.detections.from_rfdetr(rfdetr_output, labels=model.class_names)
+        >>> pf_detections = pf.from_rfdetr(rfdetr_output, labels=model.class_names)
         >>> print(f"Detected {len(pf_detections)} objects")
 
     Notes:
@@ -1140,7 +1140,7 @@ def from_easyocr(easyocr_results: List[Any]):
         >>> import pixelflow as pf
         >>>
         >>> reader = easyocr.Reader(['en'])
-        >>> detections = pf.detections.from_easyocr(reader.readtext("sign.jpg"))
+        >>> detections = pf.from_easyocr(reader.readtext("sign.jpg"))
         >>> for det in detections:
         ...     print(det.text, det.bbox)
 
@@ -1279,7 +1279,7 @@ def from_falcon_perception(
         >>> image = Image.open("photo.jpg")
         >>> prompt = build_prompt_for_task(query="cat", task="detection")
         >>> output = engine.generate(image=image, prompt=prompt, max_tokens=1024)
-        >>> detections = pf.detections.from_falcon_perception(
+        >>> detections = pf.from_falcon_perception(
         ...     output, image_size=(image.width, image.height), label="cat"
         ... )
         >>> for det in detections:

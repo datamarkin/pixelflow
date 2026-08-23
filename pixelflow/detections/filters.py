@@ -49,7 +49,7 @@ def filter_by_confidence(self, threshold: float) -> 'Detections':
         >>> model = YOLO("yolov8n.pt")
         >>> image = cv2.imread("traffic_scene.jpg")
         >>> outputs = model.predict(image)
-        >>> detections = pf.detections.from_ultralytics(outputs)
+        >>> detections = pf.from_ultralytics(outputs)
         >>> 
         >>> # Basic filtering: keep high-confidence detections
         >>> high_conf = detections.filter_by_confidence(0.8)
@@ -116,7 +116,7 @@ def filter_by_class_id(self, class_ids: Union[int, str, List[Union[int, str]]]) 
         >>> model = YOLO("yolov8n.pt")
         >>> image = cv2.imread("street_scene.jpg")
         >>> outputs = model.predict(image)
-        >>> detections = pf.detections.from_ultralytics(outputs)
+        >>> detections = pf.from_ultralytics(outputs)
         >>> 
         >>> # Filter for specific class by numeric ID (COCO format)
         >>> people = detections.filter_by_class_id(0)  # person class

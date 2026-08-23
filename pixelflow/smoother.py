@@ -60,7 +60,7 @@ def smooth(buffer: 'Buffer', temporal_weight_decay: float = 0.8) -> Detections:
         >>>
         >>>     # Get raw detections and add to buffer
         >>>     outputs = model.predict(frame)
-        >>>     results = pf.detections.from_ultralytics(outputs)
+        >>>     results = pf.from_ultralytics(outputs)
         >>>     buffer.update(results, frame)
         >>>     
         >>>     # Apply temporal smoothing

@@ -48,7 +48,7 @@ def box(
         >>> image = cv2.imread("path/to/image.jpg")
         >>> model = YOLO("yolo11n.pt")
         >>> outputs = model.predict(image)  # Raw model outputs
-        >>> detections = pf.results.from_ultralytics(outputs)  # Convert to PixelFlow format
+        >>> detections = pf.from_ultralytics(outputs)  # Convert to PixelFlow format
         >>>
         >>> # Draw boxes with default colors and adaptive thickness
         >>> annotated = pf.annotators.box(image, detections)

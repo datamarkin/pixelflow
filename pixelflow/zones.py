@@ -487,7 +487,7 @@ class Zones:
             >>> # Process detections with zones
             >>> image = cv2.imread("image.jpg")
             >>> outputs = model.predict(image)
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> 
             >>> # Update with zone-specific strategies
             >>> updated_results = zones.update(results)
@@ -586,7 +586,7 @@ class Zones:
             >>> # Process frame and get counts
             >>> image = cv2.imread("frame.jpg")
             >>> outputs = model.predict(image)
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> zones.update(results)
             >>> 
             >>> counts = zones.get_zone_counts()
@@ -596,7 +596,7 @@ class Zones:
             >>> for frame_path in frame_paths:
             ...     image = cv2.imread(frame_path)
             ...     outputs = model.predict(image)
-            ...     results = pf.results.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     zones.update(results)
             ...     current_counts = zones.get_zone_counts()
             ...     print(f"Frame counts: {current_counts}")
@@ -638,7 +638,7 @@ class Zones:
             >>> for frame_path in frame_paths:
             ...     image = cv2.imread(frame_path)
             ...     outputs = model.predict(image)
-            ...     results = pf.results.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     zones.update(results)
             >>> 
             >>> # Get comprehensive statistics
@@ -705,7 +705,7 @@ class Zones:
             >>> # Process detections
             >>> image = cv2.imread("image.jpg")
             >>> outputs = model.predict(image)
-            >>> results = pf.results.from_ultralytics(outputs)
+            >>> results = pf.from_ultralytics(outputs)
             >>> results = zones.update(results)
             >>> 
             >>> # Get only entrance detections
@@ -796,7 +796,7 @@ class Zones:
             >>> for frame_path in frame_paths[:10]:
             ...     image = cv2.imread(frame_path)
             ...     outputs = model.predict(image)
-            ...     results = pf.results.from_ultralytics(outputs)
+            ...     results = pf.from_ultralytics(outputs)
             ...     zones.update(results)
             >>> 
             >>> print(zones.get_zone_stats())  # Shows accumulated counts
