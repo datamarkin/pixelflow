@@ -7,6 +7,7 @@ scores, and interpolate missing detections. Designed to work seamlessly with Pix
 buffer system for high-quality temporal smoothing in real-time applications.
 """
 
+import warnings
 from typing import Optional, Dict, List, Tuple, Union, TYPE_CHECKING
 from collections import defaultdict
 import numpy as np
@@ -107,20 +108,62 @@ def smooth(buffer: 'Buffer', temporal_weight_decay: float = 0.8) -> Detections:
     
     # Group all detections by tracker_id across all temporal frames
     tracker_detections = _collect_temporal_detections(context)
-    
+
+    # Smoothing groups a detection with its own past and future, which only a
+    # tracker_id can establish. Untracked detections group into nothing, so
+    # returning them unsmoothed says so rather than dropping them silently.
+    if len(raw_results) > 0 and not tracker_detections:
+        warnings.warn(
+            "No detections have tracker_id. Smoothing matches each detection to "
+            "itself across frames, which requires tracking. "
+            "Make sure to call tracker.update(results) before buffering.",
+            UserWarning,
+            stacklevel=2,
+        )
+        return raw_results
+
+    # A tracker present in this frame is smoothed from its neighbours; one absent
+    # from it is interpolated between them. Both paths split on the same set, so
+    # neither can claim a tracker the other is already handling.
+    current_tracker_ids = _current_tracker_ids(context)
+
     # Generate smoothed detections for each tracker
     smoothed_detections = Detections()
     for tracker_id, detections in tracker_detections.items():
+        if tracker_id not in current_tracker_ids:
+            continue
         smoothed_detection = _smooth_temporal_detections(detections, temporal_weight_decay)
         if smoothed_detection is not None:
             smoothed_detections.add_detection(smoothed_detection)
-    
+
     # Check for missing detections that can be interpolated
     missing_detections = _find_missing_detections(context, tracker_detections)
     for interpolated_detection in missing_detections:
         smoothed_detections.add_detection(interpolated_detection)
-    
+
     return smoothed_detections
+
+
+def _current_tracker_ids(context: Dict) -> set:
+    """
+    Tracker IDs present in the frame being smoothed.
+
+    This set is what divides the two halves of `smooth`: a tracker inside it is
+    smoothed from its neighbours, one outside it is interpolated between them.
+    One definition, so the two halves cannot disagree and emit the same
+    tracker_id twice in a single frame.
+
+    Args:
+        context (Dict): Temporal context dictionary from `Buffer.get_temporal_context`.
+
+    Returns:
+        set: Tracker IDs found in the current frame, empty if it has none.
+    """
+    current_detections = context['current_results']
+    if not current_detections:
+        return set()
+    return {detection.tracker_id for detection in current_detections.detections
+            if detection.tracker_id is not None}
 
 
 def _collect_temporal_detections(context: Dict) -> Dict[int, List[Tuple[str, int, Detection]]]:
@@ -498,14 +541,8 @@ def _find_missing_detections(context: Dict, tracker_detections: Dict[int, List[T
         - Complexity: O(k*n) where k=trackers, n=avg detections per tracker
         - Minimal overhead when no missing detections found
     """
-    current_tracker_ids = set()
-    current_detections = context['current_results']
-    
-    # Get tracker IDs present in current frame
-    if current_detections:
-        current_tracker_ids = {detection.tracker_id for detection in current_detections.detections 
-                             if detection.tracker_id is not None}
-    
+    current_tracker_ids = _current_tracker_ids(context)
+
     missing_detections = []
     
     # Check each tracker in temporal detections
