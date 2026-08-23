@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np
 from ..colors import _get_color_for_prediction
-from .utils import _get_adaptive_params
+from .utils import _caption_with_score, _get_adaptive_params
 
 
 def label(
@@ -133,12 +133,7 @@ def label(
             # supply the latter, so text takes precedence where both exist.
             caption = (getattr(detection, 'text', None)
                        or getattr(detection, 'class_name', None))
-            confidence = getattr(detection, 'confidence', None)
-            score = f"{confidence:.2f}" if confidence is not None else ''
-            # Joining the parts that exist rather than formatting both keeps a
-            # missing caption from rendering as the literal "None: 0.87", while
-            # still showing the score - which is all a from_sam detection has.
-            texts.append(': '.join(part for part in (caption, score) if part))
+            texts.append(_caption_with_score(caption, getattr(detection, 'confidence', None)))
     elif isinstance(texts, str):
         # Template mode - format for each detection
         template = texts

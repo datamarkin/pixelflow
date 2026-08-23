@@ -56,3 +56,16 @@ def _meets_confidence(keypoint, min_confidence):
     the old `visibility` flag drifted between `> 0` and `> 0.5` across converters.
     """
     return keypoint.confidence is None or keypoint.confidence >= min_confidence
+
+
+def _caption_with_score(caption, confidence):
+    """Join a caption and its score into one label, dropping whichever is absent.
+
+    Joining the parts that exist rather than formatting both keeps a missing caption
+    from rendering as the literal "None: 0.87", and a detection carrying only a score
+    - anything from `from_sam` - still gets a label. Every annotator that writes one
+    formats it here, so the score precision and the separator cannot drift apart
+    between them.
+    """
+    score = f"{confidence:.2f}" if confidence is not None else ''
+    return ': '.join(part for part in (caption, score) if part)

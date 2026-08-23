@@ -12,6 +12,7 @@ allowing easy chaining of annotation operations.
 from .anchors import anchors
 from .blur import blur
 from .box import box
+from .classification import classification
 from .label import label
 from .crossing import crossings
 from .mask import mask
@@ -41,6 +42,7 @@ __all__ = [
     # Core annotators
     'anchors',
     'box',
+    'classification',
     'label',
     'mask',
     'keypoint',

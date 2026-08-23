@@ -370,3 +370,44 @@ class TestFromUltralyticsClassification:
         detection_result = SimpleNamespace(probs=None, boxes=[], names={})
         with pytest.raises(ValueError, match="pf.from_ultralytics"):
             pf.from_ultralytics_classification(detection_result)
+
+
+# ============================================================================
+# Annotator
+# ============================================================================
+
+class TestClassificationAnnotator:
+    """Tests for pf.annotate.classification."""
+
+    def test_draws_something(self, blank_image, sample_classifications):
+        """Test that the panel is actually rendered."""
+        annotated = pf.annotate.classification(blank_image.copy(), sample_classifications)
+        assert annotated.shape == blank_image.shape
+        assert not np.array_equal(annotated, blank_image)
+
+    def test_empty_result_leaves_image_unchanged(self, blank_image):
+        """Test the empty case."""
+        annotated = pf.annotate.classification(blank_image.copy(), pf.Classifications())
+        assert np.array_equal(annotated, blank_image)
+
+    @pytest.mark.parametrize("position", ["top_left", "top_right", "bottom_left", "bottom_right"])
+    def test_every_corner_stays_in_bounds(self, blank_image, sample_classifications, position):
+        """Test that no corner draws outside the image."""
+        annotated = pf.annotate.classification(
+            blank_image.copy(), sample_classifications, top_k=3, position=position
+        )
+        assert annotated.shape == blank_image.shape
+        assert not np.array_equal(annotated, blank_image)
+
+    def test_unnamed_rows_fall_back_to_class_id(self, blank_image):
+        """A row with no name still draws, using the id that is always meaningful."""
+        result = pf.from_scores([0.9])
+        annotated = pf.annotate.classification(blank_image.copy(), result)
+        assert not np.array_equal(annotated, blank_image)
+
+    def test_small_image_does_not_raise(self, small_image, sample_classifications):
+        """A panel wider than the image clamps rather than failing."""
+        annotated = pf.annotate.classification(
+            small_image.copy(), sample_classifications, top_k=3, position="bottom_right"
+        )
+        assert annotated.shape == small_image.shape
