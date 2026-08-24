@@ -9,7 +9,6 @@ from . import colors
 from . import slicer
 from . import smoother
 from . import timer
-from . import tracker
 from . import assets
 
 # Result types and their converters. Every model output PixelFlow understands becomes
@@ -37,6 +36,36 @@ from .slicer import SlicedInference, auto_slice_size
 from .buffer import Buffer
 from .smoother import smooth
 from .timer import TimeTracker
+
+# ByteTrack is the only thing in PixelFlow that needs SciPy, and SciPy is most of what importing
+# PixelFlow costs: 436 ms of 631 ms, from scipy.linalg in the Kalman filter and scipy.optimize in
+# the assignment step. Every caller that only draws boxes or converts a model's output paid it.
+#
+# So `tracker` loads on first use instead of at import. This is PEP 562, the language feature for
+# exactly this, and it is what SciPy and NumPy do with their own subpackages -- `pf.tracker`,
+# `from pixelflow import tracker` and `import pixelflow.tracker` all still work, and the module is
+# cached in globals() after the first access so the cost is paid once.
+#
+# Nothing else in PixelFlow imports tracker, and it publishes no top-level names of its own, which
+# is what makes this a one-line deferral rather than a lazy-name table.
+_LAZY = {"tracker"}
+
+
+def __getattr__(name):
+    """Load a deferred subpackage on first access. See the note above."""
+    if name in _LAZY:
+        import importlib
+
+        module = importlib.import_module(f".{name}", __name__)
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    """Keep the deferred subpackages visible to `dir()` and to tab completion."""
+    return sorted(set(globals()) | _LAZY)
+
 
 # Define the public API
 __all__ = [
