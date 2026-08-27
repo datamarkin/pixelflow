@@ -6,13 +6,44 @@ and writing video output. Includes display utilities and image loading.
 
 All image data uses **RGB** channel ordering throughout the library.
 Conversion to/from OpenCV's BGR format happens at the I/O boundary.
+
+## The contract
+
+Everything here exists to serve one loop::
+
+    video = pf.VideoReader("in.mp4")
+    writer = pf.VideoWriter("out.mp4", like=video)
+
+    for frame in video:
+        detections = pf.from_ultralytics(model(frame))
+        frame = pf.annotate.box(frame, detections)
+        writer.write(frame)
+
+Two rules follow from it, and they explain most of the decisions in this module.
+
+**A source is anything that yields RGB uint8 HxWx3 arrays.** ``VideoReader`` and
+``CameraStream`` are conveniences, not gates -- a list, a generator, or your own
+reader for the one camera that needs special handling all work identically
+everywhere else in PixelFlow.
+
+**Size is discovered, rate is declared.** The loop is allowed to change a frame's
+size -- resizing is the caller's business, and so is resizing their detections to
+match -- so ``VideoWriter`` takes its size from the first frame it is given rather
+than from the source. The loop cannot change the frame *rate*, so that has to be
+stated, and ``like=`` exists to carry it across without arithmetic.
+
+Reading and resizing are two jobs. Use ``pf.transform.resize`` for the second.
 """
 
+import math
+import warnings
 from pathlib import Path
 from typing import Union, Optional, Iterator
 import cv2
 import numpy as np
 from PIL import Image
+
+from .transforms.image import resize
 
 
 class DisplayExit(Exception):
@@ -36,13 +67,35 @@ __all__ = [
 ]
 
 
-def _resize_frame(frame: np.ndarray, width: Optional[int]) -> np.ndarray:
-    """Resize maintaining aspect ratio. Returns frame unchanged if width is None."""
-    if width is None:
-        return frame
-    h, w = frame.shape[:2]
-    height = int(h * width / w)
-    return cv2.resize(frame, (width, height))
+class _Unset:
+    """Sentinel for 'argument not supplied'.
+
+    ``None`` cannot serve here: ``VideoWriter(path, fps=None)`` is a mistake worth a
+    specific message, and it is a different mistake from omitting ``fps`` entirely.
+    """
+
+    def __repr__(self):
+        return "<unset>"
+
+
+_UNSET = _Unset()
+
+# `width=` used to resize on the way through every reader, writer and image load. It
+# is gone: it made the reader's own `.width` describe something other than the file,
+# put the original frames out of reach, and existed only because `pf.transform` had
+# no `resize`. It now does. The parameter survives as a sentinel purely so the error
+# names the replacement -- a bare TypeError says what broke but not what to write.
+_WIDTH_REMOVED = (
+    "{cls} no longer resizes. Reading and resizing are two jobs, and combining them "
+    "made .width describe something other than the source. Compose instead:\n\n"
+    "    frame = pf.transform.resize(frame, width=640)\n"
+)
+
+
+def _reject_width(width, cls: str) -> None:
+    """Raise a migration error if the removed ``width=`` parameter was passed."""
+    if width is not _UNSET:
+        raise TypeError(_WIDTH_REMOVED.format(cls=cls))
 
 
 def _resolve_path(source: str) -> Path:
@@ -62,269 +115,435 @@ def _resolve_path(source: str) -> Path:
     return path
 
 
-def read_video(source: str, width: Optional[int] = None) -> "VideoReader":
-    """Open a video file for frame-by-frame reading.
+# Only these can carry an alpha channel; JPEG cannot, so the header probe in
+# read_image is skipped for it -- which is most of any real dataset.
+_ALPHA_CAPABLE = frozenset({".png", ".gif", ".webp", ".tif", ".tiff", ".jp2"})
+
+
+def _require_rgb(image, what: str = "frame") -> None:
+    """Raise unless ``image`` is the RGB uint8 HxWx3 array this library passes around.
+
+    ``cv2.cvtColor`` accepts a 2D or 4-channel array for ``RGB2BGR`` and quietly
+    returns HxWx3, so a grayscale or RGBA array reaches an encoder as colour nonsense
+    with nothing reported. Every boundary that hands an array to OpenCV goes through
+    here, so the contract is stated once rather than per call site.
+    """
+    if not isinstance(image, np.ndarray):
+        raise ValueError(
+            f"expected an RGB uint8 HxWx3 {what}, got {type(image).__name__}"
+        )
+    if image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8:
+        raise ValueError(
+            f"expected an RGB uint8 HxWx3 {what}, got shape {image.shape} "
+            f"dtype {image.dtype}"
+        )
+
+
+def _valid_fps(value) -> Optional[float]:
+    """Return a usable frame rate, or None.
+
+    OpenCV reports 0.0 for a rate it does not know, which is routine for cameras and
+    common for network streams, and NaN for some malformed containers. Both flow
+    happily into a VideoWriter and produce a file that will not play, so neither is
+    allowed to masquerade as a number. None forces a caller to have a policy.
+    """
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return value
+
+
+class _FrameSource:
+    """Shared machinery for the classes that own a ``cv2.VideoCapture``.
+
+    Everything a consumer branches on lives here with the same name and the same
+    meaning, so that swapping a file for a camera changes one line and nothing else.
+    ``is_live`` is the only fact worth branching on.
+    """
+
+    # Declared here, not only in each subclass's __init__, so that the surface a
+    # source must provide is visible in one place and a partial subclass answers
+    # None rather than raising from inside a property.
+    _cap: Optional[cv2.VideoCapture] = None
+    _stride: int = 1
+    _width: Optional[int] = None
+    _height: Optional[int] = None
+    _source_fps: Optional[float] = None
+    _source_frames: Optional[int] = None
+    _pending: Optional[np.ndarray] = None
+    is_live: bool = False
+
+    # -- facts ---------------------------------------------------------------
+
+    @property
+    def width(self) -> Optional[int]:
+        """Width of the frames this source yields, in pixels."""
+        return self._width
+
+    @property
+    def height(self) -> Optional[int]:
+        """Height of the frames this source yields, in pixels."""
+        return self._height
+
+    @property
+    def fps(self) -> Optional[float]:
+        """Rate of the frames this source *yields*, or None if unknown.
+
+        Already divided by ``stride``. Reading every 5th frame of a 25 fps file is a
+        5 fps sequence, and a writer handed 25 would produce a file that plays five
+        times too fast. Dividing here makes that mistake unconstructible rather than
+        merely catchable.
+        """
+        if self._source_fps is None:
+            return None
+        return self._source_fps / self._stride
+
+    @property
+    def frames(self) -> Optional[int]:
+        """Estimated number of frames this source will yield, or None if unknown.
+
+        An estimate, deliberately named as one: several container formats derive the
+        count from duration x rate rather than storing it. Good for a progress bar.
+        Never use it to decide when to stop, or to preallocate.
+        """
+        if self._source_frames is None:
+            return None
+        return math.ceil(self._source_frames / self._stride)
+
+    @property
+    def duration(self) -> Optional[float]:
+        """Length of the source in seconds, or None if unknown.
+
+        Unaffected by ``stride`` -- striding changes how many frames you look at, not
+        how much time the source covers, so this is always the source's own length.
+
+        ``frames / fps`` approximates it but does not equal it: ``frames`` rounds up
+        to count the frames you actually receive, so a source whose length is not a
+        multiple of the stride reports up to one stride more time than it has. Use
+        this property when you want the length; use ``frames`` for a progress total.
+        """
+        if self._source_fps is None or self._source_frames is None:
+            return None
+        return self._source_frames / self._source_fps
+
+    @property
+    def is_opened(self) -> bool:
+        return self._cap is not None and self._cap.isOpened()
+
+    # -- reading -------------------------------------------------------------
+
+    def _retrieve_rgb(self) -> Optional[np.ndarray]:
+        """Convert the most recently grabbed frame to RGB. None if it cannot be."""
+        ok, frame = self._cap.retrieve()
+        if not ok:
+            return None
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    def _hand_out(self, frame: np.ndarray) -> np.ndarray:
+        """Record a frame's size as fact, and return it.
+
+        Container metadata and decoded reality normally agree -- OpenCV applies a
+        rotation flag to both since 4.5, so a portrait phone video reports portrait
+        dimensions. When they disagree the frame is right and the metadata is not,
+        so the facts follow the frame rather than describing an array nobody
+        received. Taking the size from every frame rather than only the first costs
+        a tuple unpack against a full-frame colour conversion on the same line, and
+        means a source that changes resolution mid-stream stays described correctly.
+        """
+        self._height, self._width = frame.shape[:2]
+        return frame
+
+    def read(self) -> Optional[np.ndarray]:
+        """Grab a single RGB frame, ignoring ``stride``. None when the source ends."""
+        if self._pending is not None:
+            frame, self._pending = self._pending, None
+            return frame
+        if self._cap is None or not self._cap.grab():
+            return None
+        frame = self._retrieve_rgb()
+        return None if frame is None else self._hand_out(frame)
+
+    def __iter__(self) -> Iterator[np.ndarray]:
+        """Yield RGB frames from the current position until the source ends.
+
+        Iteration does **not** rewind. Rewinding on every call made ``seek()``
+        useless -- seek then iterate returned you to frame 0 -- and is impossible for
+        a live source. Replay is ``source.seek(0)``, stated rather than implied.
+
+        With a stride, skipped frames are grabbed but never retrieved or converted.
+        Inter-frame coding means frame N is not decodable without its predecessors,
+        so they must be walked; they need not be turned into arrays.
+        """
+        index = 0
+
+        # A source that decoded a frame in order to learn its own size hands that
+        # frame out here rather than discarding it. Dropping it would silently skip
+        # a frame, and for a single-shot capture it is the only one there is.
+        if self._pending is not None:
+            frame, self._pending = self._pending, None
+            yield self._hand_out(frame)
+            index = 1
+
+        while self._cap is not None:
+            if not self._cap.grab():
+                break
+            if index % self._stride == 0:
+                frame = self._retrieve_rgb()
+                if frame is None:
+                    break
+                yield self._hand_out(frame)
+            index += 1
+
+    # -- removed surface, kept only to explain itself -------------------------
+
+    def __len__(self):
+        """Always raises. ``len()`` promised an exactness that cannot be kept.
+
+        ``frames`` is an estimate for several container formats, so ``len(list(v))``
+        could differ from ``len(v)``; and ``len()`` implies an indexable, re-iterable
+        sequence, which a decode-forward stream is not.
+        """
+        raise TypeError(
+            f"{type(self).__name__} has no len(): the frame count is an estimate, "
+            f"not a length. Use .frames for a progress total, and iterate to count."
+        )
+
+    def __getattr__(self, name):
+        if name == "frame_count":
+            raise AttributeError(
+                f"{type(self).__name__}.frame_count is now .frames, named as the "
+                f"estimate it always was. It is divided by the stride."
+            )
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {name!r}"
+        )
+
+    # -- cleanup -------------------------------------------------------------
+
+    def close(self) -> None:
+        """Release the underlying capture."""
+        if self._cap is not None:
+            self._cap.release()
+            self._cap = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+class VideoReader(_FrameSource):
+    """Read a video file frame by frame.
 
     Args:
         source: Path to a video file.
-        width: Optional width for aspect-ratio frame resizing.
-
-    Returns:
-        A VideoReader instance.
-    """
-    return VideoReader(source, width=width)
-
-
-def read_image(source: str, width: Optional[int] = None) -> np.ndarray:
-    """Load a single image from disk with optional resizing.
-
-    Args:
-        source: Path to the image file.
-        width: Optional width for aspect-ratio resize.
-
-    Returns:
-        RGB numpy array.
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-        RuntimeError: If OpenCV cannot decode the file.
-    """
-    path = _resolve_path(source)
-    image = cv2.imread(str(path))
-    if image is None:
-        raise RuntimeError(f"Failed to decode image: {source}")
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    return _resize_frame(image, width)
-
-
-class VideoReader:
-    """Read video files frame by frame.
-
-    Args:
-        source: Path to a video file.
-        width: Optional width for aspect-ratio frame resizing.
+        stride: Yield every Nth frame. ``fps`` and ``frames`` are divided to match,
+            so a writer built with ``like=`` stays correct.
+        start: Frame to begin at. Equivalent to ``seek(start)`` after opening.
 
     Example:
-        >>> video = pf.VideoReader("input.mp4", width=640)
+        >>> video = pf.VideoReader("input.mp4", stride=2)
+        >>> writer = pf.VideoWriter("output.mp4", like=video)
         >>> for frame in video:
-        ...     process(frame)
+        ...     writer.write(frame)
+
+    Note:
+        Frames are yielded at the source's own resolution. To work at a smaller
+        size, compose: ``pf.transform.resize(frame, width=640)``.
     """
 
-    def __init__(self, source: str, width: Optional[int] = None):
-        self._cap = None
+    def __init__(self, source: str, *, stride: int = 1, start: int = 0,
+                 width=_UNSET):
+        _reject_width(width, "VideoReader")
+        if stride < 1:
+            raise ValueError(f"stride must be at least 1, got {stride}")
+
         path = _resolve_path(source)
         self._source = str(path)
-        self._resize_width = width
+        self._stride = stride
+
         self._cap = cv2.VideoCapture(self._source)
         if not self._cap.isOpened():
             raise RuntimeError(f"Could not open video file: {source}")
 
-        # Cache raw metadata once
-        self._raw_width = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self._raw_height = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self._fps = self._cap.get(cv2.CAP_PROP_FPS)
-        self._frame_count = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # Container metadata, read once. Nothing here is ever consulted per frame.
+        self._width = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self._height = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self._source_fps = _valid_fps(self._cap.get(cv2.CAP_PROP_FPS))
+        count = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self._source_frames = count if count > 0 else None
         fourcc = int(self._cap.get(cv2.CAP_PROP_FOURCC))
         self._codec = "".join([chr((fourcc >> 8 * i) & 0xFF) for i in range(4)])
+
+        if start:
+            self.seek(start)
+
+    @property
+    def codec(self) -> str:
+        """FourCC of the source stream.
+
+        Reported, not carried: a codec that decodes here is not necessarily one that
+        *encodes* here, so passing it to a writer would make whether your output
+        opens depend on what your input was.
+        """
+        return self._codec
+
+    def seek(self, frame_number: int) -> None:
+        """Jump to a frame. Iteration continues from there; ``seek(0)`` replays."""
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+
+    def __repr__(self):
+        rate = "unknown fps" if self.fps is None else f"{self.fps:.2f}fps"
+        count = "unknown length" if self.frames is None else f"{self.frames} frames"
+        stride = "" if self._stride == 1 else f", stride={self._stride}"
+        return (f"VideoReader({self._source!r}, {self.width}x{self.height}, "
+                f"{rate}, {count}{stride})")
+
+
+class CameraStream(_FrameSource):
+    """Webcams and network streams.
+
+    Presents the same facts and the same iteration contract as :class:`VideoReader`,
+    so a consumer written against one works against the other and ``is_live`` is the
+    only thing worth branching on.
+
+    Args:
+        source: Webcam index (int) or stream URL (str).
+        stride: Yield every Nth frame.
+
+    Example:
+        >>> with pf.CameraStream(0) as cam:
+        ...     for frame in cam:
+        ...         pf.display_video(frame)
+
+    Note:
+        A live source has no reliable metadata, so ``width`` and ``height`` come from
+        a frame decoded at open. ``fps`` is commonly ``None`` (devices report 0) and
+        ``frames``/``duration`` are always ``None`` -- a stream has no length.
+    """
+
+    is_live = True
+
+    def __init__(self, source: Union[int, str], *, stride: int = 1, width=_UNSET):
+        _reject_width(width, "CameraStream")
+        if stride < 1:
+            raise ValueError(f"stride must be at least 1, got {stride}")
+
+        self._source = source
+        self._stride = stride
+
+        self._cap = cv2.VideoCapture(source)
+        if not self._cap.isOpened():
+            raise RuntimeError(f"Could not open camera/stream: {source}")
+
+        # A device's reported FRAME_WIDTH/HEIGHT is frequently the driver's default
+        # rather than what it will hand over, so the only trustworthy source of the
+        # size is a frame. One is decoded here and dropped: a camera is warming up at
+        # this point anyway, and it buys facts that are complete and correct before
+        # the first frame reaches the caller.
+        ok, probe = self._cap.read()
+        if ok:
+            # Held, not discarded: the base loop hands a pending frame out first, so
+            # learning the size costs no frame. _hand_out records it as fact there.
+            self._pending = cv2.cvtColor(probe, cv2.COLOR_BGR2RGB)
+            self._height, self._width = self._pending.shape[:2]
+        else:
+            self._width = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or None
+            self._height = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or None
+
+        self._source_fps = _valid_fps(self._cap.get(cv2.CAP_PROP_FPS))
+        self._source_frames = None  # a stream has no length, so duration is None too
+
+        # Deferred, and marked rather than forgotten: a live source that blocks when
+        # the consumer falls behind accumulates latency until the device's own buffer
+        # overflows, so the frames being processed are minutes old. The policy for
+        # that -- and reconnecting after a drop -- belongs on this class, not in the
+        # consumer. Neither is implemented; there is no live consumer to design
+        # against yet, and iteration is the base class's until there is.
+
+    def __repr__(self):
+        rate = "unknown fps" if self.fps is None else f"{self.fps:.2f}fps"
+        return f"CameraStream({self._source!r}, {self.width}x{self.height}, {rate})"
+
+
+class VideoWriter:
+    """Write RGB frames to a video file.
+
+    Exactly one of ``fps`` or ``like`` is required. ``like`` takes the rate from a
+    source, which is the one value that has to cross from reader to writer and the
+    one that is easy to get wrong -- a strided reader yields fewer frames per second
+    than its file contains, and ``like`` carries the corrected rate.
+
+    Size is not carried. It comes from the first frame written, because the loop
+    between reader and writer is allowed to change it.
+
+    Args:
+        output_path: Path to the output video file.
+        fps: Frames per second. Must be positive and finite.
+        like: A source to take the frame rate from (anything with an ``fps``).
+        codec: FourCC codec string. Default ``'mp4v'``.
+
+    Example:
+        >>> video = pf.VideoReader("input.mp4", stride=2)
+        >>> with pf.VideoWriter("output.mp4", like=video) as writer:
+        ...     for frame in video:
+        ...         writer.write(frame)
+    """
+
+    def __init__(self, output_path: str, fps=_UNSET, codec: str = "mp4v", *,
+                 like=None, width=_UNSET):
+        _reject_width(width, "VideoWriter")
+
+        if like is not None:
+            if fps is not _UNSET:
+                raise ValueError(
+                    "VideoWriter() takes exactly one of fps= or like=; "
+                    "like= already supplies the frame rate"
+                )
+            source_fps = getattr(like, "fps", _UNSET)
+            if source_fps is _UNSET:
+                raise TypeError(
+                    f"like= expects a source with an .fps attribute, "
+                    f"got {type(like).__name__}"
+                )
+            if source_fps is None:
+                raise ValueError(
+                    f"{type(like).__name__} reports no frame rate, so there is "
+                    f"nothing to copy -- this is normal for cameras and streams. "
+                    f"Pass fps= explicitly to state the rate you want."
+                )
+            fps = source_fps
+        elif fps is _UNSET:
+            raise ValueError(
+                "VideoWriter() requires a frame rate: pass fps=, or like=<source> "
+                "to take it from a reader"
+            )
+
+        # A rate that is zero, negative, NaN or infinite produces a file that will
+        # not play. Rejecting it here rather than at the first write means the run
+        # that would have wasted an hour fails on the line that was wrong.
+        rate = _valid_fps(fps)
+        if rate is None:
+            raise ValueError(
+                f"fps must be a positive finite number, got {fps!r}"
+            )
+
+        self._output_path = output_path
+        self._fps = rate
+        self._codec = codec
+        self._writer: Optional[cv2.VideoWriter] = None
+        self._size: Optional[tuple] = None
+        self._frames_written = 0
 
     # -- properties ----------------------------------------------------------
 
     @property
     def fps(self) -> float:
         return self._fps
-
-    @property
-    def width(self) -> int:
-        """Post-resize width (what the user gets)."""
-        if self._resize_width is not None:
-            return self._resize_width
-        return self._raw_width
-
-    @property
-    def height(self) -> int:
-        """Post-resize height (what the user gets)."""
-        if self._resize_width is not None:
-            return int(self._raw_height * self._resize_width / self._raw_width)
-        return self._raw_height
-
-    @property
-    def frame_count(self) -> int:
-        return self._frame_count
-
-    @property
-    def duration(self) -> float:
-        """Duration in seconds."""
-        if self._fps > 0:
-            return self._frame_count / self._fps
-        return 0.0
-
-    @property
-    def codec(self) -> str:
-        return self._codec
-
-    # -- iteration / seek ----------------------------------------------------
-
-    def __len__(self) -> int:
-        return self._frame_count
-
-    def _read_rgb_frame(self) -> Optional[np.ndarray]:
-        """Read one frame, convert BGR→RGB, and resize."""
-        ret, frame = self._cap.read()
-        if not ret:
-            return None
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return _resize_frame(frame, self._resize_width)
-
-    def __iter__(self) -> Iterator[np.ndarray]:
-        """Iterate over frames. Resets to frame 0 on each call (replayable)."""
-        self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        while True:
-            frame = self._read_rgb_frame()
-            if frame is None:
-                break
-            yield frame
-
-    def seek(self, frame_number: int) -> None:
-        """Jump to a specific frame number."""
-        self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-
-    # -- cleanup -------------------------------------------------------------
-
-    def close(self) -> None:
-        """Release the underlying VideoCapture."""
-        if self._cap is not None:
-            self._cap.release()
-            self._cap = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
-    def __repr__(self):
-        return (f"VideoReader({self._source!r}, "
-                f"{self.width}x{self.height}, "
-                f"{self.fps:.2f}fps, {self.frame_count} frames)")
-
-
-class CameraStream:
-    """Webcams and network streams.
-
-    Args:
-        source: Webcam index (int) or stream URL (str).
-        width: Optional width for aspect-ratio frame resizing.
-
-    Example:
-        >>> cam = pf.CameraStream(0, width=640)
-        >>> for frame in cam:
-        ...     if pf.display_video(frame) == ord('q'):
-        ...         break
-        >>> cam.close()
-    """
-
-    def __init__(self, source: Union[int, str], width: Optional[int] = None):
-        self._source = source
-        self._resize_width = width
-        self._cap = cv2.VideoCapture(source)
-        if not self._cap.isOpened():
-            raise RuntimeError(f"Could not open camera/stream: {source}")
-
-    # -- properties ----------------------------------------------------------
-
-    @property
-    def fps(self) -> float:
-        """Best-effort FPS reported by the device/stream."""
-        return self._cap.get(cv2.CAP_PROP_FPS)
-
-    @property
-    def width(self) -> int:
-        if self._resize_width is not None:
-            return self._resize_width
-        return int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-
-    @property
-    def height(self) -> int:
-        raw_w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        raw_h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        if self._resize_width is not None and raw_w > 0:
-            return int(raw_h * self._resize_width / raw_w)
-        return raw_h
-
-    @property
-    def is_opened(self) -> bool:
-        return self._cap is not None and self._cap.isOpened()
-
-    # -- read / iterate ------------------------------------------------------
-
-    def _read_rgb_frame(self) -> Optional[np.ndarray]:
-        """Read one frame, convert BGR→RGB, and resize."""
-        ret, frame = self._cap.read()
-        if not ret:
-            return None
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return _resize_frame(frame, self._resize_width)
-
-    def read(self) -> Optional[np.ndarray]:
-        """Grab a single frame. Returns None on failure."""
-        return self._read_rgb_frame()
-
-    def __iter__(self) -> Iterator[np.ndarray]:
-        """Infinite iteration. Skips dropped frames, stops when stream closes."""
-        while self._cap.isOpened():
-            frame = self._read_rgb_frame()
-            if frame is None:
-                break
-            yield frame
-
-    # -- cleanup -------------------------------------------------------------
-
-    def close(self) -> None:
-        if self._cap is not None:
-            self._cap.release()
-            self._cap = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        self.close()
-
-    def __del__(self):
-        self.close()
-
-    def __repr__(self):
-        return f"CameraStream({self._source!r}, {self.width}x{self.height})"
-
-
-class VideoWriter:
-    """Write frames to a video file.
-
-    Args:
-        output_path: Path to the output video file.
-        fps: Frames per second (required).
-        codec: FourCC codec string. Default ``'mp4v'``.
-        width: Optional width for resize-on-write.
-
-    Example:
-        >>> writer = pf.VideoWriter("output.mp4", fps=30.0)
-        >>> writer.write(frame)
-        >>> writer.close()
-    """
-
-    def __init__(self, output_path: str, fps: float, codec: str = "mp4v",
-                 width: Optional[int] = None):
-        self._output_path = output_path
-        self._fps = fps
-        self._codec = codec
-        self._resize_width = width
-        self._writer: Optional[cv2.VideoWriter] = None
-        self._frames_written = 0
-
-    # -- properties ----------------------------------------------------------
 
     @property
     def frames_written(self) -> int:
@@ -337,18 +556,39 @@ class VideoWriter:
     # -- write ---------------------------------------------------------------
 
     def write(self, frame: np.ndarray) -> None:
-        """Write an RGB frame. Resolution auto-detected from first frame."""
-        frame = _resize_frame(frame, self._resize_width)
+        """Write one RGB frame. The file's resolution is set by the first one.
+
+        Raises:
+            ValueError: If the frame is not RGB uint8 HxWx3, or if its size differs
+                from the frame that opened the file.
+        """
+        _require_rgb(frame)
+        height, width = frame.shape[:2]
+
         if self._writer is None:
-            h, w = frame.shape[:2]
+            # Opened lazily because the only thing that knows the frame size is a
+            # frame, and the loop above may have changed it.
+            self._size = (width, height)
             fourcc = cv2.VideoWriter_fourcc(*self._codec)
             self._writer = cv2.VideoWriter(
-                self._output_path, fourcc, self._fps, (w, h)
+                self._output_path, fourcc, self._fps, self._size
             )
             if not self._writer.isOpened():
+                self._writer = None
                 raise RuntimeError(
-                    f"Failed to open video writer for {self._output_path}"
+                    f"Failed to open video writer for {self._output_path} "
+                    f"(codec={self._codec!r}, fps={self._fps}, "
+                    f"size={width}x{height})"
                 )
+        elif (width, height) != self._size:
+            # cv2.VideoWriter drops a mismatched frame and reports nothing, so the
+            # run ends with a short file and no error anywhere.
+            raise ValueError(
+                f"frame is {width}x{height} but {self._output_path!r} was opened at "
+                f"{self._size[0]}x{self._size[1]}; every frame in a video file must "
+                f"be the same size. Resize before writing, or open a second writer."
+            )
+
         self._writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         self._frames_written += 1
 
@@ -366,17 +606,141 @@ class VideoWriter:
     def __exit__(self, *exc):
         self.close()
 
-    def __del__(self):
-        self.close()
-
     def __repr__(self):
         return (f"VideoWriter({self._output_path!r}, "
                 f"fps={self._fps}, frames={self._frames_written})")
 
 
 # ---------------------------------------------------------------------------
+# Reading and writing single images
+# ---------------------------------------------------------------------------
+
+def read_video(source: str, *, stride: int = 1, start: int = 0,
+               width=_UNSET) -> "VideoReader":
+    """Open a video file for frame-by-frame reading.
+
+    Args:
+        source: Path to a video file.
+        stride: Yield every Nth frame.
+        start: Frame to begin at.
+
+    Returns:
+        A VideoReader instance.
+    """
+    _reject_width(width, "read_video")
+    return VideoReader(source, stride=stride, start=start)
+
+
+def read_image(source: str, width=_UNSET) -> np.ndarray:
+    """Load a single image from disk as an RGB array.
+
+    Args:
+        source: Path to the image file.
+
+    Returns:
+        RGB uint8 array of shape (H, W, 3), always -- grayscale is expanded to
+        three channels and any alpha channel is dropped, so that the result can go
+        straight into the rest of PixelFlow.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        IsADirectoryError: If the path is a directory.
+        RuntimeError: If OpenCV cannot decode the file.
+
+    Note:
+        **EXIF orientation is applied.** A photo tagged as rotated is returned the
+        way a viewer would show it, which matches what ``VideoReader`` does with a
+        rotated video and is what a model needs to produce upright coordinates. If
+        annotations for an image were made against un-rotated pixels by a tool that
+        ignores EXIF, their coordinates will not line up with this array -- that is
+        the one case where the difference is visible, and it is worth checking
+        before blaming the model.
+    """
+    _reject_width(width, "read_image")
+    path = _resolve_path(source)
+
+    # IMREAD_COLOR, not IMREAD_UNCHANGED: the latter silently ignores EXIF
+    # orientation, which would hand back a sideways array for any phone photo. It
+    # also guarantees uint8 HxWx3, which is the contract every other module here
+    # relies on.
+    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    if image is None:
+        raise RuntimeError(f"Failed to decode image: {source}")
+
+    # Reading the header costs no pixels but still costs a second open, so it is
+    # skipped for formats that cannot carry alpha -- which is JPEG, and so most of
+    # any real dataset. Where it can happen it is worth saying, because IMREAD_COLOR
+    # drops alpha without compositing: transparent regions keep whatever colour was
+    # stored beneath them.
+    had_alpha = False
+    if path.suffix.lower() in _ALPHA_CAPABLE:
+        try:
+            with Image.open(path) as probe:
+                had_alpha = probe.mode in ("RGBA", "LA", "PA") or (
+                    probe.mode == "P" and "transparency" in probe.info
+                )
+        except Exception:
+            had_alpha = False
+    if had_alpha:
+        warnings.warn(
+            f"{source}: alpha channel dropped. PixelFlow images are RGB uint8 "
+            f"HxWx3; transparent areas keep the colour stored beneath them.",
+            stacklevel=2,
+        )
+
+    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+
+def save_image(path: str, image: np.ndarray) -> None:
+    """Save an RGB numpy array to an image file.
+
+    Args:
+        path: Output file path (extension determines format).
+        image: RGB numpy array.
+
+    Raises:
+        NotADirectoryError: If the parent directory does not exist.
+        ValueError: If the extension is missing or not one OpenCV can write.
+        RuntimeError: If the write fails for any other reason.
+    """
+    _require_rgb(image, "image")
+    target = Path(path)
+
+    # cv2.imwrite returns False for a missing directory and raises cv2.error for an
+    # unknown extension. Both used to surface as "Failed to write image", which
+    # names the symptom and never the cause.
+    parent = target.parent
+    if not parent.exists():
+        raise NotADirectoryError(
+            f"Cannot write {path!r}: directory {parent.resolve()} does not exist"
+        )
+    if not target.suffix:
+        raise ValueError(
+            f"Cannot write {path!r}: no file extension, so there is no way to know "
+            f"what format to encode. Try '{target.name}.jpg' or '{target.name}.png'."
+        )
+
+    bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    try:
+        success = cv2.imwrite(str(target), bgr)
+    except cv2.error as error:
+        raise ValueError(
+            f"Cannot write {path!r}: OpenCV cannot encode '{target.suffix}' files"
+        ) from error
+    if not success:
+        raise RuntimeError(f"Failed to write image: {path}")
+
+
+# ---------------------------------------------------------------------------
 # Display functions
 # ---------------------------------------------------------------------------
+
+def _show(image: np.ndarray, window_name: str, width: Optional[int]) -> None:
+    """Shrink for display if asked, convert to BGR, and show. Never mutates input."""
+    if width is not None:
+        image = resize(image, width=width)
+    cv2.imshow(window_name, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+
 
 def display_video(frame: np.ndarray, window_name: str = "PixelFlow",
                   wait_key: int = 1, width: Optional[int] = None,
@@ -387,7 +751,7 @@ def display_video(frame: np.ndarray, window_name: str = "PixelFlow",
         frame: RGB numpy array to display.
         window_name: Name of the display window. Default "PixelFlow".
         wait_key: Milliseconds to wait for key press. Default 1.
-        width: Optional display resize width.
+        width: Optional display width. Shrinks what is shown, nothing else.
         quit_key: Key code that triggers DisplayExit. Default ``ord('q')``.
             Set to ``None`` to disable auto-quit.
 
@@ -396,9 +760,14 @@ def display_video(frame: np.ndarray, window_name: str = "PixelFlow",
 
     Raises:
         DisplayExit: When the quit key is pressed.
+
+    Note:
+        ``width`` survives here, where it was removed from the readers and the
+        writer, because a display is the end of the line. Shrinking a 4K frame to
+        fit a laptop screen cannot affect anything downstream -- there is no
+        downstream. The array you passed in is not modified.
     """
-    display_frame = _resize_frame(frame, width)
-    cv2.imshow(window_name, cv2.cvtColor(display_frame, cv2.COLOR_RGB2BGR))
+    _show(frame, window_name, width)
     key = cv2.waitKey(wait_key) & 0xFF
     if key == 255:
         return None
@@ -415,13 +784,12 @@ def display_image(image: np.ndarray, window_name: str = "PixelFlow",
     Args:
         image: RGB numpy array to display.
         window_name: Name of the display window. Default "PixelFlow".
-        width: Optional display resize width.
+        width: Optional display width. Shrinks what is shown, nothing else.
 
     Returns:
         The key code pressed to dismiss the window.
     """
-    display = _resize_frame(image, width)
-    cv2.imshow(window_name, cv2.cvtColor(display, cv2.COLOR_RGB2BGR))
+    _show(image, window_name, width)
     key = cv2.waitKey(0) & 0xFF
     cv2.destroyWindow(window_name)
     return key
@@ -435,21 +803,6 @@ def close_display() -> None:
 # ---------------------------------------------------------------------------
 # Format conversion helpers
 # ---------------------------------------------------------------------------
-
-def save_image(path: str, image: np.ndarray) -> None:
-    """Save an RGB numpy array to an image file.
-
-    Args:
-        path: Output file path (extension determines format).
-        image: RGB numpy array.
-
-    Raises:
-        RuntimeError: If the write fails.
-    """
-    success = cv2.imwrite(path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-    if not success:
-        raise RuntimeError(f"Failed to write image: {path}")
-
 
 def to_pil(image: np.ndarray) -> Image.Image:
     """Convert an RGB numpy array to a PIL Image."""
