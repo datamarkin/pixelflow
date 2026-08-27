@@ -15,6 +15,66 @@ import pixelflow as pf
 # Image-Only Transform Tests
 # ============================================================================
 
+class TestImageResize:
+    """Tests for the resize transform.
+
+    resize exists so that reading and resizing can be two jobs. It used to be
+    smuggled into VideoReader/CameraStream/VideoWriter/read_image as `width=`,
+    which made a reader's own .width describe something other than its source.
+    """
+
+    def test_width_sets_width_and_height_follows(self, sample_image):
+        """One parameter, so the aspect ratio cannot be changed by accident."""
+        assert pf.transform.resize(sample_image, width=320).shape == (240, 320, 3)
+
+    def test_height_sets_height_and_width_follows(self, sample_image):
+        assert pf.transform.resize(sample_image, height=240).shape == (240, 320, 3)
+
+    def test_portrait(self):
+        """'720p' is a height for landscape and a width for portrait.
+
+        Supporting both axes is what keeps the function honest about that.
+        """
+        portrait = np.zeros((3840, 2160, 3), dtype=np.uint8)
+        assert pf.transform.resize(portrait, height=720).shape == (720, 405, 3)
+        assert pf.transform.resize(portrait, width=720).shape == (1280, 720, 3)
+
+    def test_upscaling(self, small_image):
+        assert pf.transform.resize(small_image, width=400).shape == (400, 400, 3)
+
+    def test_no_op_returns_the_same_object(self, sample_image):
+        """Documented, because PixelFlow's annotators draw in place."""
+        assert pf.transform.resize(sample_image, width=640) is sample_image
+        assert pf.transform.resize(sample_image, height=480) is sample_image
+
+    def test_preserves_dtype_and_channels(self, sample_image):
+        result = pf.transform.resize(sample_image, width=100)
+        assert result.dtype == np.uint8 and result.shape[2] == 3
+
+    def test_requires_exactly_one_axis(self, sample_image):
+        for kwargs in ({}, {"width": 320, "height": 240}):
+            with pytest.raises(ValueError, match="exactly one"):
+                pf.transform.resize(sample_image, **kwargs)
+
+    def test_is_keyword_only(self, sample_image):
+        """resize(image, 640) must not silently guess an axis.
+
+        The readers took a positional-ish `width=` for the whole of 0.4; a call that
+        kept working while changing meaning would be worse than one that stops.
+        """
+        with pytest.raises(TypeError):
+            pf.transform.resize(sample_image, 640)
+
+    @pytest.mark.parametrize("kwargs", [{"width": 0}, {"height": 0}, {"width": -5}])
+    def test_rejects_sizes_below_one_pixel(self, sample_image, kwargs):
+        with pytest.raises(ValueError, match="at least 1"):
+            pf.transform.resize(sample_image, **kwargs)
+
+    def test_extreme_downscale_stays_at_least_one_pixel(self):
+        wide = np.zeros((10, 4000, 3), dtype=np.uint8)
+        assert pf.transform.resize(wide, width=1).shape == (1, 1, 3)
+
+
 class TestImageRotation:
     """Tests for image rotation transform."""
 

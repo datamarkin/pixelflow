@@ -18,112 +18,352 @@ import pixelflow as pf
 # VideoReader Tests
 # ============================================================================
 
+def decoded_frames(path):
+    """Every frame of a file, as OpenCV actually decodes it.
+
+    Frame identity has to be checked against this rather than against whatever was
+    written: mp4v is lossy, so a frame authored as solid 50 comes back as 46. What a
+    seek or a stride test needs to know is *which* frame arrived, and comparing to
+    the decoded truth answers that exactly on every platform.
+    """
+    capture = cv2.VideoCapture(path)
+    frames = []
+    while True:
+        ok, frame = capture.read()
+        if not ok:
+            break
+        frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    capture.release()
+    return frames
+
+
 class TestVideoReader:
     """Tests for VideoReader class."""
 
-    def test_video_reader_properties(self, temp_video_path):
-        """Test video metadata properties."""
-        video = pf.VideoReader(temp_video_path)
-        assert video.frame_count == 10
-        assert video.fps == 30.0
-        assert video.width == 640
-        assert video.height == 480
-        assert video.duration == pytest.approx(10 / 30.0)
-        assert len(video) == 10
-        video.close()
-
-    def test_video_reader_iteration(self, temp_video_path):
-        """Test iterating through video frames."""
-        video = pf.VideoReader(temp_video_path)
-        frame_count = 0
-        for frame in video:
-            assert isinstance(frame, np.ndarray)
-            assert frame.shape == (480, 640, 3)
-            frame_count += 1
-        assert frame_count == 10
-        video.close()
-
-    def test_video_reader_replayable(self, temp_video_path):
-        """Test that iteration resets each time (replayable)."""
-        video = pf.VideoReader(temp_video_path)
-        count1 = sum(1 for _ in video)
-        count2 = sum(1 for _ in video)
-        assert count1 == count2 == 10
-        video.close()
-
-    def test_video_reader_resize(self, temp_video_path):
-        """Test frame resizing."""
-        video = pf.VideoReader(temp_video_path, width=320)
-        assert video.width == 320
-        assert video.height == 240
-        for frame in video:
-            assert frame.shape == (240, 320, 3)
-            break
-        video.close()
-
-    def test_video_reader_seek(self, temp_video_path):
-        """Test seeking to a specific frame."""
-        video = pf.VideoReader(temp_video_path)
-        video.seek(5)
-        # Read one frame after seek
-        for frame in video:
-            assert isinstance(frame, np.ndarray)
-            break
-        video.close()
-
-    def test_video_reader_context_manager(self, temp_video_path):
-        """Test context manager usage."""
+    def test_facts(self, temp_video_path):
+        """Metadata is read once at open and describes what iteration yields."""
         with pf.VideoReader(temp_video_path) as video:
-            assert video.frame_count == 10
-            count = sum(1 for _ in video)
-            assert count == 10
+            assert video.frames == 10
+            assert video.fps == 30.0
+            assert video.width == 640
+            assert video.height == 480
+            assert video.duration == pytest.approx(10 / 30.0)
+            assert video.is_live is False
+            assert isinstance(video.codec, str) and len(video.codec) == 4
 
-    def test_video_reader_invalid_path(self):
+    def test_facts_match_the_frames_actually_yielded(self, temp_video_path,
+                                                    portrait_video_path):
+        """width/height describe the array you receive, on both orientations.
+
+        Portrait is the case that catches a transposed size; a landscape-only
+        suite cannot distinguish width from height.
+        """
+        for path in (temp_video_path, portrait_video_path):
+            with pf.VideoReader(path) as video:
+                frame = next(iter(video))
+                assert (video.width, video.height) == (frame.shape[1], frame.shape[0])
+
+    def test_iteration(self, temp_video_path):
+        """Iterating yields RGB frames at the source's own resolution."""
+        with pf.VideoReader(temp_video_path) as video:
+            frames = list(video)
+        assert len(frames) == 10
+        assert all(f.shape == (480, 640, 3) and f.dtype == np.uint8 for f in frames)
+
+    def test_iteration_does_not_rewind(self, counted_video_path):
+        """Iteration continues from the current position rather than resetting.
+
+        Rewinding on every __iter__ made seek() unobservable and is impossible for
+        a live source. Replay is an explicit seek(0).
+        """
+        with pf.VideoReader(counted_video_path) as video:
+            assert sum(1 for _ in video) == 20
+            assert sum(1 for _ in video) == 0      # exhausted, not restarted
+            video.seek(0)
+            assert sum(1 for _ in video) == 20     # replay is explicit
+
+    def test_seek_then_iterate_starts_there(self, counted_video_path):
+        """seek(n) then iterating begins at frame n, not at 0."""
+        truth = decoded_frames(counted_video_path)
+        with pf.VideoReader(counted_video_path) as video:
+            video.seek(7)
+            assert np.array_equal(next(iter(video)), truth[7])
+
+    def test_start_parameter(self, counted_video_path):
+        """start= is seek() applied at open."""
+        truth = decoded_frames(counted_video_path)
+        with pf.VideoReader(counted_video_path, start=5) as video:
+            assert np.array_equal(next(iter(video)), truth[5])
+
+    def test_stride_divides_the_rate_and_the_count(self, counted_video_path):
+        """fps and frames describe the strided stream, so a sink cannot be misfed.
+
+        Reading every 5th frame of a 25 fps file is a 5 fps sequence. A writer
+        handed 25 would produce a file that plays five times too fast.
+        """
+        with pf.VideoReader(counted_video_path, stride=5) as video:
+            assert video.fps == 5.0
+            assert video.frames == 4                 # ceil(20 / 5)
+            assert sum(1 for _ in video) == video.frames
+
+    @pytest.mark.parametrize("stride", [2, 3, 5, 7])
+    def test_stride_leaves_duration_alone(self, counted_video_path, stride):
+        """Striding changes how many frames you look at, not the source's length."""
+        with pf.VideoReader(counted_video_path) as plain, \
+                pf.VideoReader(counted_video_path, stride=stride) as strided:
+            assert strided.duration == plain.duration
+
+    @pytest.mark.parametrize("stride,frames", [(5, 4), (3, 7), (7, 3)])
+    def test_frames_counts_what_arrives_even_when_it_does_not_divide(
+            self, counted_video_path, stride, frames):
+        """frames rounds up, because a partial stride still yields a frame.
+
+        The consequence, which duration's docstring states: frames / fps only
+        approximates duration. 20 frames at stride 3 yields 7, and 7 / (25/3) is
+        0.84s against a real 0.8s. The source's length is duration's answer to give,
+        not this one's.
+        """
+        with pf.VideoReader(counted_video_path, stride=stride) as video:
+            assert video.frames == frames
+            assert sum(1 for _ in video) == frames
+
+    def test_context_manager(self, temp_video_path):
+        with pf.VideoReader(temp_video_path) as video:
+            assert video.is_opened
+        assert not video.is_opened
+
+    def test_invalid_path(self):
         """A path that is not on disk raises FileNotFoundError, without a network call."""
         with pytest.raises(FileNotFoundError):
             pf.VideoReader("nonexistent_file.mp4")
 
-    def test_video_reader_directory_path(self, tmp_path):
+    def test_directory_path(self, tmp_path):
         """A directory raises IsADirectoryError rather than a decode failure."""
         with pytest.raises(IsADirectoryError):
             pf.VideoReader(str(tmp_path))
 
-    def test_video_reader_codec(self, temp_video_path):
-        """Test codec property."""
-        video = pf.VideoReader(temp_video_path)
-        assert isinstance(video.codec, str)
-        assert len(video.codec) == 4
-        video.close()
+    def test_no_len(self, temp_video_path):
+        """len() promised an exactness the frame count cannot keep."""
+        with pf.VideoReader(temp_video_path) as video:
+            with pytest.raises(TypeError, match="estimate"):
+                len(video)
+
+    def test_frame_count_renamed(self, temp_video_path):
+        """The old name points at the new one."""
+        with pf.VideoReader(temp_video_path) as video:
+            with pytest.raises(AttributeError, match=r"\.frames"):
+                video.frame_count
+
+
+class TestUnknownFacts:
+    """What the reader does when the container will not say.
+
+    None is the whole point: OpenCV reports 0.0 for a rate it does not know, which
+    is routine for cameras and common for streams, and 0.0 flows into a writer and
+    produces a file that will not play. None cannot be mistaken for a number, so it
+    forces a caller to have a policy.
+    """
+
+    @pytest.mark.parametrize("reported", [0.0, -1.0, float("nan"), float("inf"),
+                                          None, "not a number"])
+    def test_unusable_rates_become_none(self, reported):
+        assert pf.media._valid_fps(reported) is None
+
+    @pytest.mark.parametrize("reported", [25, 29.97, 1.0])
+    def test_usable_rates_survive(self, reported):
+        assert pf.media._valid_fps(reported) == pytest.approx(reported)
+
+    def test_unknown_rate_makes_duration_unknown_too(self, temp_video_path,
+                                                     monkeypatch):
+        """duration is derived, so it cannot be more certain than what it is from."""
+        with pf.VideoReader(temp_video_path) as video:
+            monkeypatch.setattr(video, "_source_fps", None)
+            assert video.fps is None
+            assert video.duration is None
+            assert sum(1 for _ in video) == 10      # still perfectly readable
+
+    def test_unknown_length_makes_frames_none(self, temp_video_path, monkeypatch):
+        with pf.VideoReader(temp_video_path) as video:
+            monkeypatch.setattr(video, "_source_frames", None)
+            assert video.frames is None
+            assert video.duration is None
+
+    def test_unknown_facts_are_readable_in_repr(self, temp_video_path, monkeypatch):
+        with pf.VideoReader(temp_video_path) as video:
+            monkeypatch.setattr(video, "_source_fps", None)
+            monkeypatch.setattr(video, "_source_frames", None)
+            assert "unknown fps" in repr(video)
+            assert "unknown length" in repr(video)
+
+
+class TestFactsFollowTheFrame:
+    """When metadata and a decoded frame disagree, the frame wins.
+
+    OpenCV applies a container's rotation flag to both the reported size and the
+    decoded array, so on a supported version they agree even for portrait phone
+    footage. This is the belt to that braces: if a source ever reports a size it
+    does not deliver, the facts correct themselves on the first frame handed out
+    rather than describing an array nobody received.
+    """
+
+    def test_size_corrects_itself_on_the_first_frame(self, temp_video_path,
+                                                     monkeypatch):
+        with pf.VideoReader(temp_video_path) as video:
+            monkeypatch.setattr(video, "_width", 480)     # transposed, as a
+            monkeypatch.setattr(video, "_height", 640)    # rotation flag would do
+
+            frame = next(iter(video))
+
+            assert (video.width, video.height) == (640, 480)
+            assert (video.width, video.height) == (frame.shape[1], frame.shape[0])
+
+
+class TestUndecodableSources:
+    """A file that exists but is not what it claims to be."""
+
+    def test_unreadable_video_is_not_a_missing_file(self, tmp_path):
+        path = tmp_path / "not_really.mp4"
+        path.write_text("this is not a video")
+        with pytest.raises(RuntimeError, match="Could not open video"):
+            pf.VideoReader(str(path))
+
+    def test_unreadable_stream(self, tmp_path):
+        path = tmp_path / "not_really.mp4"
+        path.write_text("this is not a stream")
+        with pytest.raises(RuntimeError, match="Could not open camera/stream"):
+            pf.CameraStream(str(path))
+
+    def test_unreadable_image(self, tmp_path):
+        path = tmp_path / "not_really.jpg"
+        path.write_text("this is not an image")
+        with pytest.raises(RuntimeError, match="Failed to decode"):
+            pf.read_image(str(path))
 
 
 # ============================================================================
-# read_image Tests
+# The shared source contract
 # ============================================================================
 
-class TestReadImage:
-    """Tests for read_image function."""
+@pytest.mark.parametrize("source_class", [pf.VideoReader, pf.CameraStream],
+                         ids=["VideoReader", "CameraStream"])
+class TestSharedSourceContract:
+    """What every source promises, asserted once against each of them.
 
-    def test_read_image(self, temp_image_path):
-        """Test loading an image."""
-        image = pf.read_image(temp_image_path)
-        assert isinstance(image, np.ndarray)
-        assert image.shape == (480, 640, 3)
+    The design claim is that swapping a file for a camera changes one line and
+    nothing else. Copies of these tests, one per class, would let the two drift
+    apart silently -- which is exactly the failure the shared base exists to
+    prevent -- so the contract is stated once and parametrized.
 
-    def test_read_image_resize(self, temp_image_path):
-        """Test loading with resize."""
-        image = pf.read_image(temp_image_path, width=320)
-        assert image.shape[1] == 320
-        assert image.shape[0] == 240
+    CameraStream is driven by a file path here: cv2.VideoCapture accepts one
+    wherever it accepts a device, and the class cannot tell the difference.
+    """
 
-    def test_read_image_invalid_path(self):
-        """A missing file raises, and the message names the resolved absolute path."""
-        with pytest.raises(FileNotFoundError, match="resolved to"):
-            pf.read_image("nonexistent.jpg")
+    def test_reports_the_same_facts(self, temp_video_path, source_class):
+        with source_class(temp_video_path) as source:
+            for name in ("width", "height", "fps", "frames", "duration", "is_live"):
+                assert hasattr(source, name), f"{source_class.__name__} lacks {name}"
+            assert isinstance(source.is_live, bool)
 
-    def test_read_image_directory_path(self, tmp_path):
-        """A directory raises IsADirectoryError rather than a decode failure."""
-        with pytest.raises(IsADirectoryError):
-            pf.read_image(str(tmp_path))
+    def test_yields_rgb_uint8_hwc3(self, temp_video_path, source_class):
+        with source_class(temp_video_path) as source:
+            frame = next(iter(source))
+        assert frame.dtype == np.uint8
+        assert frame.ndim == 3 and frame.shape[2] == 3
+
+    def test_facts_describe_the_frames_yielded(self, portrait_video_path,
+                                               source_class):
+        with source_class(portrait_video_path) as source:
+            frame = next(iter(source))
+            assert (source.width, source.height) == (frame.shape[1], frame.shape[0])
+
+    def test_iterates_every_frame(self, temp_video_path, source_class):
+        with source_class(temp_video_path) as source:
+            assert sum(1 for _ in source) == 10
+
+    def test_stride_yields_every_nth_frame(self, counted_video_path, source_class):
+        """Skipped frames are grabbed but never retrieved or converted."""
+        truth = decoded_frames(counted_video_path)
+        with source_class(counted_video_path, stride=5) as source:
+            got = list(source)
+        assert len(got) == 4
+        assert all(np.array_equal(a, truth[i]) for a, i in zip(got, [0, 5, 10, 15]))
+
+    def test_stride_divides_the_rate(self, counted_video_path, source_class):
+        with source_class(counted_video_path, stride=5) as source:
+            assert source.fps == 5.0
+
+    def test_stride_must_be_positive(self, temp_video_path, source_class):
+        with pytest.raises(ValueError, match="stride"):
+            source_class(temp_video_path, stride=0)
+
+    def test_read_returns_frames_then_none(self, temp_video_path, source_class):
+        """read() is on the base, so the webcam idiom works for a file too."""
+        with source_class(temp_video_path) as source:
+            assert source.read().shape == (480, 640, 3)
+            for _ in range(9):
+                source.read()
+            assert source.read() is None
+
+    def test_width_parameter_removed(self, temp_video_path, source_class):
+        """The removed resize parameter names its replacement."""
+        with pytest.raises(TypeError, match="transform.resize"):
+            source_class(temp_video_path, width=320)
+
+    def test_close_is_idempotent(self, temp_video_path, source_class):
+        source = source_class(temp_video_path)
+        source.close()
+        source.close()
+        assert not source.is_opened
+
+
+# ============================================================================
+# CameraStream Tests
+# ============================================================================
+
+class TestCameraStream:
+    """Tests for CameraStream.
+
+    Driven by a file: cv2.VideoCapture accepts a path wherever it accepts a device,
+    and the class cannot tell the difference, so the whole contract is testable
+    without hardware.
+    """
+
+    def test_size_comes_from_a_decoded_frame(self, portrait_video_path):
+        """A live source has no trustworthy metadata, so a frame is decoded at open."""
+        with pf.CameraStream(portrait_video_path) as cam:
+            assert (cam.width, cam.height) == (480, 640)
+
+    def test_has_no_length(self, temp_video_path):
+        """A stream has no end, so neither count nor duration can be reported."""
+        with pf.CameraStream(temp_video_path) as cam:
+            assert cam.frames is None
+            assert cam.duration is None
+
+    def test_probe_frame_is_not_lost(self, temp_video_path):
+        """The frame decoded at open is the first one handed out, not a discard."""
+        with pf.CameraStream(temp_video_path) as cam:
+            assert sum(1 for _ in cam) == 10
+
+
+
+class TestReadVideo:
+    """read_video is VideoReader by another name, kept for symmetry with read_image."""
+
+    def test_returns_a_reader(self, temp_video_path):
+        with pf.read_video(temp_video_path) as video:
+            assert isinstance(video, pf.VideoReader)
+            assert video.frames == 10
+
+    def test_forwards_stride_and_start(self, counted_video_path):
+        truth = decoded_frames(counted_video_path)
+        with pf.read_video(counted_video_path, stride=5, start=5) as video:
+            got = list(video)
+        assert len(got) == 3                                  # frames 5, 10, 15
+        assert all(np.array_equal(a, truth[i]) for a, i in zip(got, [5, 10, 15]))
+
+    def test_width_parameter_removed(self, temp_video_path):
+        with pytest.raises(TypeError, match="transform.resize"):
+            pf.read_video(temp_video_path, width=320)
 
 
 # ============================================================================
@@ -133,38 +373,225 @@ class TestReadImage:
 class TestVideoWriter:
     """Tests for VideoWriter class."""
 
-    def test_video_writer_basic(self, tmp_path, sample_image):
-        """Test writing frames to video."""
+    def test_basic(self, tmp_path, sample_image):
         output = str(tmp_path / "output.mp4")
-        writer = pf.VideoWriter(output, fps=30.0)
-        for _ in range(5):
-            writer.write(sample_image)
-        assert writer.frames_written == 5
-        assert writer.is_opened
-        writer.close()
-        assert not writer.is_opened
-        # Verify file exists and is readable
-        video = pf.VideoReader(output)
-        assert video.frame_count == 5
-        video.close()
-
-    def test_video_writer_context_manager(self, tmp_path, sample_image):
-        """Test context manager usage."""
-        output = str(tmp_path / "output_ctx.mp4")
         with pf.VideoWriter(output, fps=30.0) as writer:
-            writer.write(sample_image)
-            writer.write(sample_image)
-            assert writer.frames_written == 2
+            for _ in range(5):
+                writer.write(sample_image)
+            assert writer.frames_written == 5
+            assert writer.is_opened
+        assert not writer.is_opened
+        with pf.VideoReader(output) as video:
+            assert video.frames == 5
 
-    def test_video_writer_resize(self, tmp_path, sample_image):
-        """Test resize-on-write."""
-        output = str(tmp_path / "output_resize.mp4")
-        writer = pf.VideoWriter(output, fps=30.0, width=320)
-        writer.write(sample_image)
+    def test_size_comes_from_the_first_frame(self, tmp_path):
+        """The loop may resize, so the writer takes its size from what it is given."""
+        output = str(tmp_path / "sized.mp4")
+        with pf.VideoWriter(output, fps=25.0) as writer:
+            writer.write(np.zeros((360, 640, 3), dtype=np.uint8))
+        with pf.VideoReader(output) as video:
+            assert (video.width, video.height) == (640, 360)
+
+    def test_mismatched_size_raises(self, tmp_path):
+        """cv2.VideoWriter drops a mismatched frame and reports nothing.
+
+        The result is a short file with no error anywhere -- discovered, if at all,
+        hours later. This is the single most expensive silent failure in the module.
+        """
+        writer = pf.VideoWriter(str(tmp_path / "mismatch.mp4"), fps=25.0)
+        writer.write(np.zeros((480, 640, 3), dtype=np.uint8))
+        with pytest.raises(ValueError, match="same size"):
+            writer.write(np.zeros((240, 320, 3), dtype=np.uint8))
         writer.close()
-        video = pf.VideoReader(output)
-        assert video.width == 320
-        video.close()
+
+    @pytest.mark.parametrize("frame,description", [
+        (np.zeros((480, 640, 4), dtype=np.uint8), "4 channels"),
+        (np.zeros((480, 640), dtype=np.uint8), "grayscale"),
+        (np.zeros((480, 640, 3), dtype=np.float32), "float32"),
+        ([[0, 0, 0]], "not an array"),
+    ])
+    def test_rejects_non_rgb_frames(self, tmp_path, frame, description):
+        """cv2.cvtColor accepts these and returns HxWx3 colour nonsense silently."""
+        writer = pf.VideoWriter(str(tmp_path / f"{description}.mp4"), fps=25.0)
+        with pytest.raises(ValueError, match="RGB uint8"):
+            writer.write(frame)
+        writer.close()
+
+    @pytest.mark.parametrize("fps", [0.0, -5.0, float("nan"), float("inf"), None])
+    def test_bad_rate_raises_at_construction(self, tmp_path, fps):
+        """A rate that cannot produce a playable file fails on the line that set it."""
+        with pytest.raises(ValueError, match="positive finite"):
+            pf.VideoWriter(str(tmp_path / "bad.mp4"), fps=fps)
+
+    def test_requires_a_rate(self, tmp_path):
+        with pytest.raises(ValueError, match="requires a frame rate"):
+            pf.VideoWriter(str(tmp_path / "none.mp4"))
+
+    def test_like_carries_the_rate(self, tmp_path, counted_video_path):
+        """like= takes the rate from a source: the one value that must cross."""
+        with pf.VideoReader(counted_video_path) as video:
+            writer = pf.VideoWriter(str(tmp_path / "like.mp4"), like=video)
+            assert writer.fps == video.fps == 25.0
+            writer.close()
+
+    def test_like_carries_the_strided_rate(self, tmp_path, counted_video_path):
+        """The corrected rate, not the file's -- otherwise the output plays fast."""
+        output = str(tmp_path / "strided.mp4")
+        with pf.VideoReader(counted_video_path, stride=5) as video:
+            with pf.VideoWriter(output, like=video) as writer:
+                for frame in video:
+                    writer.write(frame)
+        with pf.VideoReader(output) as result:
+            assert result.fps == 5.0
+            assert result.duration == pytest.approx(0.8, abs=0.05)  # 4 frames @ 5fps
+
+    def test_like_and_fps_are_exclusive(self, tmp_path, temp_video_path):
+        with pf.VideoReader(temp_video_path) as video:
+            with pytest.raises(ValueError, match="exactly one"):
+                pf.VideoWriter(str(tmp_path / "both.mp4"), fps=30.0, like=video)
+
+    def test_like_refuses_a_source_without_a_rate(self, tmp_path):
+        """None means unknown, and unknown forces the caller to state a policy."""
+        class RatelessSource:
+            fps = None
+
+        with pytest.raises(ValueError, match="no frame rate"):
+            pf.VideoWriter(str(tmp_path / "live.mp4"), like=RatelessSource())
+
+    def test_like_needs_something_with_fps(self, tmp_path):
+        with pytest.raises(TypeError, match="fps"):
+            pf.VideoWriter(str(tmp_path / "x.mp4"), like=object())
+
+    def test_width_parameter_removed(self, tmp_path):
+        with pytest.raises(TypeError, match="transform.resize"):
+            pf.VideoWriter(str(tmp_path / "w.mp4"), fps=30.0, width=320)
+
+
+# ============================================================================
+# Round-trip
+# ============================================================================
+
+class TestRoundTrip:
+    """Reader and writer are two halves of one loop; test them as one."""
+
+    def test_read_process_write_preserves_the_facts(self, tmp_path,
+                                                    counted_video_path):
+        output = str(tmp_path / "round.mp4")
+        with pf.VideoReader(counted_video_path) as source:
+            with pf.VideoWriter(output, like=source) as writer:
+                for frame in source:
+                    writer.write(frame)
+            expected = (source.width, source.height, source.fps, source.frames)
+
+        with pf.VideoReader(output) as result:
+            assert (result.width, result.height, result.fps) == expected[:3]
+            assert result.frames == expected[3]
+
+    def test_resizing_in_the_loop_changes_size_and_nothing_else(
+            self, tmp_path, counted_video_path):
+        """Size is discovered, rate is declared -- the two do not interfere."""
+        output = str(tmp_path / "resized.mp4")
+        with pf.VideoReader(counted_video_path, stride=2) as source:
+            with pf.VideoWriter(output, like=source) as writer:
+                for frame in source:
+                    writer.write(pf.transform.resize(frame, width=80))
+            source_duration = source.duration
+
+        with pf.VideoReader(output) as result:
+            assert (result.width, result.height) == (80, 60)
+            assert result.fps == 12.5
+            assert result.duration == pytest.approx(source_duration, abs=0.05)
+
+
+# ============================================================================
+# read_image / save_image Tests
+# ============================================================================
+
+class TestReadImage:
+    """Tests for read_image function."""
+
+    def test_read_image(self, temp_image_path):
+        image = pf.read_image(temp_image_path)
+        assert isinstance(image, np.ndarray)
+        assert image.shape == (480, 640, 3)
+        assert image.dtype == np.uint8
+
+    def test_applies_exif_orientation(self, exif_rotated_image_path):
+        """A rotated photo comes back the way a viewer shows it.
+
+        This matches what VideoReader does with a rotated video, and it is what a
+        model needs in order to produce upright coordinates. The stored array is
+        200x100; the EXIF tag says display it rotated, so it arrives 100x200.
+        """
+        assert pf.read_image(exif_rotated_image_path).shape == (200, 100, 3)
+
+    def test_grayscale_becomes_three_channels(self, grayscale_image_path):
+        """The library's contract is RGB HxWx3; expanding is lossless."""
+        assert pf.read_image(grayscale_image_path).shape == (40, 60, 3)
+
+    def test_alpha_is_dropped_with_a_warning(self, rgba_image_path):
+        """Dropping alpha is real information loss, so it is not done in silence."""
+        with pytest.warns(UserWarning, match="alpha"):
+            image = pf.read_image(rgba_image_path)
+        assert image.shape == (40, 60, 3)
+
+    def test_no_alpha_probe_for_formats_that_cannot_carry_it(self, temp_image_path):
+        """JPEG has no alpha channel, so it never pays for the header probe."""
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")      # any warning here fails the test
+            assert pf.read_image(temp_image_path).shape == (480, 640, 3)
+
+    def test_invalid_path(self):
+        """A missing file raises, and the message names the resolved absolute path."""
+        with pytest.raises(FileNotFoundError, match="resolved to"):
+            pf.read_image("nonexistent.jpg")
+
+    def test_directory_path(self, tmp_path):
+        """A directory raises IsADirectoryError rather than a decode failure."""
+        with pytest.raises(IsADirectoryError):
+            pf.read_image(str(tmp_path))
+
+    def test_width_parameter_removed(self, temp_image_path):
+        with pytest.raises(TypeError, match="transform.resize"):
+            pf.read_image(temp_image_path, width=320)
+
+
+class TestSaveImage:
+    """Tests for save_image function."""
+
+    def test_round_trip(self, tmp_path, sample_image):
+        path = str(tmp_path / "out.png")
+        pf.save_image(path, sample_image)
+        assert np.array_equal(pf.read_image(path), sample_image)
+
+    def test_missing_directory_says_so(self, tmp_path, sample_image):
+        """Previously surfaced as "Failed to write image", naming only the symptom."""
+        with pytest.raises(NotADirectoryError, match="does not exist"):
+            pf.save_image(str(tmp_path / "nope" / "out.png"), sample_image)
+
+    def test_missing_extension_says_so(self, tmp_path, sample_image):
+        with pytest.raises(ValueError, match="no file extension"):
+            pf.save_image(str(tmp_path / "out"), sample_image)
+
+    def test_unknown_extension_does_not_leak_cv2_error(self, tmp_path, sample_image):
+        with pytest.raises(ValueError, match="cannot encode"):
+            pf.save_image(str(tmp_path / "out.xyz"), sample_image)
+
+    @pytest.mark.parametrize("image,description", [
+        (np.zeros((40, 60, 4), dtype=np.uint8), "4 channels"),
+        (np.zeros((40, 60), dtype=np.uint8), "grayscale"),
+        (np.zeros((40, 60, 3), dtype=np.float32), "float32"),
+    ])
+    def test_rejects_non_rgb_images(self, tmp_path, image, description):
+        """The same guard VideoWriter.write has, for the same reason.
+
+        cv2.cvtColor turns any of these into HxWx3 without complaint, so the file
+        written is a plausible-looking image full of colour nonsense.
+        """
+        with pytest.raises(ValueError, match="RGB uint8"):
+            pf.save_image(str(tmp_path / f"{description}.png"), image)
 
 
 # ============================================================================
@@ -194,6 +621,14 @@ class TestDisplayVideo:
                 patch("cv2.destroyWindow"):
             with pytest.raises(pf.media.DisplayExit):
                 pf.display_video(sample_image, "test", wait_key=1)
+
+    def test_display_width_does_not_touch_the_input(self, sample_image):
+        """width survives on display because a display has no downstream."""
+        original = sample_image.copy()
+        with patch("cv2.imshow") as imshow, patch("cv2.waitKey", return_value=255):
+            pf.display_video(sample_image, "test", width=320)
+        assert np.array_equal(sample_image, original)
+        assert imshow.call_args[0][1].shape[:2] == (240, 320)
 
 
 # ============================================================================
