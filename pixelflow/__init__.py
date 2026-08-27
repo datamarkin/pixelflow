@@ -1,4 +1,4 @@
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 __author__ = "Datamarkin"
 
 # Import core modules
@@ -9,7 +9,6 @@ from . import colors
 from . import slicer
 from . import smoother
 from . import timer
-from . import assets
 
 # Result types and their converters. Every model output PixelFlow understands becomes
 # one of two things: Detections for anything that localises, Classifications for
@@ -102,7 +101,6 @@ __all__ = [
     "Crossings",
 
     # Processing utilities
-    "assets",
     "slicer",
     "SlicedInference",
     "auto_slice_size",

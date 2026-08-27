@@ -11,9 +11,6 @@ __pycache__/
 *$py.class
 *.so
 
-# Downloaded assets cache
-dtmfiles/
-
 # Test / coverage artifacts
 .coverage
 .coverage.*

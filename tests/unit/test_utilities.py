@@ -79,15 +79,14 @@ class TestVideoReader:
             assert count == 10
 
     def test_video_reader_invalid_path(self):
-        """A path that is neither on disk nor downloadable raises FileNotFoundError.
+        """A path that is not on disk raises FileNotFoundError, without a network call."""
+        with pytest.raises(FileNotFoundError):
+            pf.VideoReader("nonexistent_file.mp4")
 
-        media._resolve_path falls back to assets.download() for any missing
-        path, so the download is stubbed out here — otherwise this test would
-        make a real network request to dtmfiles.com.
-        """
-        with patch("pixelflow.media.assets.download", side_effect=OSError("offline")):
-            with pytest.raises(FileNotFoundError):
-                pf.VideoReader("nonexistent_file.mp4")
+    def test_video_reader_directory_path(self, tmp_path):
+        """A directory raises IsADirectoryError rather than a decode failure."""
+        with pytest.raises(IsADirectoryError):
+            pf.VideoReader(str(tmp_path))
 
     def test_video_reader_codec(self, temp_video_path):
         """Test codec property."""
@@ -117,10 +116,14 @@ class TestReadImage:
         assert image.shape[0] == 240
 
     def test_read_image_invalid_path(self):
-        """Test with nonexistent file."""
-        with patch("pixelflow.media.assets.download", side_effect=OSError("offline")):
-            with pytest.raises(FileNotFoundError):
-                pf.read_image("nonexistent.jpg")
+        """A missing file raises, and the message names the resolved absolute path."""
+        with pytest.raises(FileNotFoundError, match="resolved to"):
+            pf.read_image("nonexistent.jpg")
+
+    def test_read_image_directory_path(self, tmp_path):
+        """A directory raises IsADirectoryError rather than a decode failure."""
+        with pytest.raises(IsADirectoryError):
+            pf.read_image(str(tmp_path))
 
 
 # ============================================================================
@@ -624,12 +627,6 @@ class TestUtilityEdgeCases:
         except (ValueError, AssertionError):
             # Expected to fail
             pass
-
-    def test_video_reader_with_invalid_path(self):
-        """Test VideoReader with invalid path."""
-        with patch("pixelflow.media.assets.download", side_effect=OSError("offline")):
-            with pytest.raises(FileNotFoundError):
-                pf.VideoReader("nonexistent_file.mp4")
 
     def test_timer_stop_without_start(self):
         """Test stopping timer that wasn't started."""

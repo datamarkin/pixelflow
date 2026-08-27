@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-27
+
+### Removed
+- **`pf.assets` and the implicit download behind every file read.** `read_image` and
+  `VideoReader` resolved a path by checking the disk and then, for anything not found,
+  asking `dtmfiles.com` for it. A mistyped filename was therefore not an error but a
+  network request -- one that could block for the full 30-second socket timeout, and one
+  whose success wrote a file into the caller's working directory under `./dtmfiles/`.
+  A read had a write as a side effect, and the only way to get a prompt "no such file"
+  was to be offline.
+
+  It also cost every user 30 ms of the 166 ms `import pixelflow` takes -- 18%, spent on
+  `urllib.request` and `hashlib` for a convenience that existed to shorten a quick-start
+  snippet. Import now measures 136 ms. The module had exactly one caller in the library,
+  and that caller is gone.
+
+  Migration: fetch the file yourself and pass a path that exists.
+
+### Changed
+- **A path that is not there says so, and says where it looked.** `FileNotFoundError` now
+  carries the resolved absolute path, which is the part that reveals a wrong *relative*
+  path -- the common case, and the one the old message could not distinguish from a failed
+  download.
+- **A directory raises `IsADirectoryError`.** Passing one previously reached `cv2.imread`,
+  which returns `None`, which surfaced as "Failed to decode image" -- a decoding message
+  for something that was never a decoding problem.
+
+### Fixed
+- `_resolve_path` no longer catches every `Exception` and re-raises `FileNotFoundError`
+  without chaining, which discarded the reason a download failed. There is no download
+  left to fail.
+
 ## [0.3.2] - 2026-08-23
 
 ### Fixed

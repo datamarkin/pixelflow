@@ -14,7 +14,6 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from pixelflow import assets
 
 class DisplayExit(Exception):
     """Raised when the quit key is pressed during display."""
@@ -47,16 +46,20 @@ def _resize_frame(frame: np.ndarray, width: Optional[int]) -> np.ndarray:
 
 
 def _resolve_path(source: str) -> Path:
-    """Return a local Path for source, downloading via assets if needed."""
+    """Return a local Path for source. Raises if it is missing or a directory.
+
+    A directory is rejected explicitly -- ``exists()`` is true for one, so it would
+    otherwise reach ``cv2.imread``, return None, and surface as a decode error. The
+    message resolves the path because that is what reveals a bad *relative* path.
+    """
     path = Path(source)
-    if path.exists():
-        return path
-    try:
-        return assets.download(source)
-    except Exception:
+    if path.is_dir():
+        raise IsADirectoryError(f"Expected a file, got a directory: {path}")
+    if not path.exists():
         raise FileNotFoundError(
-            f"File not found locally and download failed: {source}"
+            f"No such file: {source!r} (resolved to {path.resolve()})"
         )
+    return path
 
 
 def read_video(source: str, width: Optional[int] = None) -> "VideoReader":
