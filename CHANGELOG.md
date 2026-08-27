@@ -59,6 +59,41 @@ cross from source to sink, and it is now the only thing that does.
   handed 25 produces a file that plays five times too fast. `like=` carries the
   corrected rate, so that file is unconstructible rather than merely catchable.
 
+- **`read_image` accepts encoded bytes and arrays, not only paths.** `str`/`Path`
+  decodes a file; `bytes`/`bytearray`/`memoryview` decodes a buffer, which is how an
+  HTTP upload, an S3 object or a database blob actually arrives; an `np.ndarray` is
+  checked and returned unchanged. Channel order is established at decode and
+  invisible afterwards, so there has to be exactly one decoder -- otherwise every
+  caller with bytes writes `cv2.imdecode` themselves and has to remember the
+  BGR-to-RGB step, which is the mistake this function exists to make unmakeable.
+
+  Both decode paths use `IMREAD_COLOR`, deliberately and in step: `IMREAD_UNCHANGED`
+  ignores EXIF orientation, so the same file would come back rotated differently
+  depending on whether you passed the path or its bytes. A test asserts the two
+  agree, because nothing else would notice if they stopped.
+
+  An array is the one input whose channel order cannot be verified -- shape, dtype
+  and channel count are checked, but RGB versus BGR is not recoverable from pixels.
+  It is therefore *trusted*, and the docstring says so: an array from `cv2.imread`
+  is BGR, and the fix is to pass the path instead.
+
+  A URL is still not a source. Reading a file must not make a network request; see
+  the 0.4.0 note on `pf.assets`.
+
+- **`pf.encode_image(image, ".png") -> bytes`**, the mirror of `read_image`'s buffer
+  branch. Accepting bytes in with nothing to hand bytes out is the asymmetry that
+  makes every HTTP handler hand-roll `cv2.imencode` -- along with the RGB-to-BGR
+  step that goes with it, which is the one that gets forgotten. An unsupported
+  format raises `ValueError` rather than leaking a raw `cv2.error`.
+
+  **`save_image` now encodes through it** rather than calling `cv2.imwrite` itself.
+  A function whose docstring says there must be one encoder should not sit next to a
+  second one: the RGB-to-BGR conversion and the format handling now exist once, and
+  `save_image` keeps only what is genuinely its own -- the parent-directory and
+  missing-extension checks, which are path concerns. Its failure-to-write exception
+  is consequently `OSError` rather than `RuntimeError`; the `ValueError` for a bad
+  image or an unwritable format is unchanged.
+
 - **`is_live`** on both sources, and a shared fact surface -- `width`, `height`, `fps`,
   `frames`, `duration` -- with the same names and the same meanings on each. Swapping a
   file for a camera is one line, and `is_live` is the only thing worth branching on.
@@ -119,6 +154,19 @@ cross from source to sink, and it is now the only thing that does.
 - **A bad frame rate fails at construction.** `fps` of `0`, `None`, `NaN`, `inf` or a
   negative number produced a writer that failed to open on the first `write()`, hours
   into a run, with a message that blamed the output path.
+
+- **Undecodable image data raises `ValueError`, not `RuntimeError`.** Bytes that are
+  not an image, or a file that exists but is not one, are a bad *value* rather than a
+  runtime failure -- which is what lets a service turn them into a 400 without
+  widening what it catches. A missing file is still `FileNotFoundError` and a
+  directory is still `IsADirectoryError`.
+
+  The rule the image functions now follow is written down in the module docstring
+  rather than left implicit in one function's `Raises:` block. **`VideoReader` and
+  `CameraStream` still raise `RuntimeError`** when a file will not open -- the same
+  user error, a different exception. That inconsistency is recorded rather than
+  quietly fixed, because converting them is a public behaviour change beyond the
+  scope of the image work.
 
 - **`save_image` names the cause.** A missing parent directory raises
   `NotADirectoryError` instead of "Failed to write image", which named only the

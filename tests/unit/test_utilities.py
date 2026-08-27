@@ -11,6 +11,8 @@ import cv2
 import time
 from unittest.mock import patch
 
+from pathlib import Path
+
 import pixelflow as pf
 
 
@@ -233,12 +235,6 @@ class TestUndecodableSources:
         with pytest.raises(RuntimeError, match="Could not open camera/stream"):
             pf.CameraStream(str(path))
 
-    def test_unreadable_image(self, tmp_path):
-        path = tmp_path / "not_really.jpg"
-        path.write_text("this is not an image")
-        with pytest.raises(RuntimeError, match="Failed to decode"):
-            pf.read_image(str(path))
-
 
 # ============================================================================
 # The shared source contract
@@ -343,7 +339,6 @@ class TestCameraStream:
         """The frame decoded at open is the first one handed out, not a discard."""
         with pf.CameraStream(temp_video_path) as cam:
             assert sum(1 for _ in cam) == 10
-
 
 
 class TestReadVideo:
@@ -543,6 +538,13 @@ class TestReadImage:
             _warnings.simplefilter("error")      # any warning here fails the test
             assert pf.read_image(temp_image_path).shape == (480, 640, 3)
 
+    def test_undecodable_file_raises_value_error(self, tmp_path):
+        """A file that exists but is not an image is a bad value, not a crash."""
+        path = tmp_path / "not_really.jpg"
+        path.write_text("this is not an image")
+        with pytest.raises(ValueError, match="Could not decode"):
+            pf.read_image(str(path))
+
     def test_invalid_path(self):
         """A missing file raises, and the message names the resolved absolute path."""
         with pytest.raises(FileNotFoundError, match="resolved to"):
@@ -556,6 +558,123 @@ class TestReadImage:
     def test_width_parameter_removed(self, temp_image_path):
         with pytest.raises(TypeError, match="transform.resize"):
             pf.read_image(temp_image_path, width=320)
+
+
+class TestReadImageFromBuffer:
+    """read_image accepting encoded bytes.
+
+    HTTP uploads, S3 objects and database blobs arrive as bytes, never as a path.
+    Without this branch every caller writes cv2.imdecode themselves and has to
+    remember the BGR->RGB step -- which is the exact mistake read_image exists to
+    make unmakeable.
+    """
+
+    def test_bytes_round_trip(self, sample_image):
+        """The canonical round trip, and the channel-order check.
+
+        sample_image carries pure red, green and blue rectangles, so exact equality
+        here fails on any channel swap -- which is the failure this whole path
+        exists to prevent.
+        """
+        payload = pf.encode_image(sample_image, ".png")
+        assert np.array_equal(pf.read_image(payload), sample_image)
+
+    @pytest.mark.parametrize("wrap", [bytearray, memoryview],
+                             ids=["bytearray", "memoryview"])
+    def test_any_bytes_like(self, sample_image, wrap):
+        """An HTTP framework may hand you any of these; plain bytes is covered above."""
+        payload = pf.encode_image(sample_image, ".png")
+        assert pf.read_image(wrap(payload)).shape == sample_image.shape
+
+    def test_path_and_bytes_of_the_same_file_agree(self, exif_rotated_image_path):
+        """The property that would otherwise rot silently.
+
+        cv2.imdecode honours EXIF orientation with IMREAD_COLOR and ignores it with
+        IMREAD_UNCHANGED. If the two branches ever drift onto different flags, the
+        same image comes back rotated differently depending on whether you passed
+        the path or its bytes -- inside one function, with nothing to notice it.
+        """
+        from_path = pf.read_image(exif_rotated_image_path)
+        from_bytes = pf.read_image(Path(exif_rotated_image_path).read_bytes())
+
+        assert from_path.shape == from_bytes.shape == (200, 100, 3)
+        assert np.array_equal(from_path, from_bytes)
+
+    def test_undecodable_bytes_raise_value_error(self):
+        """A bad value, not a runtime failure -- an HTTP layer turns this into 400."""
+        with pytest.raises(ValueError, match="not an image"):
+            pf.read_image(b"this is not an image")
+
+    def test_empty_bytes_raise_value_error(self):
+        with pytest.raises(ValueError):
+            pf.read_image(b"")
+
+    def test_alpha_warning_from_a_buffer_too(self, rgba_image_path):
+        with pytest.warns(UserWarning, match="alpha"):
+            pf.read_image(Path(rgba_image_path).read_bytes())
+
+
+class TestReadImageFromArray:
+    """read_image accepting an array it did not decode.
+
+    This is the one input whose channel order cannot be verified: the function
+    decodes a path or a buffer, so it knows those are RGB, but an array is taken
+    on trust. Everything about it that *is* checkable is checked.
+    """
+
+    def test_array_returns_unchanged(self, sample_image):
+        assert pf.read_image(sample_image) is sample_image
+
+    @pytest.mark.parametrize("image", [
+        np.zeros((40, 60, 4), dtype=np.uint8),
+        np.zeros((40, 60), dtype=np.uint8),
+        np.zeros((40, 60, 3), dtype=np.float32),
+    ], ids=["4 channels", "grayscale", "float32"])
+    def test_array_is_validated(self, image):
+        """Stricter than a bare pass-through, and deliberately so.
+
+        Shape, dtype and channel count are recoverable from the array; only RGB
+        versus BGR is not. Checking what can be checked keeps grayscale and float
+        arrays out of the annotators and the writer.
+        """
+        with pytest.raises(ValueError, match="RGB uint8"):
+            pf.read_image(image)
+
+    def test_other_types_raise_type_error(self):
+        for value in (42, None, ["not", "an", "image"]):
+            with pytest.raises(TypeError, match="path, an encoded buffer"):
+                pf.read_image(value)
+
+
+class TestEncodeImage:
+    """encode_image -- the mirror of read_image's buffer branch.
+
+    The asymmetry is what generates the bug: accept bytes in with nothing to give
+    bytes out, and every HTTP handler hand-rolls cv2.imencode plus the RGB->BGR
+    step that goes with it.
+    """
+
+    @pytest.mark.parametrize("extension", [".jpg", ".webp"])
+    def test_round_trips_through_read_image(self, sample_image, extension):
+        """PNG is covered exactly by TestReadImageFromBuffer; these are lossy."""
+        decoded = pf.read_image(pf.encode_image(sample_image, extension))
+        assert decoded.shape == sample_image.shape
+        assert decoded.dtype == np.uint8
+
+    def test_extension_dot_is_optional(self, sample_image):
+        assert pf.encode_image(sample_image, "png") == \
+               pf.encode_image(sample_image, ".png")
+
+    def test_returns_bytes(self, sample_image):
+        assert isinstance(pf.encode_image(sample_image, ".png"), bytes)
+
+    def test_rejects_non_rgb(self):
+        with pytest.raises(ValueError, match="RGB uint8"):
+            pf.encode_image(np.zeros((8, 8, 4), dtype=np.uint8))
+
+    def test_unknown_format_does_not_leak_cv2_error(self, sample_image):
+        with pytest.raises(ValueError, match="does not support"):
+            pf.encode_image(sample_image, ".xyz")
 
 
 class TestSaveImage:

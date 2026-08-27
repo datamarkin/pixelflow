@@ -26,7 +26,7 @@ from .classifications import __all__ as _CLASSIFICATION_EXPORTS
 # Import specific functions for top-level access
 from .media import (
     DisplayExit, VideoReader, CameraStream, VideoWriter,
-    read_image, read_video, display_video, display_image, save_image,
+    read_image, read_video, encode_image, display_video, display_image, save_image,
     close_display, to_pil, from_pil,
 )
 from .zones import Zones
@@ -87,6 +87,7 @@ __all__ = [
     "VideoWriter",
     "read_image",
     "read_video",
+    "encode_image",
     "display_video",
     "display_image",
     "save_image",

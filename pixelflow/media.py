@@ -33,8 +33,24 @@ than from the source. The loop cannot change the frame *rate*, so that has to be
 stated, and ``like=`` exists to carry it across without arithmetic.
 
 Reading and resizing are two jobs. Use ``pf.transform.resize`` for the second.
+
+## What the errors mean
+
+Reading something is a different kind of failure from being handed something, and
+the distinction is load-bearing for a service that has to turn one into a status
+code. Across the image functions:
+
+* ``FileNotFoundError`` -- the path is not there.
+* ``IsADirectoryError`` -- the path is a directory.
+* ``ValueError`` -- the data is not an image, or an array is not RGB uint8 HxWx3.
+  Bad input, not a broken program: this is the 400.
+* ``TypeError`` -- the argument is not a kind of thing that could be an image.
+
+The video classes still raise ``RuntimeError`` when a file will not open, which
+predates this rule and has not been converted.
 """
 
+import io
 import math
 import warnings
 from pathlib import Path
@@ -58,6 +74,7 @@ __all__ = [
     "VideoWriter",
     "read_image",
     "read_video",
+    "encode_image",
     "display_video",
     "display_image",
     "save_image",
@@ -127,6 +144,11 @@ def _require_rgb(image, what: str = "frame") -> None:
     returns HxWx3, so a grayscale or RGBA array reaches an encoder as colour nonsense
     with nothing reported. Every boundary that hands an array to OpenCV goes through
     here, so the contract is stated once rather than per call site.
+
+    Shape, dtype and channel count are checkable. Channel *order* is not -- RGB and
+    BGR are the same bytes in a different sequence, and no inspection recovers which
+    one you have. So every array entering this library is **taken** to be RGB, at
+    every boundary, not just this one.
     """
     if not isinstance(image, np.ndarray):
         raise ValueError(
@@ -136,6 +158,31 @@ def _require_rgb(image, what: str = "frame") -> None:
         raise ValueError(
             f"expected an RGB uint8 HxWx3 {what}, got shape {image.shape} "
             f"dtype {image.dtype}"
+        )
+
+
+def _warn_if_alpha_dropped(handle, label: str = "") -> None:
+    """Warn if the source carried an alpha channel that decoding discarded.
+
+    ``IMREAD_COLOR`` drops alpha without compositing, so transparent regions keep
+    whatever colour was stored beneath them -- a real loss, and worth saying once
+    rather than leaving to be discovered in the pixels.
+
+    Reading the header costs no pixels, only a parse. Callers that know the format
+    cannot carry alpha skip the call entirely; see ``_ALPHA_CAPABLE``.
+    """
+    try:
+        with Image.open(handle) as probe:
+            had_alpha = probe.mode in ("RGBA", "LA", "PA") or (
+                probe.mode == "P" and "transparency" in probe.info
+            )
+    except Exception:
+        return
+    if had_alpha:
+        warnings.warn(
+            f"{label}alpha channel dropped. PixelFlow images are RGB uint8 HxWx3; "
+            f"transparent areas keep the colour stored beneath them.",
+            stacklevel=3,
         )
 
 
@@ -631,11 +678,20 @@ def read_video(source: str, *, stride: int = 1, start: int = 0,
     return VideoReader(source, stride=stride, start=start)
 
 
-def read_image(source: str, width=_UNSET) -> np.ndarray:
-    """Load a single image from disk as an RGB array.
+def read_image(source, width=_UNSET) -> np.ndarray:
+    """Return an RGB image from a path, an encoded buffer, or an array.
+
+    Channel order is established at decode and invisible afterwards, so there has
+    to be exactly one decoder. This is it: anything that can become a PixelFlow
+    image comes through here, and everything that leaves is RGB ``uint8`` HxWx3.
 
     Args:
-        source: Path to the image file.
+        source: One of --
+
+            * ``str`` or ``Path`` -- a file on disk, decoded.
+            * ``bytes``, ``bytearray`` or ``memoryview`` -- an encoded image, as an
+              HTTP upload or a database blob gives it to you. Decoded in memory.
+            * ``np.ndarray`` -- already pixels. Checked and returned unchanged.
 
     Returns:
         RGB uint8 array of shape (H, W, 3), always -- grayscale is expanded to
@@ -643,52 +699,117 @@ def read_image(source: str, width=_UNSET) -> np.ndarray:
         straight into the rest of PixelFlow.
 
     Raises:
-        FileNotFoundError: If the file does not exist.
-        IsADirectoryError: If the path is a directory.
-        RuntimeError: If OpenCV cannot decode the file.
+        FileNotFoundError: If a path does not exist.
+        IsADirectoryError: If a path is a directory.
+        ValueError: If the data cannot be decoded, or an array is not RGB uint8
+            HxWx3. Undecodable input is a bad *value*, not a runtime failure, which
+            is what lets an HTTP layer turn it into a 400 without widening its
+            catch.
+        TypeError: If ``source`` is some other type.
 
     Note:
-        **EXIF orientation is applied.** A photo tagged as rotated is returned the
-        way a viewer would show it, which matches what ``VideoReader`` does with a
-        rotated video and is what a model needs to produce upright coordinates. If
-        annotations for an image were made against un-rotated pixels by a tool that
-        ignores EXIF, their coordinates will not line up with this array -- that is
-        the one case where the difference is visible, and it is worth checking
+        **EXIF orientation is applied**, for a path and for a buffer alike -- they
+        go through the same flag, so the same image does not come back rotated
+        differently depending on which one you passed. A photo tagged as rotated is
+        returned the way a viewer would show it, which matches what ``VideoReader``
+        does with a rotated video and is what a model needs to produce upright
+        coordinates. If annotations for an image were made against un-rotated pixels
+        by a tool that ignores EXIF, their coordinates will not line up with this
+        array -- the one case where the difference is visible, and worth checking
         before blaming the model.
+
+        **An array is trusted, not verified.** This function decodes a path or a
+        buffer, so it *knows* those results are RGB. An array's shape, dtype and
+        channel count are checked, but channel *order* cannot be recovered from
+        pixels -- so an array is taken to be RGB already and returned as given. If
+        it came from ``cv2.imread`` it is BGR: pass the path instead and let this
+        function decode it, which is what it is for.
+
+        A URL is not a source. Reading a file must not make a network request --
+        see the 0.4.0 note on why ``pf.assets`` was removed. Fetch it yourself and
+        pass the bytes.
     """
     _reject_width(width, "read_image")
-    path = _resolve_path(source)
 
-    # IMREAD_COLOR, not IMREAD_UNCHANGED: the latter silently ignores EXIF
-    # orientation, which would hand back a sideways array for any phone photo. It
-    # also guarantees uint8 HxWx3, which is the contract every other module here
-    # relies on.
-    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
-    if image is None:
-        raise RuntimeError(f"Failed to decode image: {source}")
+    # Already pixels. Nothing to decode, so the contract can only be checked, and
+    # channel order is the one part of it that a check cannot reach.
+    if isinstance(source, np.ndarray):
+        _require_rgb(source, "image")
+        return source
 
-    # Reading the header costs no pixels but still costs a second open, so it is
-    # skipped for formats that cannot carry alpha -- which is JPEG, and so most of
-    # any real dataset. Where it can happen it is worth saying, because IMREAD_COLOR
-    # drops alpha without compositing: transparent regions keep whatever colour was
-    # stored beneath them.
-    had_alpha = False
-    if path.suffix.lower() in _ALPHA_CAPABLE:
-        try:
-            with Image.open(path) as probe:
-                had_alpha = probe.mode in ("RGBA", "LA", "PA") or (
-                    probe.mode == "P" and "transparency" in probe.info
-                )
-        except Exception:
-            had_alpha = False
-    if had_alpha:
-        warnings.warn(
-            f"{source}: alpha channel dropped. PixelFlow images are RGB uint8 "
-            f"HxWx3; transparent areas keep the colour stored beneath them.",
-            stacklevel=2,
+    # An encoded buffer: an upload, an S3 object, a blob. IMREAD_COLOR, not
+    # IMREAD_UNCHANGED -- the latter silently ignores EXIF orientation, which would
+    # hand back a sideways array for any phone photo and make this branch disagree
+    # with the path branch about the very same file.
+    if isinstance(source, (bytes, bytearray, memoryview)):
+        buffer = np.frombuffer(source, dtype=np.uint8)
+        image = cv2.imdecode(buffer, cv2.IMREAD_COLOR) if buffer.size else None
+        if image is None:
+            raise ValueError(
+                f"Could not decode image from {len(source)} bytes: the data is not "
+                f"an image in a format OpenCV reads."
+            )
+        # No extension to gate on, so the probe always runs. It is a header parse,
+        # measured at ~21us flat regardless of payload size.
+        _warn_if_alpha_dropped(io.BytesIO(source))
+        return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    if not isinstance(source, (str, Path)):
+        raise TypeError(
+            f"read_image() takes a path, an encoded buffer, or an RGB array; "
+            f"got {type(source).__name__}"
         )
 
+    path = _resolve_path(source)
+    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError(
+            f"Could not decode image: {source} exists but is not an image in a "
+            f"format OpenCV reads."
+        )
+    # A path carries its format in its name, so JPEG -- most of any real dataset --
+    # skips the probe entirely.
+    if path.suffix.lower() in _ALPHA_CAPABLE:
+        _warn_if_alpha_dropped(path, f"{source}: ")
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+
+def encode_image(image: np.ndarray, extension: str = ".png") -> bytes:
+    """Encode an RGB image to bytes, for an HTTP response or a blob.
+
+    The mirror of ``read_image``'s buffer branch, and it exists for the same reason:
+    channel order is established at the codec boundary, so there has to be one
+    encoder. Hand-rolling ``cv2.imencode`` means hand-rolling the RGB-to-BGR step
+    that goes with it, and that is the step that gets forgotten.
+
+    Args:
+        image: RGB uint8 array of shape (H, W, 3).
+        extension: Container/format extension, with or without the dot.
+
+    Returns:
+        The encoded bytes.
+
+    Raises:
+        ValueError: If the image is not RGB uint8 HxWx3, or OpenCV cannot encode
+            the requested format.
+
+    Example:
+        >>> payload = pf.encode_image(frame, ".jpg")
+        >>> return Response(payload, media_type="image/jpeg")
+    """
+    _require_rgb(image, "image")
+    suffix = extension if extension.startswith(".") else f".{extension}"
+
+    bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    try:
+        success, buffer = cv2.imencode(suffix, bgr)
+    except cv2.error as error:
+        raise ValueError(
+            f"Cannot encode {suffix!r}: OpenCV does not support that format"
+        ) from error
+    if not success:
+        raise ValueError(f"Failed to encode image as {suffix!r}")
+    return buffer.tobytes()
 
 
 def save_image(path: str, image: np.ndarray) -> None:
@@ -700,8 +821,9 @@ def save_image(path: str, image: np.ndarray) -> None:
 
     Raises:
         NotADirectoryError: If the parent directory does not exist.
-        ValueError: If the extension is missing or not one OpenCV can write.
-        RuntimeError: If the write fails for any other reason.
+        ValueError: If the image is not RGB uint8 HxWx3, or the extension is
+            missing or not one OpenCV can write.
+        OSError: If the file cannot be written for any other reason.
     """
     _require_rgb(image, "image")
     target = Path(path)
@@ -720,15 +842,17 @@ def save_image(path: str, image: np.ndarray) -> None:
             f"what format to encode. Try '{target.name}.jpg' or '{target.name}.png'."
         )
 
-    bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    # Encoding goes through encode_image rather than cv2.imwrite, so that the
+    # RGB-to-BGR step and the frame guard exist once. A second encoder here would
+    # be exactly the duplication encode_image was added to remove.
     try:
-        success = cv2.imwrite(str(target), bgr)
-    except cv2.error as error:
+        payload = encode_image(image, target.suffix)
+    except ValueError as error:
+        # The image was checked above, so anything left is the format.
         raise ValueError(
             f"Cannot write {path!r}: OpenCV cannot encode '{target.suffix}' files"
         ) from error
-    if not success:
-        raise RuntimeError(f"Failed to write image: {path}")
+    target.write_bytes(payload)
 
 
 # ---------------------------------------------------------------------------
