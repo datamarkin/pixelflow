@@ -233,22 +233,87 @@ def temp_image_path(tmp_path, sample_image):
     return str(image_path)
 
 
+def _write_video(path, frames, fps=30.0, codec="mp4v"):
+    """Write RGB frames to a video file and return the path."""
+    height, width = frames[0].shape[:2]
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*codec), fps,
+                             (width, height))
+    for frame in frames:
+        writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+    writer.release()
+    return str(path)
+
+
+@pytest.fixture
+def portrait_video_path(tmp_path):
+    """A 480x640 portrait video.
+
+    The suite was landscape-only, which is why a reader reporting a transposed size
+    could never have failed a test. Portrait is the shape that catches it.
+    """
+    frames = []
+    for i in range(10):
+        frame = np.full((640, 480, 3), 40, dtype=np.uint8)
+        cv2.putText(frame, str(i), (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 2,
+                    (255, 255, 255), 3)
+        frames.append(frame)
+    return _write_video(tmp_path / "portrait.mp4", frames, fps=25.0)
+
+
+@pytest.fixture
+def counted_video_path(tmp_path):
+    """A 25 fps, 20-frame video whose frames are individually identifiable.
+
+    Each frame is a solid shade of its own index, so a test can assert *which*
+    frames came back -- which is what seeking and striding need in order to be
+    checked at all.
+    """
+    frames = [np.full((120, 160, 3), i * 10, dtype=np.uint8) for i in range(20)]
+    return _write_video(tmp_path / "counted.mp4", frames, fps=25.0)
+
+
+@pytest.fixture
+def exif_rotated_image_path(tmp_path):
+    """A 200x100 JPEG tagged Orientation=6, i.e. displayed rotated to 100x200."""
+    from PIL import Image
+
+    array = np.zeros((100, 200, 3), dtype=np.uint8)
+    array[:, :100] = 255
+    image = Image.fromarray(array)
+    exif = image.getexif()
+    exif[274] = 6  # Orientation: rotate 90 CW for display
+    path = tmp_path / "rotated.jpg"
+    image.save(str(path), exif=exif)
+    return str(path)
+
+
+@pytest.fixture
+def rgba_image_path(tmp_path):
+    """A PNG with an alpha channel."""
+    path = tmp_path / "rgba.png"
+    rgba = np.zeros((40, 60, 4), dtype=np.uint8)
+    rgba[..., 3] = 128
+    cv2.imwrite(str(path), rgba)
+    return str(path)
+
+
+@pytest.fixture
+def grayscale_image_path(tmp_path):
+    """A single-channel PNG."""
+    path = tmp_path / "gray.png"
+    cv2.imwrite(str(path), np.full((40, 60), 90, dtype=np.uint8))
+    return str(path)
+
+
 @pytest.fixture
 def temp_video_path(tmp_path, sample_image):
     """Create a temporary video file with 10 frames."""
-    video_path = tmp_path / "test_video.mp4"
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(str(video_path), fourcc, 30.0, (640, 480))
-
+    frames = []
     for i in range(10):
-        # Add frame number to image
         frame = sample_image.copy()
         cv2.putText(frame, f"Frame {i}", (50, 50),
-                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
-        # cv2.VideoWriter expects BGR, convert from RGB
-        out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-
-    out.release()
-    return str(video_path)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+        frames.append(frame)
+    return _write_video(tmp_path / "test_video.mp4", frames)
 
 
