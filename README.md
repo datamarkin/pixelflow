@@ -14,12 +14,13 @@ import pixelflow as pf
 from ultralytics import YOLO
 
 model = YOLO("yolo11n.pt")
-video = pf.VideoReader("traffic.mp4", width=640)
+video = pf.VideoReader("traffic.mp4")
 tracker = pf.tracker.ByteTracker()
 zones = pf.Zones()
 zones.add_zone([(100, 400), (500, 400), (500, 600), (100, 600)], zone_id="entrance")
 
 for frame in video:
+    frame = pf.transform.resize(frame, width=640)
     detections = pf.from_ultralytics(model.predict(frame))
     detections = tracker.update(detections)
     zones.update(detections)
@@ -28,8 +29,7 @@ for frame in video:
     frame = pf.annotate.label(frame, detections)
     frame = pf.annotate.zones(frame, zones)
 
-    if pf.show_frame("Live", frame) == ord('q'):
-        break
+    pf.display_video(frame, "Live")   # raises DisplayExit when 'q' is pressed
 ```
 
 ## Installation
@@ -162,33 +162,63 @@ english_text = detections.filter_by_text_language("en")
 
 ### Media Handling
 
-Purpose-built classes for videos, cameras, and images:
+A source is anything that yields RGB `uint8` `HxWx3` arrays. `VideoReader` and
+`CameraStream` are conveniences, not gates — a list, a generator, or your own reader
+for the one camera that needs special handling all work identically everywhere else.
 
 ```python
 import pixelflow as pf
 
 # Read a video file
-video = pf.VideoReader("video.mp4", width=640)
-print(f"{video.width}x{video.height}, {video.fps}fps, {len(video)} frames")
+video = pf.VideoReader("video.mp4")
+print(f"{video.width}x{video.height}, {video.fps}fps, {video.frames} frames")
 
-for frame in video:       # Replayable — resets on each iteration
-    if pf.show_frame("Preview", frame) == ord('q'):
-        break
-
-# Load a single image
-image = pf.read_image("photo.jpg", width=640)
-
-# Webcam / network stream
-cam = pf.CameraStream(0, width=640)
-cam = pf.CameraStream("rtsp://camera.local/stream")
-
-# Write processed video
-writer = pf.VideoWriter("output.mp4", fps=video.fps)
 for frame in video:
-    processed = process(frame)
-    writer.write(processed)
-writer.close()
+    pf.display_video(frame, "Preview")
+
+video.seek(0)             # replay is explicit; iteration never rewinds on its own
+
+# Every 5th frame. fps and frames are divided to match, so a writer built from
+# this source stays correct.
+video = pf.VideoReader("video.mp4", stride=5)
+
+# Load a single image (EXIF orientation applied, always RGB uint8 HxWx3)
+image = pf.read_image("photo.jpg")
+
+# Webcam / network stream — same facts, same iteration, is_live is True
+cam = pf.CameraStream(0)
+cam = pf.CameraStream("rtsp://camera.local/stream")
 ```
+
+Reading and resizing are two jobs — compose them:
+
+```python
+for frame in video:
+    frame = pf.transform.resize(frame, width=640)   # or height=
+```
+
+**Writing.** `like=` carries the frame rate across from a source, which is the one
+value that has to and the one that is easy to get wrong — a strided reader yields
+fewer frames per second than its file contains. Size is *not* carried: it comes from
+the first frame written, because the loop in between is allowed to resize.
+
+```python
+video = pf.VideoReader("input.mp4", stride=2)
+
+with pf.VideoWriter("output.mp4", like=video) as writer:
+    for frame in video:
+        writer.write(process(frame))
+```
+
+Every source reports the same facts, so consumers never branch on the source type:
+
+| | `VideoReader` | `CameraStream` |
+|---|---|---|
+| `width` / `height` | from the file | from a frame decoded at open |
+| `fps` | rate yielded, `None` if unknown | usually `None` — devices report 0 |
+| `frames` | estimate, divided by stride | always `None` |
+| `duration` | seconds, unaffected by stride | always `None` |
+| `is_live` | `False` | `True` |
 
 ### Zone-Based Analytics
 
@@ -242,7 +272,7 @@ import pixelflow as pf
 
 tracker = pf.tracker.ByteTracker()
 
-for frame in media.frames:
+for frame in video:
     detections = pf.from_ultralytics(model.predict(frame))
     detections = tracker.update(detections)
 
@@ -345,7 +375,7 @@ crossings.add_line(
     direction="down"  # Only count downward crossings
 )
 
-for frame in media.frames:
+for frame in video:
     detections = tracker.update(pf.from_ultralytics(model.predict(frame)))
     crossings.update(detections)
 

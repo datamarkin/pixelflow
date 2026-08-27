@@ -5,6 +5,154 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-27
+
+Media I/O is rebuilt around one idea: **size is discovered, rate is declared.** A
+processing loop is allowed to change a frame's size -- resizing is the caller's
+business, and so is resizing their detections to match -- so a sink takes its size
+from the frames it is given. A loop cannot change the frame *rate*, so that has to
+cross from source to sink, and it is now the only thing that does.
+
+### Removed
+
+- **`width=` on `VideoReader`, `CameraStream`, `VideoWriter`, `read_image` and
+  `read_video`.** Resizing on the way through made a reader's own `.width` report the
+  post-resize number while the true size hid in `_raw_width`, so anything asking how
+  big a video was got the wrong answer; it also put the original frames permanently
+  out of reach. It existed only because `pf.transform` had no `resize`. It does now.
+  The parameter survives as a sentinel that raises with the replacement line, because
+  a bare `TypeError` says what broke but not what to write instead.
+
+  Migration: `pf.transform.resize(frame, width=640)` inside the loop.
+
+- **`len(reader)`.** `len()` promises an indexable, re-iterable sequence whose length
+  is exact. A decode-forward stream is none of those, and several container formats
+  derive their frame count from duration x rate, so `len(list(reader))` could differ
+  from `len(reader)`. Calling it now raises with an explanation rather than returning
+  a number that might be wrong. Use `.frames` for a progress total.
+
+- **`reader.frame_count`** is now **`reader.frames`**, named as the estimate it always
+  was. The old name raises pointing at the new one.
+
+- **`__del__` on the reader, stream and writer.** It ran at interpreter shutdown when
+  `cv2` may already have been torn down. The context managers are the real path, and
+  OpenCV releases its own captures.
+
+### Added
+
+- **`pf.transform.resize(image, *, width=..., height=...)`.** Exactly one axis;
+  the other follows from the aspect ratio, so the function can change an image's size
+  but never its shape. Both are keyword-only: the readers took a `width=` for the whole
+  of 0.4, and a call that kept working while silently changing which axis it meant
+  would be worse than one that stops. Interpolation is chosen, not offered --
+  `INTER_AREA` shrinking, `INTER_LINEAR` growing -- because a caller has no way to know
+  which is right. Returns the input array untouched when it already matches.
+
+- **`stride=` on `VideoReader` and `CameraStream`.** Yields every Nth frame, skipping
+  the rest with `grab()` rather than `read()`: inter-frame coding means a skipped frame
+  still has to be walked, but it does not have to be retrieved or colour-converted.
+  Measured at 1.43x on 720p at `stride=5`.
+
+- **`VideoWriter(path, like=source)`.** Takes the frame rate from a source. This is the
+  one value that must cross the reader/writer join and the one that is easy to get
+  wrong: reading every 5th frame of a 25 fps file is a 5 fps sequence, and a writer
+  handed 25 produces a file that plays five times too fast. `like=` carries the
+  corrected rate, so that file is unconstructible rather than merely catchable.
+
+- **`is_live`** on both sources, and a shared fact surface -- `width`, `height`, `fps`,
+  `frames`, `duration` -- with the same names and the same meanings on each. Swapping a
+  file for a camera is one line, and `is_live` is the only thing worth branching on.
+  `read()` is shared too, so the `while True: frame = source.read()` webcam idiom works
+  for a file; both sources run the same iteration loop rather than a copy of it.
+
+- **`start=`** on `VideoReader`, equivalent to `seek(start)` at open.
+
+### Changed
+
+- **`fps` and `frames` are `None` when unknown, and both are divided by the stride.**
+  OpenCV reports `0.0` for a rate it does not know, which is routine for cameras and
+  common for streams; `0.0` flowed straight into a writer and produced a file that
+  would not play. `None` cannot be mistaken for a number, so it forces a caller to
+  have a policy. `duration` is unaffected by the stride -- striding changes how many
+  frames you look at, not how much time the source covers. `frames / fps` approximates
+  it rather than equalling it: `frames` rounds up to count the frames you actually
+  receive, so a source whose length is not a multiple of the stride reports up to one
+  stride more time than it has. `duration` is the property to ask for a length.
+
+- **Iteration no longer rewinds.** `__iter__` used to seek to frame 0 on every call,
+  which made `seek()` unobservable -- `seek(1000)` then iterating returned frame 0 --
+  and is impossible for any non-seekable source. Iteration now continues from the
+  current position. Replay is `reader.seek(0)`, stated rather than implied.
+
+- **`CameraStream` takes its size from a frame decoded at open.** A device's reported
+  `FRAME_WIDTH`/`HEIGHT` is frequently the driver's default rather than what it hands
+  over. The probe frame is the first one yielded, not a discard. `VideoReader` keeps
+  reading its size from metadata -- OpenCV applies a container's rotation flag to both
+  the reported size and the decoded array, verified on a file carrying `rotation=90`
+  -- but now corrects itself against the first frame actually handed out, so the facts
+  can never describe an array nobody received.
+
+- **`read_image` states what it does.** Always RGB `uint8` `HxWx3`: grayscale is
+  expanded, which is lossless, and an alpha channel is dropped, which is not -- so the
+  drop now warns. **EXIF orientation is applied**, matching what `VideoReader` does
+  with a rotated video and what a model needs to produce upright coordinates. Worth
+  knowing when debugging a coordinate mismatch: annotations made by a tool that ignores
+  EXIF will not line up with this array.
+
+- **`display_video` and `display_image` keep `width=`.** A display is the end of the
+  line, so shrinking a 4K frame to fit a laptop screen cannot affect anything
+  downstream. The array passed in is not modified.
+
+### Fixed
+
+- **`VideoWriter` no longer silently truncates a file.** `cv2.VideoWriter` drops a
+  frame whose size differs from the first and reports nothing, so a run ended with a
+  short file, an accurate-looking `frames_written`, and no error anywhere. Writing 10
+  frames could produce 5. A mismatch now raises.
+
+- **`VideoWriter.write` and `save_image` no longer encode non-RGB arrays as colour
+  nonsense.** `cv2.cvtColor` accepts a 2D grayscale or 4-channel array for `RGB2BGR`
+  and quietly returns `HxWx3`, so those were written with no complaint -- a plausible
+  file full of wrong colours. Both now check for `uint8` `HxWx3` first, through one
+  shared guard, because the contract belongs to the library and not to one class.
+
+- **A bad frame rate fails at construction.** `fps` of `0`, `None`, `NaN`, `inf` or a
+  negative number produced a writer that failed to open on the first `write()`, hours
+  into a run, with a message that blamed the output path.
+
+- **`save_image` names the cause.** A missing parent directory raises
+  `NotADirectoryError` instead of "Failed to write image", which named only the
+  symptom; a missing or unwritable extension raises `ValueError` instead of leaking a
+  raw `cv2.error` through a PixelFlow API.
+
+- **`_resolve_path` chains its exceptions** with `raise ... from`.
+
+### Tests
+
+The suite drove a single synthetic 640x480 landscape file, which is why none of the
+above could fail a test. It now covers portrait video, EXIF-rotated JPEGs, grayscale
+and RGBA images, and frame-identity assertions for seeking and striding that compare
+against decoded ground truth rather than authored pixel values -- mp4v is lossy, so a
+frame written as solid 50 comes back as 46. `CameraStream` is driven by a file path,
+which `cv2.VideoCapture` accepts wherever it accepts a device, so the whole live
+contract is testable without hardware. `pixelflow/media.py` coverage: 91%.
+
+### Not done, deliberately
+
+- **Reconnect-on-drop and a frame-drop policy for `CameraStream`.** A live source that
+  blocks when its consumer falls behind accumulates latency until the device's own
+  buffer overflows, so the frames being processed are minutes old. That policy belongs
+  in the stream, not the consumer -- but there is no live consumer yet to design
+  against, so the seam is marked and left empty rather than guessed at.
+
+- **A folder-of-images reader.** A dataset directory is a `for path in sorted(...)`
+  that callers already know how to write, and absorbing it would drag per-frame
+  provenance and non-homogeneous sizes into a contract that does not need them.
+
+- **A `process_video(source, target, callback)` helper.** The loop is where the
+  caller's program lives -- tracker state, zone counters, timers, an early `break`.
+  Taking it away means every loop-level concern returns as a parameter.
+
 ## [0.4.0] - 2026-08-27
 
 ### Removed

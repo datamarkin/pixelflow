@@ -14,6 +14,7 @@ organized into two categories:
 import pixelflow as pf
 
 # Geometric operations
+resized = pf.transform.resize(image, width=640)
 rotated = pf.transform.rotate(image, 45)
 flipped = pf.transform.flip_horizontal(image)
 cropped = pf.transform.crop(image, [100, 50, 500, 400])
@@ -75,6 +76,7 @@ annotated = pf.annotate.box(original_image, original_coords)
 # Import all functions from submodules
 from .image import (
     # Geometric operations
+    resize,
     rotate,
     flip_horizontal,
     flip_vertical,
@@ -106,6 +108,7 @@ from .inverse import (
 
 __all__ = [
     # Image-only geometric operations
+    'resize',
     'rotate',
     'flip_horizontal',
     'flip_vertical',
