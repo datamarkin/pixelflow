@@ -11,6 +11,7 @@ from typing import Optional, Tuple, Union
 
 __all__ = [
     # Geometric operations
+    'resize',
     'rotate',
     'flip_horizontal',
     'flip_vertical',
@@ -29,6 +30,79 @@ __all__ = [
 # ============================================================================
 # Geometric Operations
 # ============================================================================
+
+def resize(
+    image: np.ndarray,
+    *,
+    width: Optional[int] = None,
+    height: Optional[int] = None
+) -> np.ndarray:
+    """
+    Scale an image to a width or a height, keeping its aspect ratio.
+
+    Exactly one of ``width`` or ``height`` is required. The other follows from the
+    aspect ratio, which is what makes this a scale rather than a reshape -- an image's
+    shape cannot be changed by this function, only its size.
+
+    Both are keyword-only. ``resize(image, 640)`` is a ``TypeError`` rather than a
+    guess, because PixelFlow's readers and writers previously took a positional
+    ``width=`` and a silently reinterpreted axis would be worse than an error.
+
+    Args:
+        image: Input image (H, W, 3) RGB format
+        width: Target width in pixels. Height follows.
+        height: Target height in pixels. Width follows.
+
+    Returns:
+        The scaled image, or the input array itself when it already matches.
+
+    Raises:
+        ValueError: If neither or both of width/height are given, or if the
+            target is less than 1 pixel.
+
+    Example:
+        ```python
+        import pixelflow as pf
+
+        video = pf.VideoReader("input.mp4")
+        for frame in video:
+            frame = pf.transform.resize(frame, width=640)
+        ```
+
+    Note:
+        - Interpolation is chosen, not offered: ``INTER_AREA`` when shrinking and
+          ``INTER_LINEAR`` when growing. A caller has no way to know which is right.
+        - When the image already matches, the input array is returned **unchanged and
+          uncopied**. PixelFlow's annotators draw in place, so annotating that result
+          also draws on the array you passed in. Copy first if you need both.
+    """
+    if (width is None) == (height is None):
+        raise ValueError(
+            "resize() takes exactly one of width= or height=; "
+            f"got width={width!r}, height={height!r}"
+        )
+
+    have_height, have_width = image.shape[:2]
+
+    if width is None:
+        if height < 1:
+            raise ValueError(f"height must be at least 1, got {height}")
+        if height == have_height:
+            return image
+        width = max(1, round(have_width * height / have_height))
+    else:
+        if width < 1:
+            raise ValueError(f"width must be at least 1, got {width}")
+        if width == have_width:
+            return image
+        height = max(1, round(have_height * width / have_width))
+
+    # Shrinking averages the pixels being discarded; growing interpolates between the
+    # ones being kept. Using the wrong one is visible: INTER_LINEAR downscaling aliases.
+    shrinking = width * height < have_width * have_height
+    interpolation = cv2.INTER_AREA if shrinking else cv2.INTER_LINEAR
+    return cv2.resize(image, (width, height), interpolation=interpolation)
+
 
 def rotate(
     image: np.ndarray,
