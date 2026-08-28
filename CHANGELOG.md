@@ -161,12 +161,26 @@ cross from source to sink, and it is now the only thing that does.
   widening what it catches. A missing file is still `FileNotFoundError` and a
   directory is still `IsADirectoryError`.
 
-  The rule the image functions now follow is written down in the module docstring
-  rather than left implicit in one function's `Raises:` block. **`VideoReader` and
-  `CameraStream` still raise `RuntimeError`** when a file will not open -- the same
-  user error, a different exception. That inconsistency is recorded rather than
-  quietly fixed, because converting them is a public behaviour change beyond the
-  scope of the image work.
+  **`VideoReader`, `CameraStream` and `VideoWriter` were converted too**, so the rule
+  holds for the whole module rather than for its image half: a file that exists and
+  is not what it claims to be raises `ValueError` whether it was meant to be an image
+  or a video, and one `except ValueError` covers both. `RuntimeError` no longer
+  appears anywhere in `media.py`. The rule itself is written down in the module
+  docstring rather than left implicit in one function's `Raises:` block.
+
+  Two honest edges are recorded there rather than papered over. A live source that
+  will not open is also `ValueError`, because `cv2.VideoCapture` reports failure as a
+  bare `False` and cannot say whether the URL was wrong or the device was merely
+  busy. And `CameraStream` cannot raise `FileNotFoundError` for a missing path the
+  way `VideoReader` does, because its source may be a device index or a URL, so it
+  has no path to resolve.
+
+- **A malformed codec fails at construction.** A FourCC that is not four characters
+  reached `cv2.VideoWriter_fourcc` at the first `write()` and surfaced as a bare
+  `TypeError` about argument counts -- hours into a run, from a line that never
+  mentions the codec. `VideoWriter` now checks it on the line that set it, as it
+  already did for `fps`. A well-formed but unavailable codec still cannot be detected
+  until the lazy open, and now says so.
 
 - **`save_image` names the cause.** A missing parent directory raises
   `NotADirectoryError` instead of "Failed to write image", which named only the

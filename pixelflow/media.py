@@ -38,16 +38,23 @@ Reading and resizing are two jobs. Use ``pf.transform.resize`` for the second.
 
 Reading something is a different kind of failure from being handed something, and
 the distinction is load-bearing for a service that has to turn one into a status
-code. Across the image functions:
+code. One rule, everywhere in this module:
 
 * ``FileNotFoundError`` -- the path is not there.
 * ``IsADirectoryError`` -- the path is a directory.
-* ``ValueError`` -- the data is not an image, or an array is not RGB uint8 HxWx3.
+* ``ValueError`` -- what you passed is not usable: the data is not an image or a
+  video, an array is not RGB uint8 HxWx3, a frame rate is not a positive number.
   Bad input, not a broken program: this is the 400.
 * ``TypeError`` -- the argument is not a kind of thing that could be an image.
+* ``OSError`` -- the filesystem refused, for reasons that are not about the value.
 
-The video classes still raise ``RuntimeError`` when a file will not open, which
-predates this rule and has not been converted.
+A file that exists and is not what it claims to be raises ``ValueError`` whether it
+was meant to be an image or a video, so one ``except`` covers both.
+
+One honest imprecision: a live source that will not open is also ``ValueError``,
+because ``cv2.VideoCapture`` reports failure as a bare ``False`` and cannot say
+whether the URL was wrong (a bad value) or the device was busy or forbidden (not).
+Given that it cannot be distinguished, it is reported as the more common case.
 """
 
 import io
@@ -415,7 +422,10 @@ class VideoReader(_FrameSource):
 
         self._cap = cv2.VideoCapture(self._source)
         if not self._cap.isOpened():
-            raise RuntimeError(f"Could not open video file: {source}")
+            raise ValueError(
+                f"Could not open video file: {source} exists but is not a video "
+                f"OpenCV can decode."
+            )
 
         # Container metadata, read once. Nothing here is ever consulted per frame.
         self._width = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -485,7 +495,10 @@ class CameraStream(_FrameSource):
 
         self._cap = cv2.VideoCapture(source)
         if not self._cap.isOpened():
-            raise RuntimeError(f"Could not open camera/stream: {source}")
+            raise ValueError(
+                f"Could not open camera/stream: {source!r}. The device or URL is "
+                f"wrong, or it is already in use."
+            )
 
         # A device's reported FRAME_WIDTH/HEIGHT is frequently the driver's default
         # rather than what it will hand over, so the only trustworthy source of the
@@ -579,6 +592,12 @@ class VideoWriter:
                 f"fps must be a positive finite number, got {fps!r}"
             )
 
+        if not isinstance(codec, str) or len(codec) != 4:
+            raise ValueError(
+                f"codec must be a four-character FourCC string, got {codec!r}. "
+                f"Try 'mp4v' or 'avc1'."
+            )
+
         self._output_path = output_path
         self._fps = rate
         self._codec = codec
@@ -622,10 +641,14 @@ class VideoWriter:
             )
             if not self._writer.isOpened():
                 self._writer = None
-                raise RuntimeError(
+                # Almost always the codec: a FourCC this OpenCV build cannot
+                # encode. Named as a bad value so it joins the same except clause
+                # as every other "what you passed will not work" in this module.
+                raise ValueError(
                     f"Failed to open video writer for {self._output_path} "
                     f"(codec={self._codec!r}, fps={self._fps}, "
-                    f"size={width}x{height})"
+                    f"size={width}x{height}). The codec is most likely not "
+                    f"available in this OpenCV build."
                 )
         elif (width, height) != self._size:
             # cv2.VideoWriter drops a mismatched frame and reports nothing, so the

@@ -221,19 +221,62 @@ class TestFactsFollowTheFrame:
 
 
 class TestUndecodableSources:
-    """A file that exists but is not what it claims to be."""
+    """A file that exists but is not what it claims to be.
 
-    def test_unreadable_video_is_not_a_missing_file(self, tmp_path):
-        path = tmp_path / "not_really.mp4"
-        path.write_text("this is not a video")
-        with pytest.raises(RuntimeError, match="Could not open video"):
-            pf.VideoReader(str(path))
+    One user error -- a path that resolves to the wrong kind of bytes -- so one
+    exception, whichever door it was carried through. That is what lets a service
+    write a single ``except ValueError`` and return a 400, instead of enumerating
+    which PixelFlow entry point it happened to call.
+    """
 
-    def test_unreadable_stream(self, tmp_path):
-        path = tmp_path / "not_really.mp4"
-        path.write_text("this is not a stream")
-        with pytest.raises(RuntimeError, match="Could not open camera/stream"):
-            pf.CameraStream(str(path))
+    @pytest.mark.parametrize("open_it", [
+        pf.VideoReader,
+        pf.CameraStream,
+        pf.read_image,
+    ], ids=["VideoReader", "CameraStream", "read_image"])
+    def test_wrong_kind_of_file_is_a_value_error(self, tmp_path, open_it):
+        path = tmp_path / "not_really.bin"
+        path.write_text("this is not any kind of media")
+        with pytest.raises(ValueError):
+            open_it(str(path))
+
+    @pytest.mark.parametrize("open_it", [pf.VideoReader, pf.read_image],
+                             ids=["VideoReader", "read_image"])
+    def test_missing_file_is_still_file_not_found(self, open_it, tmp_path):
+        """Not there and not decodable are different errors, and stay different."""
+        with pytest.raises(FileNotFoundError):
+            open_it(str(tmp_path / "nope.bin"))
+
+    def test_camera_stream_cannot_tell_missing_from_unreachable(self, tmp_path):
+        """CameraStream is the one exception, and for a real reason.
+
+        Its source may be a device index or a URL, so it cannot resolve paths --
+        which means a missing file and an unreachable camera are the same failure
+        to it, and both are reported as the bad value they usually are.
+        """
+        with pytest.raises(ValueError, match="Could not open camera/stream"):
+            pf.CameraStream(str(tmp_path / "nope.bin"))
+
+    def test_unavailable_codec_is_a_value_error(self, tmp_path, sample_image):
+        """A well-formed FourCC this build cannot encode is a bad value.
+
+        Detectable only at the lazy open, because that is the first moment OpenCV
+        is asked to make an encoder.
+        """
+        writer = pf.VideoWriter(str(tmp_path / "out.mp4"), fps=25.0, codec="ABCD")
+        with pytest.raises(ValueError, match="codec"):
+            writer.write(sample_image)
+
+    @pytest.mark.parametrize("codec", ["XVID9", "abc", "", 4321, None],
+                             ids=["too long", "too short", "empty", "int", "None"])
+    def test_malformed_codec_fails_at_construction(self, tmp_path, codec):
+        """Not four characters is knowable immediately, so it is caught immediately.
+
+        Previously this reached cv2.VideoWriter_fourcc at the first write and
+        surfaced as a bare TypeError about argument counts.
+        """
+        with pytest.raises(ValueError, match="FourCC"):
+            pf.VideoWriter(str(tmp_path / "out.mp4"), fps=25.0, codec=codec)
 
 
 # ============================================================================
@@ -537,13 +580,6 @@ class TestReadImage:
         with _warnings.catch_warnings():
             _warnings.simplefilter("error")      # any warning here fails the test
             assert pf.read_image(temp_image_path).shape == (480, 640, 3)
-
-    def test_undecodable_file_raises_value_error(self, tmp_path):
-        """A file that exists but is not an image is a bad value, not a crash."""
-        path = tmp_path / "not_really.jpg"
-        path.write_text("this is not an image")
-        with pytest.raises(ValueError, match="Could not decode"):
-            pf.read_image(str(path))
 
     def test_invalid_path(self):
         """A missing file raises, and the message names the resolved absolute path."""
